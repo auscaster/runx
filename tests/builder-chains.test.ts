@@ -1,0 +1,174 @@
+import { existsSync } from "node:fs";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+import { describe, expect, it } from "vitest";
+
+import { parseSkillMarkdown, validateSkill } from "../packages/parser/src/index.js";
+import { runLocalSkill, type Caller } from "../packages/runner-local/src/index.js";
+
+const builderSkillPaths = [
+  "skills/objective-decompose",
+  "skills/skill-research",
+  "skills/harness-author",
+  "skills/receipt-review",
+];
+
+describe("builder-chain skills", () => {
+  it("uses portable agent-step contracts instead of repo-local helper scripts", async () => {
+    for (const skillPath of builderSkillPaths) {
+      const skill = validateSkill(parseSkillMarkdown(await readFile(path.resolve(skillPath, "SKILL.md"), "utf8")));
+
+      expect(skill.source.type).toBe("agent");
+      expect(skill.source.command).toBeUndefined();
+      expect(skill.source.args).toEqual([]);
+    }
+  });
+
+  it("ships builder flows as skill packages instead of standalone chain assets", () => {
+    expect(existsSync(path.resolve("chains/objective-to-skill.yaml"))).toBe(false);
+    expect(existsSync(path.resolve("chains/improve-skill.yaml"))).toBe(false);
+    expect(existsSync(path.resolve("skills/objective-to-skill/x.yaml"))).toBe(true);
+    expect(existsSync(path.resolve("skills/improve-skill/x.yaml"))).toBe(true);
+  });
+});
+
+describe("builder skill objective-to-skill", () => {
+  it("runs the objective-to-skill package through explicit caller-routed subskills", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-builder-objective-"));
+
+    try {
+      const result = await runLocalSkill({
+        skillPath: path.resolve("skills/objective-to-skill"),
+        inputs: {
+          objective: "Build a runx sourcey skill",
+          project_context: "local fixture",
+        },
+        caller: createBuilderCaller(),
+        env: process.env,
+        receiptDir: path.join(tempDir, "receipts"),
+        runxHome: path.join(tempDir, "home"),
+        allowedSourceTypes: ["cli-tool", "mcp", "agent-step", "chain"],
+      });
+
+      expect(result.status).toBe("success");
+      if (result.status !== "success") {
+        return;
+      }
+      expect(result.receipt.kind).toBe("chain_execution");
+      if (result.receipt.kind !== "chain_execution") {
+        return;
+      }
+      expect(result.receipt.steps.map((step) => step.step_id)).toEqual(["decompose", "research", "author-harness"]);
+      expect(JSON.parse(result.execution.stdout)).toMatchObject({
+        harness_fixture: {
+          kind: "skill",
+        },
+      });
+      expect(result.receipt.steps).toHaveLength(3);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("builder skill improve-skill", () => {
+  it("runs the improve-skill package from a failed harness summary to a bounded proposal", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-builder-improve-"));
+
+    try {
+      const result = await runLocalSkill({
+        skillPath: path.resolve("skills/improve-skill"),
+        inputs: {
+          receipt_id: "rx_failed",
+          receipt_summary: "harness failed because required context was missing",
+          harness_output: "missing_context",
+          skill_path: "oss/skills/sourcey",
+          objective: "Improve Sourcey skill input resolution",
+        },
+        caller: createBuilderCaller(),
+        env: process.env,
+        receiptDir: path.join(tempDir, "receipts"),
+        runxHome: path.join(tempDir, "home"),
+        allowedSourceTypes: ["cli-tool", "mcp", "agent-step", "chain"],
+      });
+
+      expect(result.status).toBe("success");
+      if (result.status !== "success") {
+        return;
+      }
+      expect(result.receipt.kind).toBe("chain_execution");
+      if (result.receipt.kind !== "chain_execution") {
+        return;
+      }
+      expect(result.receipt.steps.map((step) => step.step_id)).toEqual(["review-receipt", "author-update-harness"]);
+      expect(JSON.parse(result.execution.stdout)).toMatchObject({
+        acceptance_checks: expect.arrayContaining(["missing-context fixture passes"]),
+      });
+      expect(result.receipt.steps[0]?.skill).toContain("../receipt-review");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+function createBuilderCaller(): Caller {
+  return {
+    answer: async (questions) =>
+      Object.fromEntries(
+        questions.map((question) => [question.id, answerForAgentStep(question.id)]),
+      ),
+    approve: async () => false,
+    report: () => undefined,
+  };
+}
+
+function answerForAgentStep(questionId: string): unknown {
+  if (questionId.includes("objective-decomposition")) {
+    return {
+      objective_summary: "Build a governed runx skill",
+      orchestration_steps: ["decompose", "research", "author-harness"],
+      required_skills: ["objective-decompose", "skill-research", "harness-author"],
+      open_questions: [],
+    };
+  }
+
+  if (questionId.includes("skill-research")) {
+    return {
+      findings: ["Use portable skills and explicit agent-step boundaries."],
+      recommended_flow: ["decompose", "research", "author-harness"],
+      sources: [],
+      risks: ["Do not hide agent work in helper scripts."],
+    };
+  }
+
+  if (questionId.includes("receipt-review")) {
+    return {
+      verdict: "needs_update",
+      failure_summary: "Missing-context handling needs a fixture.",
+      improvement_proposals: ["Add an answers-backed missing-context fixture."],
+      next_harness_checks: ["missing-context fixture passes"],
+    };
+  }
+
+  if (questionId.includes("harness-author")) {
+    return {
+      skill_spec: {
+        name: "sourcey",
+      },
+      execution_plan: {
+        runner: "chain",
+      },
+      harness_fixture: {
+        kind: "skill",
+        expect: {
+          status: "success",
+        },
+      },
+      acceptance_checks: ["missing-context fixture passes"],
+    };
+  }
+
+  return {};
+}

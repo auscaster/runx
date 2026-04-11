@@ -1,0 +1,34 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
+import { describe, expect, it } from "vitest";
+
+import { parseRunnerManifestYaml, parseSkillMarkdown, validateRunnerManifest, validateSkill } from "../packages/parser/src/index.js";
+
+describe("scafld skill contract", () => {
+  it("keeps the portable skill standard while X wraps the existing scafld CLI", async () => {
+    const skillPath = path.resolve("skills/scafld/SKILL.md");
+    const skill = validateSkill(parseSkillMarkdown(await readFile(skillPath, "utf8")), { mode: "strict" });
+    const manifest = validateRunnerManifest(parseRunnerManifestYaml(await readFile(path.resolve("skills/scafld/x.yaml"), "utf8")));
+    const runner = manifest.runners["scafld-cli"];
+    const agentRunner = manifest.runners.agent;
+
+    expect(skill.name).toBe("scafld");
+    expect(skill.source.type).toBe("agent");
+    expect(skill.inputs).toEqual({});
+    expect(runner?.default).toBe(true);
+    expect(runner?.source.type).toBe("cli-tool");
+    expect(runner?.source.command).toBe("node");
+    expect(runner?.source.args.join("\n")).toContain("spawnSync(scafld, args");
+    expect(runner?.source.args.join("\n")).toContain('if (jsonCommands.has(command)) args.push("--json")');
+    expect(runner?.source.args.join("\n")).not.toContain("env: process.env");
+    expect(agentRunner?.source.type).toBe("agent");
+    expect(agentRunner?.inputs.review_file.required).toBe(true);
+    expect(agentRunner?.inputs.review_prompt.required).toBe(true);
+    expect(runner?.inputs.command.required).toBe(true);
+    expect(runner?.inputs.task_id.required).toBe(false);
+    expect(runner?.runtime).toEqual({
+      requirements: ["scafld CLI available on PATH, via SCAFLD_BIN, or through explicit scafld_bin input"],
+    });
+  });
+});

@@ -1,0 +1,10 @@
+name: retry-mutating-denied
+owner: runx
+steps:
+  - id: deploy
+    skill: ../../skills/echo.md
+    mutation: mutating
+    inputs:
+      message: deploy
+    retry:
+      max_attempts: 2

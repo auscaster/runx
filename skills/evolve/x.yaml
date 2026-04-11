@@ -1,0 +1,160 @@
+skill: evolve
+
+runners:
+  evolve:
+    default: true
+    type: chain
+    inputs:
+      objective:
+        type: string
+        required: true
+        description: "Objective to evolve the repository toward."
+      repo_root:
+        type: string
+        required: false
+        default: "."
+        description: "Repository root to inspect and evolve."
+      terminate:
+        type: string
+        required: false
+        default: "spec"
+        description: "Bounded termination target: spec, patch, or pr."
+    chain:
+      name: evolve
+      steps:
+        - id: preflight
+          run:
+            type: cli-tool
+            command: node
+            args:
+              - -e
+              - |
+                const fs = require("node:fs");
+                const path = require("node:path");
+                const inputs = JSON.parse(process.env.RUNX_INPUTS_JSON || "{}");
+                const repoRoot = path.resolve(String(inputs.repo_root || "."));
+                const hasScafld = fs.existsSync(path.join(repoRoot, ".ai"));
+                const packageJsonPath = path.join(repoRoot, "package.json");
+                const packageJson = fs.existsSync(packageJsonPath)
+                  ? JSON.parse(fs.readFileSync(packageJsonPath, "utf8"))
+                  : null;
+                const languages = [];
+                if (packageJson) languages.push("javascript");
+                if (fs.existsSync(path.join(repoRoot, "pnpm-workspace.yaml"))) languages.push("typescript");
+                process.stdout.write(JSON.stringify({
+                  repo_profile: {
+                    root: repoRoot,
+                    has_scafld: hasScafld,
+                    languages,
+                    risk_signals: hasScafld ? [] : ["missing_scafld"]
+                  }
+                }));
+          artifacts:
+            named_emits:
+              repo_profile: repo_profile
+        - id: plan
+          run:
+            type: agent-step
+            agent: builder
+            task: evolve-plan
+            outputs:
+              objective_brief: object
+              diagnosis_report: object
+              change_plan: object
+              spec_document: object
+          instructions: >
+            Using the evolve skill environment, produce a bounded objective_brief,
+            diagnosis_report, change_plan, and spec_document. Keep them practical
+            and directly actionable for the current repository.
+          context:
+            repo_profile: preflight.repo_profile.data
+          artifacts:
+            named_emits:
+              objective_brief: objective_brief
+              diagnosis_report: diagnosis_report
+              change_plan: change_plan
+              spec_document: spec_document
+        - id: approve
+          run:
+            type: approval
+          inputs:
+            gate_id: evolve.plan.approval
+            reason: Approve the evolve plan before any acting or publishing phase.
+          context:
+            objective_brief: plan.objective_brief.data
+            change_plan: plan.change_plan.data
+            spec_document: plan.spec_document.data
+          artifacts:
+            wrap_as: approval_decision
+        - id: act
+          run:
+            type: cli-tool
+            command: node
+            args:
+              - -e
+              - |
+                const inputs = JSON.parse(process.env.RUNX_INPUTS_JSON || "{}");
+                const terminate = String(inputs.terminate || "spec");
+                const approved = Boolean(inputs.approved);
+                const noOp = terminate === "spec" || !approved;
+                process.stdout.write(JSON.stringify({
+                  execution_report: {
+                    steps_completed: noOp ? 0 : 1,
+                    files_changed: noOp ? [] : ["README.md"],
+                    receipt_ids: []
+                  },
+                  verification_report: {
+                    passed: approved,
+                    checks: noOp ? ["bounded_noop"] : ["synthetic_check"]
+                  },
+                  review_report: {
+                    verdict: approved ? "approve" : "reject",
+                    findings: []
+                  }
+                }));
+          scopes:
+            - runx:evolve:draft_write
+          context:
+            approved: approve.approval_decision.data.approved
+            change_plan: plan.change_plan.data
+            spec_document: plan.spec_document.data
+            repo_profile: preflight.repo_profile.data
+          artifacts:
+            named_emits:
+              execution_report: execution_report
+              verification_report: verification_report
+              review_report: review_report
+        - id: publish
+          run:
+            type: cli-tool
+            command: node
+            args:
+              - -e
+              - |
+                const inputs = JSON.parse(process.env.RUNX_INPUTS_JSON || "{}");
+                const terminate = String(inputs.terminate || "spec");
+                const reviewVerdict = String(inputs.review_verdict || "reject");
+                const published = terminate === "pr" && reviewVerdict === "approve";
+                process.stdout.write(JSON.stringify({
+                  publish_report: {
+                    published,
+                    target: published ? "pull_request" : "none",
+                    artifact_refs: []
+                  }
+                }));
+          scopes:
+            - runx:evolve:write
+          context:
+            review_verdict: act.review_report.data.verdict
+            execution_report: act.execution_report.data
+          artifacts:
+            named_emits:
+              publish_report: publish_report
+      policy:
+        transitions:
+          - to: act
+            field: approve.approval_decision.data.approved
+            equals: true
+          - to: publish
+            field: act.review_report.data.verdict
+            equals: approve

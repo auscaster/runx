@@ -1,0 +1,22 @@
+skill: objective-decompose
+
+runners:
+  objective-decompose-agent:
+    default: true
+    type: agent-step
+    agent: builder
+    task: objective-decomposition
+    outputs:
+      objective_summary: string
+      orchestration_steps: array
+      required_skills: array
+      open_questions: array
+    inputs:
+      objective:
+        type: string
+        required: true
+        description: "The build or skill objective to decompose."
+      project_context:
+        type: string
+        required: false
+        description: "Optional repo, product, or user context for the objective."

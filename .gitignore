@@ -1,0 +1,25 @@
+# scafld
+.ai/logs/
+.ai/reviews/
+
+# dependencies
+node_modules/
+
+# build output
+dist/
+coverage/
+.turbo/
+*.tsbuildinfo
+__pycache__/
+*.py[cod]
+
+# environment
+.env
+.env.*
+!.env.example
+
+# local runx state
+.runx/
+runx-receipts/
+runx-output/
+runx-answers.json

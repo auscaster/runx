@@ -1,0 +1,10 @@
+name: retry-read-only
+owner: runx
+steps:
+  - id: flaky-read
+    skill: ../../skills/echo.md
+    inputs:
+      message: retry ok
+    retry:
+      max_attempts: 2
+      backoff_ms: 0

@@ -1,0 +1,24 @@
+{
+  "name": "@runxai/cli",
+  "version": "0.0.0",
+  "private": false,
+  "type": "module",
+  "bin": {
+    "runx": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "runx": "tsx src/index.ts"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "yaml": "^2.8.3"
+  }
+}

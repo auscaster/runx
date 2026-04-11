@@ -1,0 +1,123 @@
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+import { describe, expect, it } from "vitest";
+
+import { runLocalSkill, type Caller } from "../packages/runner-local/src/index.js";
+
+function caller(approved = false): Caller {
+  return {
+    answer: async () => ({}),
+    approve: async () => approved,
+    report: () => undefined,
+  };
+}
+
+describe("cli-tool sandbox profiles", () => {
+  it("denies readonly declared workspace writes before command execution", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-sandbox-readonly-"));
+    const outputPath = path.join(tempDir, "should-not-exist.txt");
+
+    try {
+      const result = await runLocalSkill({
+        skillPath: path.resolve("fixtures/skills/sandbox-readonly.md"),
+        inputs: { output_path: outputPath },
+        caller: caller(),
+        receiptDir: path.join(tempDir, "receipts"),
+        runxHome: path.join(tempDir, "home"),
+        env: process.env,
+      });
+
+      expect(result.status).toBe("policy_denied");
+      if (result.status !== "policy_denied") {
+        return;
+      }
+      expect(result.reasons).toEqual(["readonly sandbox cannot declare writable paths"]);
+      await expect(readFile(outputPath, "utf8")).rejects.toThrow();
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("permits workspace-write declarations and records actual local enforcement limits", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-sandbox-write-"));
+    const outputPath = path.join(tempDir, "out.txt");
+    const receiptDir = path.join(tempDir, "receipts");
+
+    try {
+      const result = await runLocalSkill({
+        skillPath: path.resolve("fixtures/skills/sandbox-workspace-write.md"),
+        inputs: { output_path: outputPath },
+        caller: caller(),
+        receiptDir,
+        runxHome: path.join(tempDir, "home"),
+        env: process.env,
+      });
+
+      expect(result.status).toBe("success");
+      if (result.status !== "success") {
+        return;
+      }
+      await expect(readFile(outputPath, "utf8")).resolves.toBe("sandbox-ok");
+      const receiptContents = await readFile(path.join(receiptDir, `${result.receipt.id}.json`), "utf8");
+      expect(receiptContents).toContain('"profile": "workspace-write"');
+      expect(receiptContents).toContain('"enforcement": "declared-policy-only"');
+      expect(receiptContents).toContain('"mode": "allowlist"');
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("requires explicit approval for unrestricted local development profile", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-sandbox-unrestricted-"));
+    const skillPath = path.join(tempDir, "unrestricted.md");
+    const receiptDir = path.join(tempDir, "receipts");
+
+    try {
+      await writeFile(
+        skillPath,
+        `---
+name: sandbox-unrestricted
+source:
+  type: cli-tool
+  command: node
+  args:
+    - -e
+    - "process.stdout.write('approved')"
+  sandbox:
+    profile: unrestricted-local-dev
+---
+Unrestricted fixture.
+`,
+      );
+
+      const denied = await runLocalSkill({
+        skillPath,
+        caller: caller(false),
+        receiptDir,
+        runxHome: path.join(tempDir, "home-denied"),
+        env: process.env,
+      });
+      expect(denied.status).toBe("policy_denied");
+
+      const approved = await runLocalSkill({
+        skillPath,
+        caller: caller(true),
+        receiptDir,
+        runxHome: path.join(tempDir, "home-approved"),
+        env: process.env,
+      });
+      expect(approved.status).toBe("success");
+      if (approved.status !== "success") {
+        return;
+      }
+      expect(approved.execution.stdout).toBe("approved");
+      const receiptContents = await readFile(path.join(receiptDir, `${approved.receipt.id}.json`), "utf8");
+      expect(receiptContents).toContain('"profile": "unrestricted-local-dev"');
+      expect(receiptContents).toContain('"approved": true');
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+});

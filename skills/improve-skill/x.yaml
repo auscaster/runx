@@ -1,0 +1,41 @@
+skill: improve-skill
+
+runners:
+  improve-skill:
+    default: true
+    type: chain
+    inputs:
+      receipt_id:
+        type: string
+        required: false
+        description: "Receipt id to inspect when available."
+      receipt_summary:
+        type: string
+        required: false
+        description: "Sanitized receipt or failure summary."
+      harness_output:
+        type: string
+        required: false
+        description: "Sanitized harness output or failure text."
+      skill_path:
+        type: string
+        required: false
+        description: "Skill package being improved."
+      objective:
+        type: string
+        required: false
+        description: "Operator intent for the next improvement pass."
+    chain:
+      name: improve-skill
+      owner: runx
+      steps:
+        - id: review-receipt
+          skill: ../receipt-review
+          scopes:
+            - runx:builder:review
+        - id: author-update-harness
+          skill: ../harness-author
+          scopes:
+            - runx:builder:write-proposal
+          context:
+            review: review-receipt.stdout

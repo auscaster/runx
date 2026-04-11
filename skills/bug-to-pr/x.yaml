@@ -1,0 +1,111 @@
+skill: bug-to-pr
+
+runners:
+  bug-to-pr:
+    default: true
+    type: chain
+    inputs:
+      task_id:
+        type: string
+        required: false
+        default: "bug-to-pr-fixture"
+        description: "scafld task id for the governed bug-to-PR lane."
+      title:
+        type: string
+        required: false
+        default: "Fixture bug to PR"
+        description: "Title passed to scafld spec/new."
+      size:
+        type: string
+        required: false
+        default: "micro"
+        description: "Size passed to scafld spec/new."
+      risk:
+        type: string
+        required: false
+        default: "low"
+        description: "Risk passed to scafld spec/new."
+      phase:
+        type: string
+        required: false
+        default: "phase1"
+        description: "Optional scafld execution phase."
+      fixture:
+        type: string
+        required: false
+        description: "Workspace root containing the target .ai/ directory."
+      scafld_bin:
+        type: string
+        required: false
+        description: "Explicit scafld executable path."
+    chain:
+      name: bug-to-pr
+      owner: runx
+      notes:
+        status: skeleton
+        rationale: >
+          This execution graph intentionally contains only the self-contained
+          scafld skill plus one caller-mediated review boundary. Writing the
+          review artifact and deciding whether it passes are outside the
+          subprocess and must stay visible.
+      steps:
+        - id: scafld-new
+          skill: ../scafld
+          scopes:
+            - scafld:spec:write
+          mutation: true
+          inputs:
+            command: spec
+        - id: scafld-approve
+          skill: ../scafld
+          scopes:
+            - scafld:spec:approve
+          mutation: true
+          inputs:
+            command: approve
+        - id: scafld-start
+          skill: ../scafld
+          scopes:
+            - scafld:exec:start
+          mutation: true
+          inputs:
+            command: start
+        - id: scafld-exec
+          skill: ../scafld
+          scopes:
+            - scafld:exec:write
+          mutation: true
+          inputs:
+            command: execute
+        - id: scafld-audit
+          skill: ../scafld
+          scopes:
+            - scafld:review:read
+          inputs:
+            command: audit
+        - id: scafld-review-open
+          skill: ../scafld
+          scopes:
+            - scafld:review:write
+          mutation: true
+          inputs:
+            command: review
+        - id: reviewer-boundary
+          skill: ../scafld
+          runner: agent
+          scopes:
+            - scafld:review:fill
+          context:
+            review_file: scafld-review-open.review_file
+            review_prompt: scafld-review-open.review_prompt
+          inputs:
+            instruction: "Fill the scafld review artifact at review_file before scafld complete runs."
+        - id: scafld-complete
+          skill: ../scafld
+          scopes:
+            - scafld:archive:write
+          mutation: true
+          context:
+            reviewer_result: reviewer-boundary.stdout
+          inputs:
+            command: complete

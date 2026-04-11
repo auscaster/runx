@@ -1,0 +1,11 @@
+name: sequential-echo
+owner: runx
+steps:
+  - id: first
+    skill: ../../skills/echo.md
+    inputs:
+      message: hello from chain
+  - id: second
+    skill: ../../skills/echo.md
+    context:
+      message: first.stdout

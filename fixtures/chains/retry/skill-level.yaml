@@ -1,0 +1,7 @@
+name: retry-skill-level
+owner: runx
+steps:
+  - id: skill-retry
+    skill: ../../skills/skill-level-retry.md
+    inputs:
+      message: skill retry ok

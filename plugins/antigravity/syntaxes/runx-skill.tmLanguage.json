@@ -1,0 +1,12 @@
+{
+  "scopeName": "text.runx.skill",
+  "patterns": [
+    { "include": "text.html.markdown" },
+    {
+      "name": "meta.frontmatter.yaml.runx",
+      "begin": "\\A---$",
+      "end": "^---$",
+      "patterns": [{ "include": "source.yaml" }]
+    }
+  ]
+}

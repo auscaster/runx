@@ -1,0 +1,207 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+import { describe, expect, it } from "vitest";
+
+import { createFixtureMarketplaceAdapter, type MarketplaceAdapter, type SkillSearchResult } from "../packages/marketplaces/src/index.js";
+import { createFileRegistryStore, ingestSkillMarkdown } from "../packages/registry/src/index.js";
+import { installLocalSkill, runLocalSkill, type Caller } from "../packages/runner-local/src/index.js";
+
+const caller: Caller = {
+  answer: async (questions) =>
+    Object.fromEntries(questions.map((question) => [question.id, { status: "agent", id: question.id }])),
+  approve: async () => false,
+  report: () => undefined,
+};
+
+describe("skill add X metadata", () => {
+  it("installs registry X metadata and runs through the installed default runner", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-skill-add-x-registry-"));
+    const registryDir = path.join(tempDir, "registry");
+    const skillsDir = path.join(tempDir, "skills");
+    const markdown = `---
+name: package-echo
+description: Portable echo package.
+---
+
+Echo a message.
+`;
+    const xManifest = `skill: package-echo
+runners:
+  package-echo-cli:
+    default: true
+    type: cli-tool
+    command: node
+    args:
+      - -e
+      - "process.stdout.write(process.env.RUNX_INPUT_MESSAGE || '')"
+    inputs:
+      message:
+        type: string
+        required: true
+`;
+
+    try {
+      const version = await ingestSkillMarkdown(createFileRegistryStore(registryDir), markdown, {
+        owner: "0state",
+        version: "1.0.0",
+        xManifest,
+      });
+
+      const install = await installLocalSkill({
+        ref: "0state/package-echo@1.0.0",
+        registryStore: createFileRegistryStore(registryDir),
+        destinationRoot: skillsDir,
+      });
+
+      expect(install).toMatchObject({
+        destination: path.join(skillsDir, "0state", "package-echo", "SKILL.md"),
+        xDestination: path.join(skillsDir, "0state", "package-echo", "x.yaml"),
+        xDigest: version.x_digest,
+        runnerNames: ["package-echo-cli"],
+      });
+      await expect(readFile(path.join(skillsDir, "0state", "package-echo", "x.yaml"), "utf8")).resolves.toBe(xManifest);
+
+      const run = await runLocalSkill({
+        skillPath: path.join(skillsDir, "0state", "package-echo"),
+        inputs: { message: "installed x ok" },
+        caller,
+        receiptDir: path.join(tempDir, "receipts"),
+        runxHome: path.join(tempDir, "home"),
+        env: process.env,
+      });
+
+      expect(run.status).toBe("success");
+      if (run.status !== "success") {
+        return;
+      }
+      expect(run.execution.stdout).toBe("installed x ok");
+      expect(run.receipt.kind).toBe("skill_execution");
+      if (run.receipt.kind !== "skill_execution") {
+        return;
+      }
+      expect(run.receipt.subject.source_type).toBe("cli-tool");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("installs marketplace X metadata when the upstream source provides it", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-skill-add-x-marketplace-"));
+
+    try {
+      const install = await installLocalSkill({
+        ref: "fixture:sourcey-docs",
+        registryStore: createFileRegistryStore(path.join(tempDir, "registry")),
+        marketplaceAdapters: [createFixtureMarketplaceAdapter()],
+        destinationRoot: path.join(tempDir, "skills"),
+      });
+
+      expect(install).toMatchObject({
+        destination: path.join(tempDir, "skills", "sourcey-docs", "SKILL.md"),
+        xDestination: path.join(tempDir, "skills", "sourcey-docs", "x.yaml"),
+        runnerNames: ["sourcey-docs-cli"],
+        trust_tier: "external-unverified",
+      });
+      await expect(readFile(path.join(tempDir, "skills", "sourcey-docs", "x.yaml"), "utf8")).resolves.toContain(
+        "sourcey-docs-cli",
+      );
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps standard-only marketplace skills runnable through the agent runner", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-skill-add-x-standard-"));
+
+    try {
+      const install = await installLocalSkill({
+        ref: "fixture:marketplace-standard-only",
+        registryStore: createFileRegistryStore(path.join(tempDir, "registry")),
+        marketplaceAdapters: [createFixtureMarketplaceAdapter()],
+        destinationRoot: path.join(tempDir, "skills"),
+      });
+
+      expect(install).toMatchObject({
+        destination: path.join(tempDir, "skills", "marketplace-standard-only", "SKILL.md"),
+        xDestination: undefined,
+        runnerNames: [],
+      });
+
+      const run = await runLocalSkill({
+        skillPath: path.join(tempDir, "skills", "marketplace-standard-only"),
+        caller,
+        receiptDir: path.join(tempDir, "receipts"),
+        runxHome: path.join(tempDir, "home"),
+        env: process.env,
+      });
+
+      expect(run.status).toBe("success");
+      if (run.status !== "success") {
+        return;
+      }
+      expect(run.receipt.kind).toBe("skill_execution");
+      if (run.receipt.kind !== "skill_execution") {
+        return;
+      }
+      expect(run.receipt.subject.source_type).toBe("agent");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects marketplace X metadata that does not match the installed skill", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-skill-add-x-invalid-"));
+
+    try {
+      await expect(
+        installLocalSkill({
+          ref: "invalid-x:portable",
+          registryStore: createFileRegistryStore(path.join(tempDir, "registry")),
+          marketplaceAdapters: [createInvalidXMarketplaceAdapter()],
+          destinationRoot: path.join(tempDir, "skills"),
+        }),
+      ).rejects.toThrow("does not match skill");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+function createInvalidXMarketplaceAdapter(): MarketplaceAdapter {
+  const markdown = `---
+name: portable
+description: Portable skill.
+---
+
+Portable.
+`;
+  const xManifest = `skill: other-skill
+runners:
+  portable-cli:
+    type: cli-tool
+    command: node
+`;
+  const result: SkillSearchResult = {
+    skill_id: "invalid-x/portable",
+    name: "portable",
+    owner: "invalid-x",
+    source: "invalid-x",
+    source_label: "Invalid X Fixture",
+    source_type: "agent",
+    trust_tier: "external-unverified",
+    required_scopes: [],
+    tags: [],
+    runner_mode: "x-metadata",
+    runner_names: ["portable-cli"],
+    add_command: "runx skill add invalid-x:portable",
+    run_command: "runx skill portable",
+  };
+  return {
+    source: "invalid-x",
+    label: "Invalid X Fixture",
+    search: async () => [result],
+    resolve: async () => ({ markdown, xManifest, result }),
+  };
+}

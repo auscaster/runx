@@ -1,0 +1,30 @@
+skill: harness-author
+
+runners:
+  harness-author-agent:
+    default: true
+    type: agent-step
+    agent: builder
+    task: harness-author
+    outputs:
+      skill_spec: object
+      execution_plan: object
+      harness_fixture: object
+      acceptance_checks: array
+    inputs:
+      objective:
+        type: string
+        required: true
+        description: "The skill objective to harness."
+      decomposition:
+        type: string
+        required: false
+        description: "Output from objective-decompose."
+      research:
+        type: string
+        required: false
+        description: "Output from skill-research."
+      review:
+        type: string
+        required: false
+        description: "Output from receipt-review when improving an existing skill."

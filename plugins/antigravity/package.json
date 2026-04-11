@@ -1,0 +1,93 @@
+{
+  "name": "@runx/antigravity",
+  "displayName": "runx",
+  "description": "Governed skill and chain execution for VS Code-compatible IDE hosts, Antigravity first.",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "publisher": "runxai",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "dependencies": {
+    "yaml": "^2.8.3"
+  },
+  "activationEvents": [
+    "onCommand:runx.skill.run",
+    "onCommand:runx.history",
+    "onView:runx.receipts"
+  ],
+  "main": "./dist/index.js",
+  "contributes": {
+    "commands": [
+      { "command": "runx.skill.run", "title": "runx: Run Skill" },
+      { "command": "runx.receipt.inspect", "title": "runx: Inspect Receipt" },
+      { "command": "runx.history", "title": "runx: Show History" },
+      { "command": "runx.skill.search", "title": "runx: Search Skills" },
+      { "command": "runx.skill.add", "title": "runx: Add Skill" },
+      { "command": "runx.connect.list", "title": "runx: List Connections" },
+      { "command": "runx.harness.run", "title": "runx: Run Harness" },
+      { "command": "runx.skill.preview", "title": "runx: Preview Skill" }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "runx",
+          "title": "runx",
+          "icon": "./media/runx-mark.svg"
+        }
+      ]
+    },
+    "views": {
+      "runx": [
+        { "id": "runx.receipts", "name": "Receipts" }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "runx.receipts",
+        "contents": "Run a skill or composite skill to generate receipts.\\n[Run Skill](command:runx.skill.run)"
+      }
+    ],
+    "languages": [
+      {
+        "id": "runx-skill",
+        "aliases": ["runx skill"],
+        "extensions": [".runx.md", ".skill.md"],
+        "filenames": ["SKILL.md"]
+      }
+    ],
+    "grammars": [
+      {
+        "language": "runx-skill",
+        "scopeName": "text.runx.skill",
+        "path": "./syntaxes/runx-skill.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "runx-skill",
+        "path": "./snippets/runx-skill.json"
+      },
+      {
+        "language": "yaml",
+        "path": "./snippets/runx-skill.json"
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "runx.gettingStarted",
+        "title": "Run governed skills",
+        "description": "Run skills and inspect linked receipts from the IDE.",
+        "steps": [
+          {
+            "id": "runx.runSkill",
+            "title": "Run a skill",
+            "description": "Use the command palette action to run a local or registry skill.",
+            "completionEvents": ["onCommand:runx.skill.run"]
+          }
+        ]
+      }
+    ]
+  }
+}

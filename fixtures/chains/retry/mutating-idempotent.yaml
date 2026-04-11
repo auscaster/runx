@@ -1,0 +1,13 @@
+name: retry-mutating-idempotent
+owner: runx
+steps:
+  - id: deploy
+    skill: ../../skills/echo.md
+    mutation: mutating
+    idempotency_key: "{{request_id}}"
+    inputs:
+      message: deploy
+      request_id: deploy-123
+    retry:
+      max_attempts: 2
+      backoff_ms: 0

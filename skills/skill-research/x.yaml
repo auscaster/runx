@@ -1,0 +1,22 @@
+skill: skill-research
+
+runners:
+  skill-research-agent:
+    default: true
+    type: agent-step
+    agent: researcher
+    task: skill-research
+    outputs:
+      findings: array
+      recommended_flow: array
+      sources: array
+      risks: array
+    inputs:
+      objective:
+        type: string
+        required: true
+        description: "The build or skill objective being researched."
+      decomposition:
+        type: string
+        required: false
+        description: "Structured decomposition output from objective-decompose."

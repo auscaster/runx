@@ -1,0 +1,36 @@
+skill: objective-to-skill
+
+runners:
+  objective-to-skill:
+    default: true
+    type: chain
+    inputs:
+      objective:
+        type: string
+        required: true
+        description: "The capability or automation objective to design."
+      project_context:
+        type: string
+        required: false
+        description: "Repo, product, or operator context that constrains the design."
+    chain:
+      name: objective-to-skill
+      owner: runx
+      steps:
+        - id: decompose
+          skill: ../objective-decompose
+          scopes:
+            - runx:builder:read
+        - id: research
+          skill: ../skill-research
+          scopes:
+            - runx:builder:research
+          context:
+            decomposition: decompose.stdout
+        - id: author-harness
+          skill: ../harness-author
+          scopes:
+            - runx:builder:write-proposal
+          context:
+            decomposition: decompose.stdout
+            research: research.stdout

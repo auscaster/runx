@@ -1,0 +1,30 @@
+skill: receipt-review
+
+runners:
+  receipt-review-agent:
+    default: true
+    type: agent-step
+    agent: reviewer
+    task: receipt-review
+    outputs:
+      verdict: string
+      failure_summary: string
+      improvement_proposals: array
+      next_harness_checks: array
+    inputs:
+      receipt_id:
+        type: string
+        required: false
+        description: "Receipt id to review when available."
+      receipt_summary:
+        type: string
+        required: false
+        description: "Sanitized receipt or harness summary."
+      harness_output:
+        type: string
+        required: false
+        description: "Sanitized failed harness output."
+      skill_path:
+        type: string
+        required: false
+        description: "Skill path being improved."

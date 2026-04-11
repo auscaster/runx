@@ -1,0 +1,13 @@
+name: sequential-chain
+kind: chain
+target: ../chains/sequential/runx.yaml
+expect:
+  status: success
+  receipt:
+    kind: chain_execution
+    status: success
+    subject:
+      chain_name: sequential-echo
+  steps:
+    - first
+    - second
