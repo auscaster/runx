@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "incremental": true,
+    "rootDir": ".",
+    "outDir": ".build/runtime",
+    "tsBuildInfoFile": "node_modules/.cache/tsc/runtime.tsbuildinfo"
+  },
+  "include": ["packages/**/*.ts", "apps/**/*.ts", "plugins/**/*.ts"],
+  "exclude": ["**/*.test.ts", "dist", "**/dist", ".build", "coverage", "node_modules"]
+}

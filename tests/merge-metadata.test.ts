@@ -54,7 +54,7 @@ describe("merge-metadata", () => {
       expect(result.receipt.metadata).toMatchObject({
         runner: {
           type: "agent",
-          enforcement: "caller-mediated",
+          enforcement: "agent-mediated",
           attestation: "agent-reported",
           provider: "openai",
           model: "gpt-test",

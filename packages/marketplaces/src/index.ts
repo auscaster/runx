@@ -2,7 +2,7 @@ export const marketplacesPackage = "@runx/marketplaces";
 
 export type SkillSearchSource = "runx-registry" | string;
 export type SkillSearchTrustTier = "runx-derived" | "external-unverified";
-export type SkillRunnerMode = "standard-only" | "x-metadata";
+export type SkillRunnerMode = "standard-only" | "x-manifest";
 
 export interface SkillSearchResult {
   readonly skill_id: string;

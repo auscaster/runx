@@ -8,7 +8,7 @@ description: Turn a product or automation objective into a bounded runx skill pa
 Convert an automation or product objective into a practical, testable runx
 skill package.
 
-This is a composite skill that chains three builder skills:
+This is a composite skill that chains three reusable builder capabilities:
 `objective-decompose` → `skill-research` → `harness-author`. It takes a
 high-level goal and produces everything needed to implement and test a
 new skill.

@@ -1,4 +1,4 @@
-import { chmod, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
@@ -8,12 +8,16 @@ const require = createRequire(import.meta.url);
 const workspaceRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const packageRoot = path.join(workspaceRoot, "packages");
 const packageSearchRoots = [packageRoot, path.join(workspaceRoot, "plugins")];
+const runtimeOutDir = path.join(workspaceRoot, ".build", "runtime");
 const tscPath = require.resolve("typescript/bin/tsc");
 
-const packageDirs = (await Promise.all(packageSearchRoots.map(findPackageDirs))).flat();
+const mode = process.argv.includes("--pack") ? "pack" : "dev";
 
+await runTscBuild(["-b", "tsconfig.runtime.json"]);
+
+const packageDirs = (await Promise.all(packageSearchRoots.map(findPackageDirs))).flat();
 for (const directory of packageDirs) {
-  await buildPackage(directory);
+  await finalizePackage(directory);
 }
 
 async function findPackageDirs(root) {
@@ -45,95 +49,69 @@ async function findPackageDirs(root) {
   return directories.sort();
 }
 
-async function buildPackage(directory) {
-  const src = path.join(directory, "src");
-  const entry = path.join(src, "index.ts");
+async function finalizePackage(directory) {
+  const entry = path.join(directory, "src", "index.ts");
   if (!(await exists(entry))) {
     return;
   }
 
-  const dist = path.join(directory, "dist");
-  await rm(dist, { recursive: true, force: true });
-
   const packageJson = JSON.parse(await readFile(path.join(directory, "package.json"), "utf8"));
-  const sources = await findRuntimeSources(src);
-  await runTsc([
-    "--target",
-    "ES2022",
-    "--module",
-    "NodeNext",
-    "--moduleResolution",
-    "NodeNext",
-    "--strict",
-    "--declaration",
-    "--sourceMap",
-    "--types",
-    "node",
-    "--skipLibCheck",
-    "--outDir",
+  const workspaceRelativePath = toPosix(path.relative(workspaceRoot, directory));
+  const runtimeEntry = path.join(runtimeOutDir, workspaceRelativePath, "src", "index.js");
+
+  if (!(await exists(runtimeEntry))) {
+    throw new Error(`No compiled runtime entry found for ${directory}`);
+  }
+
+  const dist = path.join(directory, "dist");
+  const isCli = packageJson.name === "@runxai/cli";
+  const isExecutable = Boolean(packageJson.bin?.runx);
+
+  if (isCli && mode === "pack") {
+    await writeCliPackDist({ directory, dist });
+    return;
+  }
+
+  // Dev mode: write a thin wrapper that imports from .build/runtime.
+  // No copying, no duplication. Idempotent and race-free.
+  await mkdir(dist, { recursive: true });
+  await writeEntryWrapper({
     dist,
-    ...sources,
-  ]);
-
-  const compiledEntry = await findCompiledEntry(directory, dist);
-  if (!compiledEntry) {
-    throw new Error(`No compiled entry found for ${directory}`);
-  }
-
-  if (path.resolve(compiledEntry) !== path.resolve(path.join(dist, "index.js"))) {
-    await writeEntryWrapper({
-      dist,
-      compiledEntry,
-      executable: Boolean(packageJson.bin?.runx),
-    });
-  }
-
-  if (packageJson.bin?.runx) {
+    compiledEntry: runtimeEntry,
+    executable: isExecutable,
+  });
+  if (isExecutable) {
     await chmod(path.join(dist, "index.js"), 0o755);
   }
+  if (isCli) {
+    await syncCliAssets(directory);
+  }
 }
 
-async function findRuntimeSources(directory) {
-  const sources = [];
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
-    const candidate = path.join(directory, entry.name);
-    if (entry.isDirectory()) {
-      sources.push(...(await findRuntimeSources(candidate)));
-      continue;
-    }
-    if (entry.isFile() && entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
-      sources.push(candidate);
-    }
-  }
-  return sources.sort();
+async function writeCliPackDist({ directory, dist }) {
+  // Publish mode: produce a self-contained CLI dist that can be packed
+  // and installed without .build/runtime on disk.
+  await rm(dist, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  await mkdir(dist, { recursive: true });
+  await copyIntoDist(path.join(runtimeOutDir, "packages"), path.join(dist, "packages"));
+  await writeEntryWrapper({
+    dist,
+    compiledEntry: path.join(dist, "packages", "cli", "src", "index.js"),
+    executable: true,
+  });
+  await chmod(path.join(dist, "index.js"), 0o755);
+  await syncCliAssets(directory);
 }
 
-async function findCompiledEntry(directory, dist) {
-  const directEntry = path.join(dist, "index.js");
-  if (await exists(directEntry)) {
-    return directEntry;
+async function syncCliAssets(directory) {
+  for (const assetName of ["skills", "tools"]) {
+    const source = path.join(workspaceRoot, assetName);
+    const target = path.join(directory, assetName);
+    await rm(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    if (await exists(source)) {
+      await cp(source, target, { recursive: true });
+    }
   }
-
-  const relativePackagePath = toPosix(path.relative(packageRoot, directory));
-  const nestedEntry = path.join(dist, ...relativePackagePath.split("/"), "src", "index.js");
-  if (await exists(nestedEntry)) {
-    return nestedEntry;
-  }
-
-  const packageParent = path.dirname(directory);
-  const relativeLocalPath = toPosix(path.relative(packageParent, directory));
-  const localNestedEntry = path.join(dist, relativeLocalPath, "src", "index.js");
-  if (await exists(localNestedEntry)) {
-    return localNestedEntry;
-  }
-
-  const workspaceRelativePath = toPosix(path.relative(workspaceRoot, directory));
-  const workspaceNestedEntry = path.join(dist, ...workspaceRelativePath.split("/"), "src", "index.js");
-  if (await exists(workspaceNestedEntry)) {
-    return workspaceNestedEntry;
-  }
-
-  return undefined;
 }
 
 async function writeEntryWrapper({ dist, compiledEntry, executable }) {
@@ -157,7 +135,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
   await writeFile(path.join(dist, "index.d.ts"), `export * from ${JSON.stringify(specifier)};\n`);
 }
 
-async function runTsc(args) {
+async function runTscBuild(args) {
   await new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [tscPath, ...args], {
       cwd: workspaceRoot,
@@ -172,6 +150,14 @@ async function runTsc(args) {
       }
     });
   });
+}
+
+async function copyIntoDist(source, target) {
+  if (!(await exists(source))) {
+    return;
+  }
+  await mkdir(path.dirname(target), { recursive: true });
+  await cp(source, target, { recursive: true });
 }
 
 async function exists(filePath) {

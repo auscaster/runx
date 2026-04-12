@@ -4,14 +4,14 @@ export const cliPackage = "@runxai/cli";
 
 import { createInterface } from "node:readline/promises";
 import { createCipheriv, createHash, randomBytes } from "node:crypto";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { stdin as processStdin, stdout as processStdout } from "node:process";
 import { fileURLToPath } from "node:url";
 import { pathToFileURL } from "node:url";
 
-import { runHarness } from "../../harness/src/index.js";
+import { runHarness, runHarnessTarget } from "../../harness/src/index.js";
 import { createFixtureMarketplaceAdapter, searchMarketplaceAdapters, type SkillSearchResult } from "../../marketplaces/src/index.js";
 import { createFileMemoryStore } from "../../memory/src/index.js";
 import {
@@ -34,6 +34,66 @@ export interface CliIo {
   readonly stdout: NodeJS.WriteStream;
   readonly stderr: NodeJS.WriteStream;
   readonly stdin: NodeJS.ReadStream;
+}
+
+interface UiTheme {
+  readonly on: boolean;
+  readonly reset: string;
+  readonly bold: string;
+  readonly dim: string;
+  readonly cyan: string;
+  readonly magenta: string;
+  readonly green: string;
+  readonly red: string;
+  readonly yellow: string;
+  readonly gray: string;
+}
+
+function isTtyStream(stream: unknown): boolean {
+  return typeof stream === "object" && stream !== null && (stream as { isTTY?: boolean }).isTTY === true;
+}
+
+function theme(stream: NodeJS.WritableStream | undefined = process.stdout, env: NodeJS.ProcessEnv = process.env): UiTheme {
+  const on = isTtyStream(stream) && !env.NO_COLOR;
+  const code = (seq: string) => (on ? seq : "");
+  return {
+    on,
+    reset: code("\u001b[0m"),
+    bold: code("\u001b[1m"),
+    dim: code("\u001b[2m"),
+    cyan: code("\u001b[38;5;117m"),
+    magenta: code("\u001b[38;5;207m"),
+    green: code("\u001b[38;5;42m"),
+    red: code("\u001b[38;5;203m"),
+    yellow: code("\u001b[38;5;221m"),
+    gray: code("\u001b[38;5;244m"),
+  };
+}
+
+function statusIcon(status: string, t: UiTheme): string {
+  if (status === "success" || status === "verified" || status === "installed") return `${t.green}✓${t.reset}`;
+  if (status === "failure" || status === "invalid" || status === "denied") return `${t.red}✗${t.reset}`;
+  if (status === "needs_agent" || status === "needs_approval") return `${t.yellow}◇${t.reset}`;
+  if (status === "unverified" || status === "unchanged") return `${t.dim}·${t.reset}`;
+  return `${t.dim}·${t.reset}`;
+}
+
+function relativeTime(iso: string | undefined, now: number = Date.now()): string {
+  if (!iso) return "";
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return "";
+  const diffSec = Math.max(0, Math.round((now - then) / 1000));
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHour = Math.round(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}h ago`;
+  const diffDay = Math.round(diffHour / 24);
+  return `${diffDay}d ago`;
+}
+
+function shortId(id: string): string {
+  return id.length > 12 ? `${id.slice(0, 12)}…` : id;
 }
 
 export interface CliServices {
@@ -71,7 +131,6 @@ export interface ParsedArgs {
   readonly receiptDir?: string;
   readonly runner?: string;
   readonly memoryProject?: string;
-  readonly allowAgentStep: boolean;
   readonly sourceFilter?: string;
   readonly installVersion?: string;
   readonly installTo?: string;
@@ -95,14 +154,14 @@ export async function runCli(
   services: CliServices = {},
 ): Promise<number> {
   if (isHelpRequest(argv)) {
-    writeUsage(io.stdout);
+    writeUsage(io.stdout, env);
     return 0;
   }
 
   const parsed = parseArgs(argv);
 
   if (!isSupportedCommand(parsed)) {
-    writeUsage(io.stderr);
+    writeUsage(io.stderr, env);
     return 64;
   }
 
@@ -113,24 +172,15 @@ export async function runCli(
     const caller = parsed.nonInteractive
       ? createNonInteractiveCaller(callerInput.answers, callerInput.approvals)
       : createInteractiveCaller(io, callerInput.answers, callerInput.approvals);
-    const allowedSourceTypes =
-      parsed.allowAgentStep || parsed.command === "evolve"
-        ? ["agent", "approval", "cli-tool", "mcp", "a2a", "agent-step", "chain"]
-        : undefined;
-
     if (parsed.command === "harness" && parsed.harnessPath) {
-      const result = await runHarness(resolveUserPath(parsed.harnessPath, env), { env });
+      const result = await runHarnessTarget(resolveUserPath(parsed.harnessPath, env), { env });
       if (parsed.json) {
         io.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
       } else {
-        io.stdout.write(
-          `Harness ${result.fixture.name} ${result.status} (${result.assertionErrors.length} assertion error(s)).\n`,
-        );
+        io.stdout.write(renderHarnessResult(result));
       }
-      if (result.assertionErrors.length > 0) {
-        for (const error of result.assertionErrors) {
-          io.stderr.write(`${error}\n`);
-        }
+      for (const error of result.assertionErrors) {
+        io.stderr.write(`${error}\n`);
       }
       return result.assertionErrors.length === 0 ? 0 : 1;
     }
@@ -203,8 +253,10 @@ export async function runCli(
       if (parsed.json) {
         io.stdout.write(`${JSON.stringify({ status: "success", install: result }, null, 2)}\n`);
       } else {
+        const t = theme(io.stdout, env);
+        const icon = statusIcon(result.status, t);
         io.stdout.write(
-          `${result.status === "installed" ? "Installed" : "Unchanged"} ${result.skill_name} -> ${result.destination}\n`,
+          `\n  ${icon}  ${t.bold}${result.skill_name}${t.reset}  ${t.dim}${result.status}${t.reset}\n  ${t.dim}${result.destination}${t.reset}\n\n`,
         );
       }
       return 0;
@@ -225,7 +277,11 @@ export async function runCli(
       if (parsed.json) {
         io.stdout.write(`${JSON.stringify({ status: "success", publish: result }, null, 2)}\n`);
       } else {
-        io.stdout.write(`${result.status} ${result.skill_id}@${result.version} sha256:${result.digest}\n`);
+        const t = theme(io.stdout, env);
+        const icon = statusIcon(result.status, t);
+        io.stdout.write(
+          `\n  ${icon}  ${t.bold}${result.skill_id}${t.reset}${t.dim}@${result.version}${t.reset}  ${t.dim}${result.status}${t.reset}\n  ${t.dim}sha256:${result.digest}${t.reset}\n\n`,
+        );
       }
       return 0;
     }
@@ -274,17 +330,18 @@ export async function runCli(
     }
 
     if (parsed.command === "evolve") {
+      const evolveInputs: Record<string, unknown> = { ...parsed.inputs };
+      if (parsed.evolveObjective !== undefined) {
+        evolveInputs.objective = parsed.evolveObjective;
+      }
       const result = await runLocalSkill({
         skillPath: resolveBundledSkillPath("evolve"),
-        inputs: {
-          ...parsed.inputs,
-          objective: parsed.evolveObjective ?? parsed.inputs.objective,
-        },
+        inputs: evolveInputs,
         answersPath: parsed.answersPath ? resolveUserPath(parsed.answersPath, env) : undefined,
         caller,
         env,
         receiptDir: parsed.receiptDir ? resolveUserPath(parsed.receiptDir, env) : undefined,
-        allowedSourceTypes,
+        runner: parsed.runner ?? (parsed.evolveObjective === undefined && !parsed.resumeReceiptId ? "introspect" : undefined),
         resumeFromRunId: parsed.resumeReceiptId,
       });
 
@@ -294,12 +351,58 @@ export async function runCli(
           skill_path: resolveBundledSkillPath("evolve"),
           questions: result.questions,
         };
-        io.stdout.write(`${JSON.stringify(report, null, parsed.json ? 2 : 0)}\n`);
-        return parsed.json ? 0 : 2;
+        if (parsed.json) {
+          io.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+          return 0;
+        }
+        io.stdout.write(renderMissingContext("evolve", result.questions));
+        return 2;
+      }
+
+      if (result.status === "needs_agent") {
+        if (parsed.json) {
+          io.stdout.write(
+            `${JSON.stringify(
+              {
+                status: "needs_agent",
+                skill: result.skill.name,
+                run_id: result.runId,
+                step_ids: result.stepIds,
+                requests: result.requests,
+              },
+              null,
+              2,
+            )}\n`,
+          );
+        } else {
+          io.stdout.write(renderNeedsAgent(result));
+        }
+        return 2;
+      }
+
+      if (result.status === "needs_approval") {
+        if (parsed.json) {
+          io.stdout.write(
+            `${JSON.stringify(
+              {
+                status: "needs_approval",
+                skill: result.skill.name,
+                run_id: result.runId,
+                step_ids: result.stepIds,
+                gates: result.gates,
+              },
+              null,
+              2,
+            )}\n`,
+          );
+        } else {
+          io.stdout.write(renderNeedsApproval(result));
+        }
+        return 2;
       }
 
       if (result.status === "policy_denied") {
-        io.stderr.write(`Policy denied evolve execution: ${result.reasons.join("; ")}\n`);
+        io.stderr.write(renderPolicyDenied(result.skill.name, result.reasons));
         return 1;
       }
 
@@ -315,14 +418,13 @@ export async function runCli(
     }
 
     const result = await runLocalSkill({
-      skillPath: resolveUserPath(parsed.skillPath ?? "", env),
+      skillPath: resolveSkillReference(parsed.skillPath ?? "", env),
       inputs: parsed.inputs,
       answersPath: parsed.answersPath ? resolveUserPath(parsed.answersPath, env) : undefined,
       caller,
       env,
       receiptDir: parsed.receiptDir ? resolveUserPath(parsed.receiptDir, env) : undefined,
       runner: parsed.runner,
-      allowedSourceTypes,
       resumeFromRunId: parsed.resumeReceiptId,
     });
 
@@ -332,8 +434,54 @@ export async function runCli(
         skill_path: result.skillPath,
         questions: result.questions,
       };
-      io.stdout.write(`${JSON.stringify(report, null, parsed.json ? 2 : 0)}\n`);
-      return parsed.json ? 0 : 2;
+      if (parsed.json) {
+        io.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+        return 0;
+      }
+      io.stdout.write(renderMissingContext(path.basename(result.skillPath, path.extname(result.skillPath)), result.questions));
+      return 2;
+    }
+
+    if (result.status === "needs_agent") {
+      if (parsed.json) {
+        io.stdout.write(
+          `${JSON.stringify(
+            {
+              status: "needs_agent",
+              skill: result.skill.name,
+              run_id: result.runId,
+              step_ids: result.stepIds,
+              requests: result.requests,
+            },
+            null,
+            2,
+          )}\n`,
+        );
+      } else {
+        io.stdout.write(renderNeedsAgent(result));
+      }
+      return 2;
+    }
+
+    if (result.status === "needs_approval") {
+      if (parsed.json) {
+        io.stdout.write(
+          `${JSON.stringify(
+            {
+              status: "needs_approval",
+              skill: result.skill.name,
+              run_id: result.runId,
+              step_ids: result.stepIds,
+              gates: result.gates,
+            },
+            null,
+            2,
+          )}\n`,
+        );
+      } else {
+        io.stdout.write(renderNeedsApproval(result));
+      }
+      return 2;
     }
 
     if (result.status === "policy_denied") {
@@ -362,7 +510,7 @@ export async function runCli(
         );
         return approvalRequired ? 2 : 1;
       }
-      io.stderr.write(`Policy denied skill execution: ${result.reasons.join("; ")}\n`);
+      io.stderr.write(renderPolicyDenied(result.skill.name, result.reasons));
       return 1;
     }
 
@@ -377,7 +525,8 @@ export async function runCli(
 
     return result.status === "success" ? 0 : 1;
   } catch (error) {
-    io.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    const message = error instanceof Error ? error.message : String(error);
+    io.stderr.write(renderCliError(message));
     return 1;
   }
 }
@@ -386,7 +535,33 @@ function isHelpRequest(argv: readonly string[]): boolean {
   return argv.length === 1 && (argv[0] === "--help" || argv[0] === "-h");
 }
 
-function writeUsage(stream: NodeJS.WritableStream): void {
+const BANNER_LINES = [
+  "_______ __ __  ____ ___  ___",
+  "\\_  __ \\  |  \\/    \\\\  \\/  /",
+  " |  | \\/  |  /   |  \\>    < ",
+  " |__|  |____/|___|  /__/\\_ \\",
+  "                  \\/      \\/",
+];
+
+function writeBanner(stream: NodeJS.WritableStream, env: NodeJS.ProcessEnv): void {
+  const t = theme(stream, env);
+  const gradient = t.on
+    ? ["\u001b[38;5;201m", "\u001b[38;5;207m", "\u001b[38;5;177m", "\u001b[38;5;147m", "\u001b[38;5;117m"]
+    : ["", "", "", "", ""];
+  const lines: string[] = [""];
+  for (let i = 0; i < BANNER_LINES.length; i += 1) {
+    lines.push(`  ${gradient[i]}${t.bold}${BANNER_LINES[i]}${t.reset}`);
+  }
+  lines.push("");
+  stream.write(`${lines.join("\n")}\n`);
+}
+
+function writeUsage(stream: NodeJS.WritableStream, env: NodeJS.ProcessEnv = process.env): void {
+  const t = theme(stream, env);
+  const wantsBanner = t.on || env.RUNX_BANNER === "1";
+  if (wantsBanner) {
+    writeBanner(stream, env);
+  }
   stream.write(
     [
       "Usage:",
@@ -398,9 +573,9 @@ function writeUsage(stream: NodeJS.WritableStream): void {
       "  runx memory show --project . [--json]",
       "  runx connect list|revoke <grant-id>|<provider> [--scope scope] [--json]",
       "  runx config set|get|list [agent.provider|agent.model|agent.api_key] [value] [--json]",
-      "  runx skill <skill.md> [--runner runner-name] [--input value] [--non-interactive] [--json] [--answers answers.json] [--allow-agent-step]",
-      "  runx evolve <objective> [--receipt run-id] [--non-interactive] [--json] [--answers answers.json] [--allow-agent-step]",
-      "  runx harness <fixture.yaml> [--json]",
+      "  runx skill <skill.md> [--runner runner-name] [--input value] [--non-interactive] [--json] [--answers answers.json]",
+      "  runx evolve [objective] [--receipt run-id] [--non-interactive] [--json] [--answers answers.json]",
+      "  runx harness <fixture.yaml|skill-dir|x.yaml> [--json]",
       "",
     ].join("\n"),
   );
@@ -416,8 +591,6 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   let receiptDir: string | undefined;
   let resumeReceiptId: string | undefined;
   let runner: string | undefined;
-  let allowAgentStep = false;
-
   for (let index = 0; index < rest.length; index += 1) {
     const token = rest[index];
 
@@ -436,11 +609,6 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
 
     if (knownKey === "json") {
       json = true;
-      continue;
-    }
-
-    if (knownKey === "allowAgentStep") {
-      allowAgentStep = true;
       continue;
     }
 
@@ -521,7 +689,6 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     resumeReceiptId,
     runner,
     memoryProject,
-    allowAgentStep,
     sourceFilter,
     installVersion,
     installTo,
@@ -555,7 +722,7 @@ function isSupportedCommand(parsed: ParsedArgs): boolean {
   if (parsed.command === "skill" && parsed.skillPath) {
     return true;
   }
-  if (parsed.command === "evolve" && (parsed.evolveObjective || parsed.resumeReceiptId)) {
+  if (parsed.command === "evolve") {
     return true;
   }
   if (parsed.command === "history") {
@@ -616,6 +783,106 @@ function mergeInputValue(existing: unknown, next: unknown): unknown {
   return Array.isArray(existing) ? [...existing, next] : [existing, next];
 }
 
+interface RunStateSummary {
+  readonly skill: { readonly name: string };
+  readonly runId: string;
+  readonly stepIds?: readonly string[];
+}
+
+function renderNeedsAgent(result: RunStateSummary & { readonly requests: readonly { readonly id: string }[] }): string {
+  const t = theme();
+  const icon = statusIcon("needs_agent", t);
+  const steps = (result.stepIds ?? []).join(", ");
+  const requestIds = result.requests.map((r) => r.id).join(", ");
+  return (
+    `\n  ${icon}  ${t.bold}${result.skill.name}${t.reset}  ${t.dim}needs an agent${t.reset}\n` +
+    `  ${t.dim}run${t.reset}       ${shortId(result.runId)}\n` +
+    `  ${t.dim}step${t.reset}      ${steps}\n` +
+    `  ${t.dim}requests${t.reset}  ${requestIds}\n\n` +
+    `  ${t.dim}This step needs a hosted agent or \`--answers\` input. Re-run with \`--json\` to see the full envelope.${t.reset}\n\n`
+  );
+}
+
+function renderNeedsApproval(
+  result: RunStateSummary & { readonly gates: readonly { readonly id: string; readonly reason?: string }[] },
+): string {
+  const t = theme();
+  const icon = statusIcon("needs_approval", t);
+  const lines: string[] = [""];
+  lines.push(`  ${icon}  ${t.bold}${result.skill.name}${t.reset}  ${t.dim}needs approval${t.reset}`);
+  lines.push(`  ${t.dim}run${t.reset}   ${shortId(result.runId)}`);
+  lines.push("");
+  for (const gate of result.gates) {
+    lines.push(`  ${t.yellow}◇${t.reset}  ${t.bold}${gate.id}${t.reset}`);
+    if (gate.reason) lines.push(`     ${t.dim}${gate.reason}${t.reset}`);
+  }
+  lines.push("");
+  lines.push(`  ${t.dim}Re-run interactively to approve, or pass \`--answers\` with approval decisions.${t.reset}`);
+  lines.push("");
+  return lines.join("\n");
+}
+
+function renderPolicyDenied(skillName: string, reasons: readonly string[]): string {
+  const t = theme(process.stderr);
+  const icon = statusIcon("denied", t);
+  const lines = [""];
+  lines.push(`  ${icon}  ${t.bold}${skillName}${t.reset}  ${t.dim}policy denied${t.reset}`);
+  for (const reason of reasons) {
+    lines.push(`  ${t.dim}·${t.reset} ${reason}`);
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+function renderMissingContext(skillName: string, questions: readonly { id: string; prompt: string }[]): string {
+  const t = theme();
+  const icon = statusIcon("needs_agent", t);
+  const lines = [""];
+  lines.push(`  ${icon}  ${t.bold}${skillName}${t.reset}  ${t.dim}needs more context${t.reset}`);
+  for (const question of questions) {
+    lines.push(`  ${t.dim}·${t.reset} ${question.prompt} ${t.dim}(${question.id})${t.reset}`);
+  }
+  lines.push("");
+  lines.push(`  ${t.dim}Re-run interactively or pass --input ${t.reset}${t.cyan}<key>=<value>${t.reset}${t.dim}.${t.reset}`);
+  lines.push("");
+  return lines.join("\n");
+}
+
+function renderCliError(message: string): string {
+  const t = theme(process.stderr);
+  const icon = statusIcon("failure", t);
+  let hint = "";
+  if (/ENOENT.*SKILL\.md/i.test(message) && !/Try/.test(message)) {
+    hint = `\n  ${t.dim}Pass a skill name or directory path.${t.reset}`;
+  }
+  return `\n  ${icon}  ${message}${hint}\n\n`;
+}
+
+function renderHarnessResult(
+  result:
+    | Awaited<ReturnType<typeof runHarness>>
+    | Awaited<ReturnType<typeof runHarnessTarget>>,
+): string {
+  const t = theme();
+  if ("cases" in result) {
+    const icon = statusIcon(result.status, t);
+    const lines = [
+      "",
+      `  ${icon}  ${t.bold}harness suite${t.reset}  ${t.dim}${result.cases.length} case(s) · ${result.assertionErrors.length} assertion error(s)${t.reset}`,
+      "",
+    ];
+    for (const entry of result.cases) {
+      lines.push(
+        `  ${statusIcon(entry.status, t)}  ${entry.fixture.name}  ${t.dim}${entry.assertionErrors.length} error(s)${t.reset}`,
+      );
+    }
+    lines.push("");
+    return lines.join("\n");
+  }
+  const icon = statusIcon(result.status, t);
+  return `\n  ${icon}  ${t.bold}${result.fixture.name}${t.reset}  ${t.dim}${result.assertionErrors.length} assertion error(s)${t.reset}\n\n`;
+}
+
 function normalizeKnownFlag(rawKey: string): string {
   return rawKey.replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
 }
@@ -626,7 +893,12 @@ interface LocalSkillPackage {
 }
 
 function resolveBundledSkillPath(skillName: string): string {
-  return fileURLToPath(new URL(`../../../skills/${skillName}`, import.meta.url));
+  const bundledDir = resolveBundledSkillsDir();
+  if (bundledDir) {
+    const candidate = path.join(bundledDir, skillName);
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(`Bundled skill not found: ${skillName}. The @runxai/cli package may be missing its \`skills/\` assets.`);
 }
 
 async function readSkillPackage(skillPath: string): Promise<LocalSkillPackage> {
@@ -675,7 +947,122 @@ async function runSkillSearch(
       : [];
   results.push(...(await searchMarketplaceAdapters(marketplaceAdapters, query)));
 
+  if (!normalizedSource || normalizedSource === "bundled" || normalizedSource === "builtin") {
+    results.push(...(await searchBundledSkills(query)));
+  }
+
   return results;
+}
+
+async function searchBundledSkills(query: string): Promise<readonly SkillSearchResult[]> {
+  const bundledDir = resolveBundledSkillsDir();
+  if (!bundledDir || !existsSync(bundledDir)) return [];
+  const { readdir } = await import("node:fs/promises");
+  const entries = await readdir(bundledDir, { withFileTypes: true });
+  const needle = query.trim().toLowerCase();
+  const out: SkillSearchResult[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const skillMdPath = path.join(bundledDir, entry.name, "SKILL.md");
+    if (!existsSync(skillMdPath)) continue;
+    const raw = await readFile(skillMdPath, "utf8");
+    const { name, description } = parseSkillFrontmatter(raw, entry.name);
+    const hay = `${name}\n${description}`.toLowerCase();
+    if (needle && !hay.includes(needle)) continue;
+    const hasXManifest = existsSync(path.join(bundledDir, entry.name, "x.yaml"));
+    out.push({
+      skill_id: `runx/${name}`,
+      name,
+      summary: description,
+      owner: "runx",
+      source: "runx-registry",
+      source_label: "runx (bundled)",
+      source_type: "bundled",
+      trust_tier: "runx-derived",
+      required_scopes: [],
+      tags: [],
+      runner_mode: hasXManifest ? "x-manifest" : "standard-only",
+      runner_names: [],
+      add_command: `runx skill add runx/${name}`,
+      run_command: `runx skill ${name}`,
+    });
+  }
+  return out;
+}
+
+let cachedBundledSkillsDir: string | undefined | null = null;
+
+function resolveBundledSkillsDir(): string | undefined {
+  if (cachedBundledSkillsDir !== null) return cachedBundledSkillsDir ?? undefined;
+  try {
+    // Walk up from the compiled entry looking for the @runxai/cli package root,
+    // which owns a `skills/` sibling. Works across dev (src/), dist wrapper,
+    // and nested-dist layouts without sentinel files.
+    let dir = path.dirname(fileURLToPath(import.meta.url));
+    for (let i = 0; i < 8; i += 1) {
+      const pkgJsonPath = path.join(dir, "package.json");
+      if (existsSync(pkgJsonPath)) {
+        try {
+          const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf8"));
+          if (pkg && pkg.name === "@runxai/cli") {
+            const skills = path.join(dir, "skills");
+            cachedBundledSkillsDir = existsSync(skills) ? skills : undefined;
+            return cachedBundledSkillsDir ?? undefined;
+          }
+        } catch {
+          // ignore and keep walking
+        }
+      }
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+    cachedBundledSkillsDir = undefined;
+    return undefined;
+  } catch {
+    cachedBundledSkillsDir = undefined;
+    return undefined;
+  }
+}
+
+function resolveSkillReference(ref: string, env: NodeJS.ProcessEnv): string {
+  if (!ref) {
+    throw new Error("Missing skill reference.");
+  }
+  // Treat anything that looks like a path (contains a separator, leading dot, or
+  // tilde) or that actually exists on disk as a direct filesystem reference.
+  const looksLikePath = ref.includes("/") || ref.includes(path.sep) || ref.startsWith(".") || ref.startsWith("~");
+  if (looksLikePath) {
+    return resolveUserPath(ref, env);
+  }
+  const directCandidate = resolveUserPath(ref, env);
+  if (existsSync(directCandidate)) {
+    return directCandidate;
+  }
+  const bundled = resolveBundledSkillsDir();
+  if (bundled) {
+    const named = path.join(bundled, ref);
+    if (existsSync(path.join(named, "SKILL.md")) || existsSync(`${named}.md`)) {
+      return existsSync(path.join(named, "SKILL.md")) ? named : `${named}.md`;
+    }
+  }
+  throw new Error(`Skill not found: ${ref}. Try \`runx skill search ${ref}\` to discover available skills.`);
+}
+
+function parseSkillFrontmatter(raw: string, fallbackName: string): { name: string; description: string } {
+  const match = raw.match(/^---\n([\s\S]*?)\n---/);
+  let name = fallbackName;
+  let description = "";
+  if (match) {
+    for (const line of match[1].split("\n")) {
+      const kv = line.match(/^(name|description):\s*(.*)$/);
+      if (!kv) continue;
+      const value = kv[2].trim().replace(/^["']|["']$/g, "");
+      if (kv[1] === "name") name = value || fallbackName;
+      else if (kv[1] === "description") description = value;
+    }
+  }
+  return { name, description };
 }
 
 function resolveRegistryDir(env: NodeJS.ProcessEnv, registry?: string): string {
@@ -892,10 +1279,20 @@ async function loadOrCreateLocalConfigSecret(keyDir: string): Promise<string> {
 }
 
 function renderConfigResult(result: ConfigResult): string {
+  const t = theme();
   if (result.action === "list") {
-    return JSON.stringify(result.values);
+    const entries = Object.entries(result.values ?? {});
+    if (entries.length === 0) return `\n  ${t.dim}No config values set.${t.reset}\n\n`;
+    const keyWidth = Math.max(...entries.map(([k]) => k.length));
+    const lines = [""];
+    for (const [key, value] of entries) {
+      lines.push(`  ${t.bold}${key.padEnd(keyWidth)}${t.reset}  ${String(value ?? "")}`);
+    }
+    lines.push("");
+    return lines.join("\n");
   }
-  return `${result.key}=${String(result.value ?? "")}`;
+  const value = String(result.value ?? "");
+  return `\n  ${t.bold}${result.key}${t.reset}  ${value}\n`;
 }
 
 function isRemoteRegistryUrl(value: string): boolean {
@@ -903,49 +1300,62 @@ function isRemoteRegistryUrl(value: string): boolean {
 }
 
 function renderSearchResults(results: readonly SkillSearchResult[]): string {
+  const t = theme();
   if (results.length === 0) {
-    return "No skills found.\n";
+    return `\n  ${t.dim}No skills found.${t.reset}\n\n`;
   }
-
-  return `${results
-    .map((result) =>
-      [
-        result.source,
-        result.trust_tier,
-        result.skill_id,
-        result.version ?? "",
-        result.source_type,
-        result.runner_mode,
-        result.runner_names.length > 0 ? result.runner_names.join(",") : "agent",
-        result.summary ?? "",
-      ].join("\t"),
-    )
-    .join("\n")}\n`;
+  const lines: string[] = [""];
+  for (const result of results) {
+    const tier = result.source_type === "bundled" ? "bundled" : result.source;
+    lines.push(`  ${t.magenta}${t.bold}${result.skill_id}${t.reset}  ${t.dim}· ${tier}${t.reset}`);
+    if (result.summary) {
+      lines.push(`  ${t.dim}${result.summary}${t.reset}`);
+    }
+    lines.push(`  ${t.cyan}${result.run_command}${t.reset}`);
+    lines.push("");
+  }
+  return lines.join("\n");
 }
 
 function renderReceiptInspection(summary: LocalReceiptSummary): string {
-  const source = summary.sourceType ? ` ${summary.sourceType}` : "";
-  return `${summary.id} ${summary.kind}${source} ${summary.name} ${summary.status}${renderVerificationSuffix(summary.verification)}\n`;
+  const t = theme();
+  const icon = statusIcon(summary.status, t);
+  const source = summary.sourceType ? ` ${t.dim}· ${summary.sourceType}${t.reset}` : "";
+  const verification = renderVerificationBadge(summary.verification, t);
+  const when = summary.startedAt ? `  ${t.dim}${relativeTime(summary.startedAt)}${t.reset}` : "";
+  return (
+    `\n  ${icon}  ${t.bold}${summary.name}${t.reset}  ${t.dim}${summary.kind}${t.reset}${source}${when}\n` +
+    `  ${t.dim}${summary.id}${t.reset}${verification}\n\n`
+  );
 }
 
 function renderHistory(receipts: readonly LocalReceiptSummary[]): string {
+  const t = theme();
   if (receipts.length === 0) {
-    return "No receipts found.\n";
+    return `\n  ${t.dim}No receipts yet. Run a skill to produce one:${t.reset}\n  ${t.cyan}runx skill search${t.reset}\n\n`;
   }
-  return `${receipts.map(renderHistoryLine).join("\n")}\n`;
+  const now = Date.now();
+  const nameWidth = Math.min(32, Math.max(...receipts.map((r) => r.name.length)));
+  const lines: string[] = [""];
+  for (const summary of receipts) {
+    const icon = statusIcon(summary.status, t);
+    const name = summary.name.padEnd(nameWidth);
+    const when = summary.startedAt ? relativeTime(summary.startedAt, now) : "";
+    const source = summary.sourceType ?? summary.kind;
+    const id = shortId(summary.id);
+    lines.push(
+      `  ${icon}  ${t.bold}${name}${t.reset}  ${t.dim}${source.padEnd(16)}${t.reset}  ${t.dim}${when.padEnd(10)}${t.reset}  ${t.dim}${id}${t.reset}`,
+    );
+  }
+  lines.push("");
+  return lines.join("\n");
 }
 
-function renderHistoryLine(summary: LocalReceiptSummary): string {
-  const source = summary.sourceType ? ` ${summary.sourceType}` : "";
-  return `${summary.id}\t${summary.kind}${source}\t${summary.name}\t${summary.status}\t${formatVerification(summary.verification)}`;
-}
-
-function renderVerificationSuffix(verification: LocalReceiptSummary["verification"] | undefined): string {
-  return verification ? ` (${formatVerification(verification)})` : "";
-}
-
-function formatVerification(verification: LocalReceiptSummary["verification"]): string {
-  return verification.reason ? `${verification.status}:${verification.reason}` : verification.status;
+function renderVerificationBadge(verification: LocalReceiptSummary["verification"] | undefined, t: UiTheme): string {
+  if (!verification) return "";
+  const color = verification.status === "verified" ? t.green : verification.status === "invalid" ? t.red : t.dim;
+  const reason = verification.reason ? ` ${t.dim}(${verification.reason})${t.reset}` : "";
+  return `  ${color}${verification.status}${t.reset}${reason}`;
 }
 
 function renderMemoryFacts(
@@ -960,22 +1370,22 @@ function renderMemoryFacts(
     readonly receipt_id?: string;
   }[],
 ): string {
+  const t = theme();
   if (facts.length === 0) {
-    return `No memory facts for ${project}.\n`;
+    return `\n  ${t.dim}No memory facts for ${project}.${t.reset}\n\n`;
   }
-  return `${facts
-    .map((fact) =>
-      [
-        fact.scope,
-        fact.key,
-        typeof fact.value === "string" ? fact.value : JSON.stringify(fact.value),
-        fact.source,
-        String(fact.confidence),
-        fact.freshness,
-        fact.receipt_id ?? "",
-      ].join("\t"),
-    )
-    .join("\n")}\n`;
+  const keyWidth = Math.min(32, Math.max(...facts.map((f) => f.key.length)));
+  const lines: string[] = [""];
+  lines.push(`  ${t.dim}${project}${t.reset}`);
+  lines.push("");
+  for (const fact of facts) {
+    const value = typeof fact.value === "string" ? fact.value : JSON.stringify(fact.value);
+    lines.push(
+      `  ${t.bold}${fact.key.padEnd(keyWidth)}${t.reset}  ${value}  ${t.dim}· ${fact.scope}/${fact.source} ${fact.freshness}${t.reset}`,
+    );
+  }
+  lines.push("");
+  return lines.join("\n");
 }
 
 function resolveUserPath(userPath: string, env: NodeJS.ProcessEnv): string {
@@ -1029,6 +1439,8 @@ function createNonInteractiveCaller(
   return {
     answer: async (questions) => pickAnswers(questions, answers),
     approve: async (gate) => resolveApproval(gate.id, approvals) ?? false,
+    resolveAgentResult: async (request) => answers[request.id],
+    resolveApproval: async (gate) => resolveApproval(gate.id, approvals),
     report: () => undefined,
   };
 }
@@ -1041,6 +1453,8 @@ function createInteractiveCaller(
   return {
     answer: async (questions) => askQuestions(questions, io, answers),
     approve: async (gate) => approveGate(gate, io, approvals),
+    resolveAgentResult: async (request) => answers[request.id],
+    resolveApproval: async (gate) => resolveApproval(gate.id, approvals) ?? await approveGate(gate, io, approvals),
     report: () => undefined,
   };
 }
@@ -1093,20 +1507,37 @@ async function askQuestions(
     return provided;
   }
 
-  const rl = createInterface({
-    input: io.stdin,
-    output: io.stdout,
-  });
+  const t = theme(io.stdout);
+  const rl = createInterface({ input: io.stdin, output: io.stdout });
+  io.stdout.write(`\n  ${t.magenta}runx${t.reset} ${t.dim}needs a little context${t.reset}\n\n`);
 
   try {
     const collected: Record<string, unknown> = { ...provided };
     for (const question of unanswered) {
-      collected[question.id] = await rl.question(`${question.prompt}: `);
+      const defaultValue = inferQuestionDefault(question);
+      const label = question.description ?? question.prompt;
+      const hint = defaultValue
+        ? ` ${t.dim}(${defaultValue})${t.reset}`
+        : question.required
+          ? ` ${t.dim}(required)${t.reset}`
+          : "";
+      io.stdout.write(`  ${t.bold}${label}${t.reset}${hint}\n`);
+      const answer = (await rl.question(`  ${t.cyan}›${t.reset} `)).trim();
+      collected[question.id] = answer || defaultValue || "";
+      io.stdout.write("\n");
     }
     return collected;
   } finally {
     rl.close();
   }
+}
+
+function inferQuestionDefault(question: Question): string | undefined {
+  const label = `${question.id} ${question.prompt} ${question.description ?? ""}`.toLowerCase();
+  if (question.id === "project" || /project\s+root|repo\s+root|working\s+directory/.test(label)) {
+    return process.cwd();
+  }
+  return undefined;
 }
 
 function pickAnswers(

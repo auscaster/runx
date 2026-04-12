@@ -1,114 +1,21 @@
 skill: sourcey
 
+harness:
+  cases:
+    - name: sourcey-discovery-yield
+      runner: sourcey
+      inputs:
+        project: fixtures/sourcey/basic
+      expect:
+        status: needs_agent
+
 runners:
   agent:
     type: agent
 
-  sourcey-cli:
+  sourcey:
     default: true
-    type: cli-tool
-    command: node
-    args:
-      - -e
-      - |
-        const { existsSync } = require("node:fs");
-        const { spawnSync } = require("node:child_process");
-        const path = require("node:path");
-
-        const inputs = JSON.parse(process.env.RUNX_INPUTS_JSON || "{}");
-
-        function requiredString(name) {
-          const value = inputs[name];
-          if (value === undefined || value === null || value === "") {
-            throw new Error(`${name} is required.`);
-          }
-          return String(value);
-        }
-
-        function parseDocsInputs(value) {
-          if (value && typeof value === "object" && !Array.isArray(value)) {
-            return value;
-          }
-          if (typeof value === "string") {
-            try {
-              const parsed = JSON.parse(value);
-              if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-                return parsed;
-              }
-            } catch {
-              return { mode: "config", description: value };
-            }
-          }
-          return { mode: "config" };
-        }
-
-        function sourceyEnv() {
-          const env = { ...process.env };
-          delete env.RUNX_INPUTS_JSON;
-          for (const key of Object.keys(env)) {
-            if (key.startsWith("RUNX_INPUT_")) {
-              delete env[key];
-            }
-          }
-          return env;
-        }
-
-        const inputBase = process.env.RUNX_CWD || process.env.INIT_CWD || process.cwd();
-        const project = path.resolve(inputBase, requiredString("project"));
-        const homepageUrl = requiredString("homepage_url");
-        const brandName = requiredString("brand_name");
-        const docsInputs = parseDocsInputs(inputs.docs_inputs);
-        const sourcey = String(inputs.sourcey_bin || process.env.SOURCEY_BIN || "sourcey");
-        const outputDir = path.resolve(project, String(inputs.output_dir || ".sourcey/runx-docs"));
-        const command = /\.(mjs|cjs|js)$/.test(sourcey) ? process.execPath : sourcey;
-        const sourceyArgs = /\.(mjs|cjs|js)$/.test(sourcey) ? [sourcey] : [];
-        const mode = String(docsInputs.mode || "config");
-
-        sourceyArgs.push("build");
-        if (mode === "openapi") {
-          const spec = docsInputs.spec || docsInputs.openapi;
-          if (!spec) {
-            throw new Error("docs_inputs.spec or docs_inputs.openapi is required when docs_inputs.mode is 'openapi'.");
-          }
-          sourceyArgs.push(path.resolve(project, String(spec)));
-        } else if (mode === "config") {
-          const configPath = path.resolve(project, String(docsInputs.config || "sourcey.config.ts"));
-          if (!existsSync(configPath)) {
-            throw new Error(`Sourcey config not found: ${configPath}`);
-          }
-        } else {
-          throw new Error(`Unsupported docs_inputs.mode: ${mode}`);
-        }
-        sourceyArgs.push("-o", outputDir, "--quiet");
-
-        const result = spawnSync(command, sourceyArgs, {
-          cwd: project,
-          env: sourceyEnv(),
-          encoding: "utf8",
-          shell: false,
-        });
-
-        if (result.error) {
-          console.error(result.error.message);
-          process.exit(1);
-        }
-        if (result.status !== 0) {
-          if (result.stdout) process.stdout.write(result.stdout);
-          if (result.stderr) process.stderr.write(result.stderr);
-          process.exit(result.status ?? 1);
-        }
-
-        process.stdout.write(JSON.stringify({
-          project,
-          brand_name: brandName,
-          homepage_url: homepageUrl,
-          docs_inputs: docsInputs,
-          output_dir: outputDir,
-          command: "sourcey build",
-          generated: existsSync(path.join(outputDir, "index.html")),
-        }));
-    timeout_seconds: 180
-    input_mode: none
+    type: chain
     inputs:
       project:
         type: string
@@ -116,16 +23,16 @@ runners:
         description: "Project root containing Sourcey inputs."
       homepage_url:
         type: string
-        required: true
-        description: "Canonical project homepage URL to include in docs context."
+        required: false
+        description: "Canonical project homepage URL. If omitted, discover it from project evidence."
       brand_name:
         type: string
-        required: true
-        description: "Human-facing brand or project name for the generated docs context."
+        required: false
+        description: "Human-facing brand or project name. If omitted, discover it from project evidence."
       docs_inputs:
         type: json
-        required: true
-        description: "Structured docs inputs, for example {\"mode\":\"config\",\"config\":\"sourcey.config.ts\"} or {\"mode\":\"openapi\",\"spec\":\"openapi.yaml\"}."
+        required: false
+        description: "Structured docs inputs. If omitted, infer a bounded config or spec path from the project."
       output_dir:
         type: string
         required: false
@@ -134,7 +41,168 @@ runners:
         type: string
         required: false
         description: "Explicit Sourcey executable or JS entrypoint; defaults to SOURCEY_BIN or sourcey on PATH."
-    runtime:
-      requirements:
-        - "Node >=20"
-        - "Sourcey available on PATH, via SOURCEY_BIN, or through explicit sourcey_bin input"
+    chain:
+      name: sourcey
+      steps:
+        - id: discover
+          run:
+            type: agent-step
+            agent: builder
+            task: sourcey-discover
+            outputs:
+              discovery_report: object
+          instructions: >
+            Inspect the target project and produce a bounded discovery_report for
+            Sourcey. Prefer explicit input values when supplied. Otherwise infer
+            brand_name, homepage_url, and docs_inputs from real project evidence
+            such as package.json, README, existing docs, and specs. Do not invent
+            APIs or pages. When config does not already exist, propose a practical
+            docs_inputs object pointing to the config or spec path the next step
+            should build from. Treat this as a bounded scope/ingest/model pass.
+            Do not author docs, build the site, or propose open-ended revision.
+          allowed_tools:
+            - fs.read
+            - git.status
+            - git.current_branch
+            - git.diff_name_only
+            - cli.capture_help
+          artifacts:
+            named_emits:
+              discovery_report: discovery_report
+        - id: approve
+          run:
+            type: approval
+          inputs:
+            gate_id: sourcey.discovery.approval
+            reason: Approve the discovered Sourcey documentation plan before writing or building.
+          context:
+            discovery_report: discover.discovery_report.data
+          artifacts:
+            wrap_as: approval_decision
+        - id: author
+          run:
+            type: agent-step
+            agent: builder
+            task: sourcey-author
+            outputs:
+              doc_bundle: object
+          instructions: >
+            Author a bounded Sourcey source bundle from the approved discovery
+            plan. doc_bundle must include a files array of { path, contents }
+            entries to write under the target project, plus a summary of what was
+            authored. When the project already has a complete Sourcey config and
+            pages, keep the bundle minimal. When config or pages are missing,
+            create only the files required to build a strong first documentation
+            site grounded in the discovered evidence. This is one bounded
+            materialize pass, not an open-ended iteration loop.
+          allowed_tools:
+            - fs.read
+            - cli.capture_help
+          context:
+            discovery_report: discover.discovery_report.data
+          artifacts:
+            named_emits:
+              doc_bundle: doc_bundle
+        - id: write-docs
+          tool: fs.write_bundle
+          scopes:
+            - fs.write
+          mutation: true
+          context:
+            files: author.doc_bundle.data.files
+        - id: build
+          tool: sourcey.build
+          scopes:
+            - sourcey.build
+          context:
+            homepage_url: discover.discovery_report.data.homepage_url
+            brand_name: discover.discovery_report.data.brand_name
+            docs_inputs: discover.discovery_report.data.docs_inputs
+        - id: critique
+          run:
+            type: agent-step
+            agent: reviewer
+            task: sourcey-critique
+            outputs:
+              evaluation_report: object
+          instructions: >
+            Evaluate the built Sourcey site against the discovered plan and the
+            authored source bundle. Read the generated output files as needed and
+            produce one bounded evaluation_report covering grounding, clarity,
+            navigation quality, and obvious gaps. Do not propose open-ended
+            revision loops here.
+          allowed_tools:
+            - fs.read
+          context:
+            discovery_report: discover.discovery_report.data
+            doc_bundle: author.doc_bundle.data
+            build_report: build.sourcey_build_report.data
+          artifacts:
+            named_emits:
+              evaluation_report: evaluation_report
+        - id: revise
+          run:
+            type: agent-step
+            agent: builder
+            task: sourcey-revise
+            outputs:
+              revision_bundle: object
+          instructions: >
+            Apply at most one bounded revision pass using the evaluation_report.
+            revision_bundle must include a files array of { path, contents }
+            entries to update under the target project, plus a summary of the
+            deltas applied. If the first build is already strong, return an
+            empty files array and explain why. Do not open a second critique
+            loop and do not widen scope beyond the discovered plan.
+          allowed_tools:
+            - fs.read
+          context:
+            discovery_report: discover.discovery_report.data
+            doc_bundle: author.doc_bundle.data
+            build_report: build.sourcey_build_report.data
+            evaluation_report: critique.evaluation_report.data
+          artifacts:
+            named_emits:
+              revision_bundle: revision_bundle
+        - id: write-revisions
+          tool: fs.write_bundle
+          scopes:
+            - fs.write
+          mutation: true
+          context:
+            files: revise.revision_bundle.data.files
+        - id: rebuild
+          tool: sourcey.build
+          scopes:
+            - sourcey.build
+          context:
+            homepage_url: discover.discovery_report.data.homepage_url
+            brand_name: discover.discovery_report.data.brand_name
+            docs_inputs: discover.discovery_report.data.docs_inputs
+        - id: verify
+          tool: sourcey.verify
+          scopes:
+            - sourcey.verify
+          context:
+            output_dir: rebuild.sourcey_build_report.data.output_dir
+            index_path: rebuild.sourcey_build_report.data.index_path
+      policy:
+        transitions:
+          - to: author
+            field: approve.approval_decision.data.approved
+            equals: true
+          - to: build
+            field: approve.approval_decision.data.approved
+            equals: true
+          - to: critique
+            field: build.sourcey_build_report.data.generated
+            equals: true
+          - to: revise
+            field: build.sourcey_build_report.data.generated
+            equals: true
+          - to: rebuild
+            field: build.sourcey_build_report.data.generated
+            equals: true
+          - to: verify
+            field: rebuild.sourcey_build_report.data.generated
+            equals: true

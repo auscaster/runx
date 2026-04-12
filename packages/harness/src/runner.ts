@@ -1,9 +1,17 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
 import { parseDocument } from "yaml";
 
+import {
+  parseRunnerManifestYaml,
+  validateRunnerManifest,
+  type HarnessCallerFixture,
+  type HarnessExpectation,
+  type HarnessReceiptExpectation,
+  type RunnerHarnessCase,
+} from "../../parser/src/index.js";
 import {
   runLocalChain,
   runLocalSkill,
@@ -13,30 +21,15 @@ import {
   type RunLocalChainResult,
   type RunLocalSkillResult,
 } from "../../runner-local/src/index.js";
+import type { AgentWorkRequest } from "../../executor/src/index.js";
 
 type HarnessKind = "skill" | "chain";
-
-export interface HarnessCallerFixture {
-  readonly answers?: Readonly<Record<string, unknown>>;
-  readonly approvals?: Readonly<Record<string, boolean>>;
-}
-
-export interface HarnessReceiptExpectation {
-  readonly kind?: "skill_execution" | "chain_execution";
-  readonly status?: "success" | "failure";
-  readonly subject?: Readonly<Record<string, unknown>>;
-}
-
-export interface HarnessExpectation {
-  readonly status?: "success" | "failure" | "missing_context" | "policy_denied";
-  readonly receipt?: HarnessReceiptExpectation;
-  readonly steps?: readonly string[];
-}
 
 export interface HarnessFixture {
   readonly name: string;
   readonly kind: HarnessKind;
   readonly target: string;
+  readonly runner?: string;
   readonly inputs: Readonly<Record<string, unknown>>;
   readonly env: Readonly<Record<string, string>>;
   readonly caller: HarnessCallerFixture;
@@ -50,11 +43,13 @@ export interface HarnessRunOptions {
 
 export interface CallerTrace {
   readonly questions: readonly Question[];
+  readonly agentRequests: readonly AgentWorkRequest[];
   readonly approvals: readonly string[];
   readonly events: readonly ExecutionEvent[];
 }
 
 export interface HarnessRunResult {
+  readonly source: "fixture" | "inline";
   readonly fixture: HarnessFixture;
   readonly fixturePath: string;
   readonly targetPath: string;
@@ -73,6 +68,23 @@ export interface HarnessRunResult {
     : never;
   readonly trace: CallerTrace;
   readonly assertionErrors: readonly string[];
+}
+
+export interface HarnessSuiteResult {
+  readonly source: "inline";
+  readonly targetPath: string;
+  readonly skillPath: string;
+  readonly xManifestPath: string;
+  readonly status: "success" | "failure";
+  readonly cases: readonly HarnessRunResult[];
+  readonly assertionErrors: readonly string[];
+}
+
+export type HarnessTargetResult = HarnessRunResult | HarnessSuiteResult;
+
+interface ResolvedInlineHarnessTarget {
+  readonly skillPath: string;
+  readonly xManifestPath: string;
 }
 
 export async function parseHarnessFixtureFile(fixturePath: string): Promise<HarnessFixture> {
@@ -99,6 +111,7 @@ export function parseHarnessFixture(contents: string): HarnessFixture {
     name: requiredString(parsed.name, "name"),
     kind,
     target: requiredString(parsed.target, "target"),
+    runner: optionalString(parsed.runner, "runner"),
     inputs: optionalRecord(parsed.inputs, "inputs") ?? {},
     env: validateEnv(optionalRecord(parsed.env, "env") ?? {}),
     caller: validateCaller(optionalRecord(parsed.caller, "caller") ?? {}),
@@ -106,48 +119,110 @@ export function parseHarnessFixture(contents: string): HarnessFixture {
   };
 }
 
+export async function runHarnessTarget(targetPath: string, options: HarnessRunOptions = {}): Promise<HarnessTargetResult> {
+  const resolvedTargetPath = path.resolve(targetPath);
+  const targetStat = await stat(resolvedTargetPath);
+
+  if (isInlineHarnessTarget(resolvedTargetPath, targetStat)) {
+    return await runInlineHarnessSuite(resolvedTargetPath, options);
+  }
+
+  return await runHarness(resolvedTargetPath, options);
+}
+
 export async function runHarness(fixturePath: string, options: HarnessRunOptions = {}): Promise<HarnessRunResult> {
   const resolvedFixturePath = path.resolve(fixturePath);
   const fixture = await parseHarnessFixtureFile(resolvedFixturePath);
   const fixtureDir = path.dirname(resolvedFixturePath);
   const targetPath = path.resolve(fixtureDir, fixture.target);
+  return await executeHarnessFixture({
+    fixture,
+    fixturePath: resolvedFixturePath,
+    targetPath,
+    source: "fixture",
+    options,
+  });
+}
+
+async function runInlineHarnessSuite(targetPath: string, options: HarnessRunOptions): Promise<HarnessSuiteResult> {
+  const resolved = await resolveInlineHarnessTarget(targetPath);
+  const manifest = validateRunnerManifest(parseRunnerManifestYaml(await readFile(resolved.xManifestPath, "utf8")));
+  if (!manifest.harness || manifest.harness.cases.length === 0) {
+    throw new Error(`Inline harness target does not declare harness.cases: ${resolved.xManifestPath}`);
+  }
+
+  const cases: HarnessRunResult[] = [];
+  for (const entry of manifest.harness.cases) {
+    const fixture = createInlineHarnessFixture(entry, resolved.skillPath);
+    cases.push(
+      await executeHarnessFixture({
+        fixture,
+        fixturePath: resolved.xManifestPath,
+        targetPath: resolved.skillPath,
+        source: "inline",
+        options,
+      }),
+    );
+  }
+
+  const assertionErrors = cases.flatMap((result) => result.assertionErrors.map((error) => `${result.fixture.name}: ${error}`));
+  return {
+    source: "inline",
+    targetPath: resolved.skillPath,
+    skillPath: resolved.skillPath,
+    xManifestPath: resolved.xManifestPath,
+    status: assertionErrors.length === 0 ? "success" : "failure",
+    cases,
+    assertionErrors,
+  };
+}
+
+async function executeHarnessFixture(args: {
+  readonly fixture: HarnessFixture;
+  readonly fixturePath: string;
+  readonly targetPath: string;
+  readonly source: "fixture" | "inline";
+  readonly options: HarnessRunOptions;
+}): Promise<HarnessRunResult> {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-harness-"));
   const receiptDir = path.join(tempDir, "receipts");
   const runxHome = path.join(tempDir, "home");
   const trace = createTrace();
-  const caller = createReplayCaller(fixture.caller, trace);
+  const caller = createReplayCaller(args.fixture.caller, trace);
   const env = {
-    ...(options.env ?? process.env),
-    ...fixture.env,
+    ...(args.options.env ?? process.env),
+    ...args.fixture.env,
     RUNX_RECEIPT_DIR: receiptDir,
     RUNX_HOME: runxHome,
   };
 
   try {
     const result =
-      fixture.kind === "skill"
+      args.fixture.kind === "skill"
         ? await runLocalSkill({
-            skillPath: targetPath,
-            inputs: fixture.inputs,
+            skillPath: args.targetPath,
+            runner: args.fixture.runner,
+            inputs: args.fixture.inputs,
             caller,
             env,
             receiptDir,
             runxHome,
           })
         : await runLocalChain({
-            chainPath: targetPath,
-            inputs: fixture.inputs,
+            chainPath: args.targetPath,
+            inputs: args.fixture.inputs,
             caller,
             env,
             receiptDir,
             runxHome,
           });
 
-    const assertionErrors = assertHarnessResult(fixture, result);
+    const assertionErrors = assertHarnessResult(args.fixture, result);
     return {
-      fixture,
-      fixturePath: resolvedFixturePath,
-      targetPath,
+      source: args.source,
+      fixture: args.fixture,
+      fixturePath: args.fixturePath,
+      targetPath: args.targetPath,
       receiptDir,
       runxHome,
       status: result.status,
@@ -157,10 +232,72 @@ export async function runHarness(fixturePath: string, options: HarnessRunOptions
       assertionErrors,
     };
   } finally {
-    if (!options.keepFiles) {
+    if (!args.options.keepFiles) {
       await rm(tempDir, { recursive: true, force: true });
     }
   }
+}
+
+function createInlineHarnessFixture(entry: RunnerHarnessCase, skillPath: string): HarnessFixture {
+  return {
+    name: entry.name,
+    kind: "skill",
+    target: skillPath,
+    runner: entry.runner,
+    inputs: entry.inputs,
+    env: entry.env,
+    caller: entry.caller,
+    expect: entry.expect,
+  };
+}
+
+async function resolveInlineHarnessTarget(targetPath: string): Promise<ResolvedInlineHarnessTarget> {
+  const resolvedTargetPath = path.resolve(targetPath);
+  const targetStat = await stat(resolvedTargetPath);
+
+  if (targetStat.isDirectory()) {
+    const xManifestPath = path.join(resolvedTargetPath, "x.yaml");
+    await stat(xManifestPath);
+    return {
+      skillPath: resolvedTargetPath,
+      xManifestPath,
+    };
+  }
+
+  const basename = path.basename(resolvedTargetPath).toLowerCase();
+  if (basename === "x.yaml") {
+    return {
+      skillPath: path.dirname(resolvedTargetPath),
+      xManifestPath: resolvedTargetPath,
+    };
+  }
+  if (basename === "skill.md") {
+    const xManifestPath = path.join(path.dirname(resolvedTargetPath), "x.yaml");
+    await stat(xManifestPath);
+    return {
+      skillPath: path.dirname(resolvedTargetPath),
+      xManifestPath,
+    };
+  }
+  if (basename.endsWith(".x.yaml")) {
+    const stem = basename.slice(0, -".x.yaml".length);
+    const skillPath = path.join(path.dirname(resolvedTargetPath), `${stem}.md`);
+    await stat(skillPath);
+    return {
+      skillPath,
+      xManifestPath: resolvedTargetPath,
+    };
+  }
+
+  throw new Error(`Inline harness target must be a skill directory, x.yaml, *.x.yaml, or SKILL.md: ${resolvedTargetPath}`);
+}
+
+function isInlineHarnessTarget(targetPath: string, targetStat: Awaited<ReturnType<typeof stat>>): boolean {
+  if (targetStat.isDirectory()) {
+    return true;
+  }
+  const basename = path.basename(targetPath).toLowerCase();
+  return basename === "x.yaml" || basename === "skill.md" || basename.endsWith(".x.yaml");
 }
 
 function assertHarnessResult(
@@ -205,6 +342,7 @@ function assertHarnessResult(
 function createTrace(): CallerTrace {
   return {
     questions: [],
+    agentRequests: [],
     approvals: [],
     events: [],
   };
@@ -219,6 +357,16 @@ function createReplayCaller(fixture: HarnessCallerFixture, trace: CallerTrace): 
     approve: async (gate) => {
       (trace.approvals as string[]).push(gate.id);
       return fixture.approvals?.[gate.id] ?? false;
+    },
+    resolveAgentResult: async (request) => {
+      (trace.agentRequests as AgentWorkRequest[]).push(request);
+      return fixture.answers?.[request.id];
+    },
+    resolveApproval: async (gate) => {
+      if (fixture.approvals?.[gate.id] !== undefined) {
+        (trace.approvals as string[]).push(gate.id);
+      }
+      return fixture.approvals?.[gate.id];
     },
     report: (event) => {
       (trace.events as ExecutionEvent[]).push(event);
@@ -297,6 +445,16 @@ function requiredString(value: unknown, field: string): string {
   return value;
 }
 
+function optionalString(value: unknown, field: string): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    throw new Error(`${field} must be a string.`);
+  }
+  return value;
+}
+
 function optionalRecord(value: unknown, field: string): Record<string, unknown> | undefined {
   if (value === undefined || value === null) {
     return undefined;
@@ -321,10 +479,17 @@ function optionalStatus(value: unknown, field: string): HarnessExpectation["stat
   if (value === undefined || value === null) {
     return undefined;
   }
-  if (value === "success" || value === "failure" || value === "missing_context" || value === "policy_denied") {
+  if (
+    value === "success" ||
+    value === "failure" ||
+    value === "missing_context" ||
+    value === "policy_denied" ||
+    value === "needs_agent" ||
+    value === "needs_approval"
+  ) {
     return value;
   }
-  throw new Error(`${field} must be success, failure, missing_context, or policy_denied.`);
+  throw new Error(`${field} must be success, failure, missing_context, policy_denied, needs_agent, or needs_approval.`);
 }
 
 function optionalSuccessFailure(value: unknown, field: string): "success" | "failure" | undefined {

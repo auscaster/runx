@@ -33,7 +33,7 @@ describe("registry CE", () => {
       expect(version.digest).toMatch(/^[a-f0-9]{64}$/);
       expect(version.x_digest).toMatch(/^[a-f0-9]{64}$/);
       expect(version.source_type).toBe("agent");
-      expect(version.runner_names).toEqual(["agent", "sourcey-cli"]);
+      expect(version.runner_names).toEqual(["agent", "sourcey"]);
       expect(version.markdown).toBe(markdown);
       expect(version.x_manifest).toBe(xManifest);
 
@@ -54,7 +54,7 @@ describe("registry CE", () => {
         version: "1.0.0",
         digest: version.digest,
         x_digest: version.x_digest,
-        runner_names: ["agent", "sourcey-cli"],
+        runner_names: ["agent", "sourcey"],
         source_type: "agent",
         install_command: "runx skill add 0state/sourcey@1.0.0 --registry https://runx.example.test",
         run_command: "runx skill sourcey",
@@ -76,8 +76,8 @@ describe("registry CE", () => {
           source_label: "runx registry",
           source_type: "agent",
           trust_tier: "runx-derived",
-          runner_mode: "x-metadata",
-          runner_names: ["agent", "sourcey-cli"],
+          runner_mode: "x-manifest",
+          runner_names: ["agent", "sourcey"],
           x_digest: version.x_digest,
           add_command: "runx skill add 0state/sourcey@1.0.0 --registry https://runx.example.test",
         }),

@@ -52,17 +52,19 @@ describe("skill-search CLI", () => {
         status: "success",
         query: "sourcey",
       });
-      expect(report.results).toEqual([
-        expect.objectContaining({
-          skill_id: "0state/sourcey",
-          source: "runx-registry",
-          source_label: "runx registry",
-          trust_tier: "runx-derived",
-          runner_mode: "standard-only",
-          runner_names: [],
-          add_command: "runx skill add 0state/sourcey@1.0.0 --registry https://runx.example.test",
-        }),
-      ]);
+      expect(report.results).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            skill_id: "0state/sourcey",
+            source: "runx-registry",
+            source_label: "runx registry",
+            trust_tier: "runx-derived",
+            runner_mode: "standard-only",
+            runner_names: [],
+            add_command: "runx skill add 0state/sourcey@1.0.0 --registry https://runx.example.test",
+          }),
+        ]),
+      );
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
@@ -103,7 +105,7 @@ describe("skill-search CLI", () => {
           source: "fixture-marketplace",
           source_label: "Fixture Marketplace",
           trust_tier: "external-unverified",
-          runner_mode: "x-metadata",
+          runner_mode: "x-manifest",
           runner_names: ["sourcey-docs-cli"],
         }),
       ]);

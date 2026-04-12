@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -7,17 +7,11 @@ import { describe, expect, it } from "vitest";
 
 import { runLocalSkill, type Caller } from "../packages/runner-local/src/index.js";
 
-const nonInteractiveCaller: Caller = {
-  answer: async () => ({}),
-  approve: async () => false,
-  report: () => undefined,
-};
-
 describe("sourcey skill", () => {
   const sourceyBin = resolveSourceyBin();
   const itWithSourcey = sourceyBin ? it : it.skip;
 
-  itWithSourcey("builds deterministic docs, including an MCP snapshot, through the cli-tool adapter", async () => {
+  itWithSourcey("builds deterministic docs for an already-configured project through the mixed-runner skill", async () => {
     expect(sourceyBin).toBeDefined();
 
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-sourcey-skill-"));
@@ -27,20 +21,65 @@ describe("sourcey skill", () => {
     const expectedProject = path.resolve(project);
 
     try {
+      const caller: Caller = {
+        answer: async () => ({}),
+        approve: async () => false,
+        resolveApproval: async (gate) => (gate.id === "sourcey.discovery.approval" ? true : undefined),
+        resolveAgentResult: async (request) => {
+          if (request.envelope.skill === "sourcey.discover") {
+            return {
+              discovery_report: {
+                brand_name: "Sourcey Fixture",
+                homepage_url: "https://sourcey.example.test",
+                docs_inputs: {
+                  mode: "config",
+                  config: "sourcey.config.ts",
+                },
+                confidence: "high",
+                rationale: ["fixture already includes a valid Sourcey config and docs content"],
+              },
+            };
+          }
+          if (request.envelope.skill === "sourcey.author") {
+            return {
+              doc_bundle: {
+                files: [],
+                summary: "No authoring needed for the already-configured fixture.",
+              },
+            };
+          }
+          if (request.envelope.skill === "sourcey.critique") {
+            return {
+              evaluation_report: {
+                verdict: "pass",
+                grounding: "strong",
+                clarity: "strong",
+                navigation: "strong",
+                obvious_gaps: [],
+              },
+            };
+          }
+          if (request.envelope.skill === "sourcey.revise") {
+            return {
+              revision_bundle: {
+                files: [],
+                summary: "No revision needed for the already-configured fixture.",
+              },
+            };
+          }
+          throw new Error(`Unexpected agent step ${request.envelope.skill}`);
+        },
+        report: () => undefined,
+      };
+
       const result = await runLocalSkill({
         skillPath: path.resolve("skills/sourcey"),
         inputs: {
           project,
-          homepage_url: "https://sourcey.example.test",
-          brand_name: "Sourcey Fixture",
-          docs_inputs: {
-            mode: "config",
-            config: "sourcey.config.ts",
-          },
           output_dir: outputDir,
           sourcey_bin: sourceyBin as string,
         },
-        caller: nonInteractiveCaller,
+        caller,
         env: { ...process.env, RUNX_CWD: process.cwd() },
         receiptDir,
         runxHome: path.join(tempDir, "home"),
@@ -52,19 +91,14 @@ describe("sourcey skill", () => {
       }
 
       const output = JSON.parse(result.execution.stdout) as {
-        command: string;
+        verified: boolean;
         output_dir: string;
-        generated: boolean;
-        docs_inputs: { mode: string; config: string };
+        contains_doctype: boolean;
       };
       expect(output).toMatchObject({
-        command: "sourcey build",
+        verified: true,
         output_dir: outputDir,
-        generated: true,
-        docs_inputs: {
-          mode: "config",
-          config: "sourcey.config.ts",
-        },
+        contains_doctype: true,
       });
 
       const generatedFiles = await collectFiles(outputDir);
@@ -81,14 +115,216 @@ describe("sourcey skill", () => {
 
       const receiptFiles = await readdir(receiptDir);
       expect(receiptFiles).toContain("journals");
-      expect(receiptFiles.filter((file) => file.endsWith(".json"))).toEqual([`${result.receipt.id}.json`]);
+      expect(receiptFiles.filter((file) => file.endsWith(".json"))).toContain(`${result.receipt.id}.json`);
       const receiptText = await readFile(path.join(receiptDir, `${result.receipt.id}.json`), "utf8");
       expect(receiptText).not.toContain(expectedProject);
       expect(receiptText).not.toContain("fixture_status");
+      expect(result.receipt.kind).toBe("chain_execution");
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
-  }, 30000);
+  }, 90000);
+
+  itWithSourcey("runs the default mixed-runner flow through author, critique, bounded revise, and deterministic rebuild", async () => {
+    expect(sourceyBin).toBeDefined();
+
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-sourcey-mixed-"));
+    const receiptDir = path.join(tempDir, "receipts");
+    const projectDir = path.join(tempDir, "project");
+    const outputDir = path.join(tempDir, "docs");
+
+    const caller: Caller = {
+      answer: async () => ({}),
+      approve: async () => false,
+      resolveAgentResult: async (request) => {
+        if (request.envelope.skill === "sourcey.discover") {
+          expect(request.envelope.allowed_tools).toEqual([
+            "fs.read",
+            "git.status",
+            "git.current_branch",
+            "git.diff_name_only",
+            "cli.capture_help",
+          ]);
+          return {
+            discovery_report: {
+              brand_name: "Sourcey Incomplete Fixture",
+              homepage_url: "https://sourcey.example.test",
+              docs_inputs: {
+                mode: "config",
+                config: "sourcey.config.ts",
+              },
+              confidence: "high",
+              rationale: ["package metadata exists", "project needs an authored Sourcey config and guide page"],
+            },
+          };
+        }
+        if (request.envelope.skill === "sourcey.author") {
+          expect(request.envelope.allowed_tools).toEqual(["fs.read", "cli.capture_help"]);
+          return {
+            doc_bundle: {
+              files: [
+                {
+                  path: "sourcey.config.ts",
+                  contents: [
+                    "export default {",
+                    '  name: "Sourcey Incomplete Fixture",',
+                    '  repo: "https://github.com/0state/sourcey-incomplete-fixture",',
+                    "  navigation: {",
+                    "    tabs: [",
+                    "      {",
+                    '        tab: "Docs",',
+                    "        groups: [",
+                    "          {",
+                    '            group: "Start",',
+                    '            pages: ["introduction"],',
+                    "          },",
+                    "        ],",
+                    "      },",
+                    "    ],",
+                    "  },",
+                    "};",
+                    "",
+                  ].join("\n"),
+                },
+                {
+                  path: "introduction.md",
+                  contents: [
+                    "---",
+                    "title: Introduction",
+                    "description: Guided docs generated through runx and Sourcey",
+                    "---",
+                    "",
+                    "# Sourcey Incomplete Fixture",
+                    "",
+                    "This site was authored from bounded project evidence through runx.",
+                    "",
+                    "## What you get",
+                    "",
+                    "- A governed Sourcey configuration",
+                    "- A starter documentation page",
+                    "- A deterministic build and verification path",
+                    "",
+                  ].join("\n"),
+                },
+              ],
+              summary: "Created a minimal Sourcey config and introduction page for the incomplete fixture.",
+            },
+          };
+        }
+        if (request.envelope.skill === "sourcey.critique") {
+          expect(request.envelope.allowed_tools).toEqual(["fs.read"]);
+          return {
+            evaluation_report: {
+              verdict: "revise",
+              grounding: "strong",
+              clarity: "adequate",
+              navigation: "good",
+              obvious_gaps: ["The introduction page should explain the user-visible hook more clearly."],
+            },
+          };
+        }
+        if (request.envelope.skill === "sourcey.revise") {
+          expect(request.envelope.allowed_tools).toEqual(["fs.read"]);
+          return {
+            revision_bundle: {
+              files: [
+                {
+                  path: "introduction.md",
+                  contents: [
+                    "---",
+                    "title: Introduction",
+                    "description: Guided docs generated through runx and Sourcey",
+                    "---",
+                    "",
+                    "# Sourcey Incomplete Fixture",
+                    "",
+                    "This site was authored from bounded project evidence through runx.",
+                    "",
+                    "## Why it matters",
+                    "",
+                    "runx gives Sourcey a governed lane: discover evidence, author docs, build deterministically, critique once, revise once, and verify the output.",
+                    "",
+                    "## What you get",
+                    "",
+                    "- A governed Sourcey configuration",
+                    "- A starter documentation page",
+                    "- A deterministic build and verification path",
+                    "",
+                  ].join("\n"),
+                },
+              ],
+              summary: "Expanded the introduction with a stronger product hook and clearer value statement.",
+            },
+          };
+        }
+        throw new Error(`Unexpected agent step ${request.envelope.skill}`);
+      },
+      resolveApproval: async (gate) => (gate.id === "sourcey.discovery.approval" ? true : undefined),
+      report: () => undefined,
+    };
+
+    try {
+      await mkdir(projectDir, { recursive: true });
+      await writeFile(
+        path.join(projectDir, "package.json"),
+        `${JSON.stringify(
+          {
+            name: "sourcey-incomplete-fixture",
+            version: "0.0.0",
+            private: true,
+          },
+          null,
+          2,
+        )}\n`,
+      );
+
+      const result = await runLocalSkill({
+        skillPath: path.resolve("skills/sourcey"),
+        inputs: {
+          project: projectDir,
+          output_dir: outputDir,
+          sourcey_bin: sourceyBin as string,
+        },
+        caller,
+        env: { ...process.env, RUNX_CWD: process.cwd() },
+        receiptDir,
+        runxHome: path.join(tempDir, "home"),
+      });
+
+      expect(result.status).toBe("success");
+      if (result.status !== "success") {
+        throw new Error(result.status === "failure" ? result.execution.stderr || result.execution.errorMessage : result.status);
+      }
+
+      const output = JSON.parse(result.execution.stdout) as {
+        verified: boolean;
+        output_dir: string;
+        contains_doctype: boolean;
+      };
+      expect(output).toMatchObject({
+        verified: true,
+        output_dir: outputDir,
+        contains_doctype: true,
+      });
+
+      const generatedFiles = await collectFiles(outputDir);
+      expect(generatedFiles.some((file) => file.endsWith("index.html"))).toBe(true);
+      expect(await readFile(path.join(projectDir, "sourcey.config.ts"), "utf8")).toContain('name: "Sourcey Incomplete Fixture"');
+      const introduction = await readFile(path.join(projectDir, "introduction.md"), "utf8");
+      expect(introduction).toContain("## Why it matters");
+      const generatedText = (
+        await Promise.all(
+          generatedFiles
+            .filter((file) => /\.(html|txt|json)$/.test(file))
+            .map((file) => readFile(file, "utf8")),
+        )
+      ).join("\n");
+      expect(generatedText).toContain("Why it matters");
+      expect(result.receipt.kind).toBe("chain_execution");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  }, 90000);
 });
 
 function resolveSourceyBin(): string | undefined {

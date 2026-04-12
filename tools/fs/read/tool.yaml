@@ -1,0 +1,39 @@
+name: fs.read
+description: Read a UTF-8 text file relative to a repository or workspace root.
+source:
+  type: cli-tool
+  command: node
+  args:
+    - -e
+    - |
+      const fs = require("node:fs");
+      const path = require("node:path");
+
+      const inputs = JSON.parse(process.env.RUNX_INPUTS_JSON || "{}");
+      const repoRoot = path.resolve(String(inputs.repo_root || process.env.RUNX_CWD || process.cwd()));
+      const targetPath = String(inputs.path || "");
+      if (!targetPath) {
+        throw new Error("path is required.");
+      }
+
+      const resolvedPath = path.resolve(repoRoot, targetPath);
+      const content = fs.readFileSync(resolvedPath, "utf8");
+      process.stdout.write(JSON.stringify({
+        path: targetPath,
+        repo_root: repoRoot,
+        contents: content,
+      }));
+inputs:
+  path:
+    type: string
+    required: true
+    description: Path to the file relative to repo_root.
+  repo_root:
+    type: string
+    required: false
+    description: Repository or workspace root; defaults to RUNX_CWD or the current working directory.
+scopes:
+  - fs.read
+runx:
+  artifacts:
+    wrap_as: file_read

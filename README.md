@@ -21,11 +21,19 @@ pnpm typecheck
 
 ## Local CLI
 
+Link the CLI globally once:
+
 ```bash
 pnpm --dir oss build
-node oss/packages/cli/dist/index.js --help
-node oss/packages/cli/dist/index.js skill ./oss/fixtures/skills/echo.md --message hello --json
-node oss/packages/cli/dist/index.js skill ./oss/skills/objective-to-skill --objective "build sourcey docs skill" --json
+pnpm --dir oss/packages/cli link --global
+```
+
+Then invoke `runx` from anywhere:
+
+```bash
+runx --help
+runx skill ./oss/fixtures/skills/echo.md --message hello --json
+runx skill ./oss/skills/objective-to-skill --objective "build sourcey docs skill" --json
 ```
 
 Common commands:
@@ -33,11 +41,12 @@ Common commands:
 ```bash
 runx skill search sourcey
 runx skill add 0state/sourcey@1.0.0 --to ./skills
-runx skill ./skills/sourcey --runner sourcey-cli --project .
+runx skill ./skills/sourcey --project . --json
 runx skill ./skills/objective-to-skill --objective "build github review skill" --json
 runx skill inspect <receipt-id> --json
 runx history --json
 runx harness ./fixtures/harness/echo-skill.yaml --json
+runx harness ./skills/evolve --json
 runx config set agent.provider openai
 runx config set agent.model gpt-5.4
 runx config set agent.api_key "$OPENAI_API_KEY"
@@ -62,13 +71,26 @@ skills/sourcey.x.yaml
 
 See `../docs/skill-x-model.md` for resolution rules, runner trust levels, and composite skill behavior.
 
-See `../docs/evolution-model.md` for the internal skill taxonomy, canonical
-evolve phase geometry, and the distinction between builder, control,
-integration, and domain skills.
+See `../docs/evolution-model.md` for the evolve lane, the skill/tool boundary,
+and the canonical composite execution geometry.
 
 ## Receipts
 
 Local receipts are append-only JSON files under `.runx/receipts` unless `RUNX_RECEIPT_DIR` is set. `runx inspect` and `runx history` verify receipt signatures and surface `verified`, `unverified`, or `invalid` status.
+
+## Harness
+
+`runx harness` supports both existing standalone fixture YAML files and
+package-local inline harness cases declared in `x.yaml`:
+
+```bash
+runx harness ./fixtures/harness/echo-skill.yaml --json
+runx harness ./skills/evolve --json
+runx harness ./skills/evolve/x.yaml --json
+```
+
+Inline harness keeps representative cases beside the skill package. Standalone
+fixture YAML remains supported for larger shared or cross-package scenarios.
 
 ## Build And Pack
 

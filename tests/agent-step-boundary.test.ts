@@ -15,7 +15,7 @@ const nonInteractiveCaller: Caller = {
 };
 
 describe("agent-step and harness-hook boundary", () => {
-  it("denies agent-step execution by default in local policy", async () => {
+  it("yields agent context by default for explicit agent-step skills", async () => {
     const result = await runLocalSkill({
       skillPath: path.resolve("fixtures/skills/agent-step.md"),
       inputs: { prompt: "review this" },
@@ -23,22 +23,30 @@ describe("agent-step and harness-hook boundary", () => {
       env: process.env,
     });
 
-    expect(result.status).toBe("policy_denied");
-    if (result.status !== "policy_denied") {
+    expect(result.status).toBe("needs_agent");
+    if (result.status !== "needs_agent") {
       return;
     }
-    expect(result.reasons).toContain("source type 'agent-step' is not allowed for local execution");
+    expect(result.requests).toMatchObject([
+      {
+        id: "agent_step.review-boundary.output",
+        source_type: "agent-step",
+        task: "review-boundary",
+      },
+    ]);
   });
 
-  it("runs an explicit agent-step through the caller boundary when policy admits it", async () => {
+  it("runs an explicit agent-step when a structured agent result is supplied", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-agent-step-"));
     const caller: Caller = {
-      answer: async (questions) => ({
-        [questions[0]?.id ?? "agent_step.review-boundary.output"]: {
+      answer: async () => ({}),
+      resolveAgentResult: async (request) =>
+        request.id === "agent_step.review-boundary.output"
+          ? {
           verdict: "pass",
           checked: "caller boundary",
-        },
-      }),
+        }
+          : undefined,
       approve: async () => false,
       report: () => undefined,
     };
@@ -51,7 +59,6 @@ describe("agent-step and harness-hook boundary", () => {
         env: process.env,
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
-        allowedSourceTypes: ["cli-tool", "mcp", "agent-step"],
       });
 
       expect(result.status).toBe("success");
@@ -71,7 +78,7 @@ describe("agent-step and harness-hook boundary", () => {
           source_type: "agent-step",
           agent: "codex",
           task: "review-boundary",
-          route: "caller",
+          route: "provided",
           status: "success",
         },
       });
@@ -133,7 +140,9 @@ describe("agent-step and harness-hook boundary", () => {
     }
     const chain = runner.source.chain;
 
-    expect(chain.steps.every((step) => step.skill === "../scafld")).toBe(true);
+    expect(chain.steps.filter((step) => step.skill).every((step) => step.skill === "../scafld")).toBe(true);
+    expect(chain.steps.some((step) => step.tool === "fs.write")).toBe(true);
+    expect(chain.steps.some((step) => step.run?.type === "agent-step")).toBe(true);
     expect(chain.steps.some((step) => /fixture-agent|helper-script|\.mjs$/.test(step.skill ?? ""))).toBe(false);
   });
 });

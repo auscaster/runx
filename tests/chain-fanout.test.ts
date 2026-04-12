@@ -64,7 +64,7 @@ describe("local fanout chain runner", () => {
 
     try {
       const result = await runLocalChain({
-        chainPath: path.resolve("fixtures/chains/fanout/runx.yaml"),
+        chainPath: path.resolve("fixtures/chains/fanout/chain.yaml"),
         caller: nonInteractiveCaller,
         receiptDir,
         runxHome,
@@ -140,7 +140,7 @@ describe("local fanout chain runner", () => {
     }
   });
 
-  it("exposes sync policy decisions through chain inspect and the CLI shell", async () => {
+  it("exposes sync policy decisions through composite receipt inspection and the CLI shell", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-fanout-inspect-"));
     const receiptDir = path.join(tempDir, "receipts");
     const stdout = createMemoryStream();
@@ -148,7 +148,7 @@ describe("local fanout chain runner", () => {
 
     try {
       const result = await runLocalChain({
-        chainPath: path.resolve("fixtures/chains/fanout/runx.yaml"),
+        chainPath: path.resolve("fixtures/chains/fanout/chain.yaml"),
         caller: nonInteractiveCaller,
         receiptDir,
         runxHome: path.join(tempDir, "home"),
@@ -179,7 +179,10 @@ describe("local fanout chain runner", () => {
         { ...process.env, RUNX_CWD: process.cwd(), RUNX_HOME: path.join(tempDir, "home") },
       );
       expect(inspectExit).toBe(0);
-      expect(stdout.contents()).toContain("sync advisors: proceed via quorum.min_success");
+      expect(stdout.contents()).toContain("fanout-advisors");
+      expect(stdout.contents()).toContain("chain_execution");
+      expect(stdout.contents()).toContain(result.receipt.id);
+      expect(stdout.contents()).toContain("verified");
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

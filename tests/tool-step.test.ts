@@ -1,0 +1,306 @@
+import { spawnSync } from "node:child_process";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+import { describe, expect, it } from "vitest";
+
+import { parseChainYaml, validateChain } from "../packages/parser/src/index.js";
+import { runLocalChain, type Caller } from "../packages/runner-local/src/index.js";
+
+describe("tool steps", () => {
+  it("resolves builtin tool manifests and carries allowed_tools into agent steps", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-tool-step-"));
+    const receiptDir = path.join(tempDir, "receipts");
+    const notePath = path.join(tempDir, "note.txt");
+    await writeFile(notePath, "tool output");
+
+    const chain = validateChain(
+      parseChainYaml(`
+name: tool-aware
+steps:
+  - id: read_note
+    tool: fs.read
+    inputs:
+      path: note.txt
+      repo_root: ${JSON.stringify(tempDir)}
+  - id: plan
+    run:
+      type: agent-step
+      agent: builder
+      task: summarize-note
+      outputs:
+        summary: object
+    allowed_tools:
+      - fs.read
+      - git.status
+    context:
+      note: read_note.file_read.data
+    artifacts:
+      named_emits:
+        summary: summary
+`),
+    );
+
+    const caller: Caller = {
+      answer: async () => ({}),
+      approve: async () => false,
+      resolveAgentResult: async (request) => {
+        expect(request.envelope.allowed_tools).toEqual(["fs.read", "git.status"]);
+        expect(request.envelope.current_context.map((artifact) => artifact.type)).toEqual(["file_read"]);
+        expect(request.envelope.provenance).toEqual([
+          expect.objectContaining({
+            input: "note",
+            from_step: "read_note",
+            output: "file_read.data",
+          }),
+        ]);
+        return {
+          summary: {
+            verdict: "read",
+            observed: request.envelope.inputs.note,
+          },
+        };
+      },
+      report: () => undefined,
+    };
+
+    try {
+      const result = await runLocalChain({
+        chain,
+        chainDirectory: tempDir,
+        caller,
+        env: { ...process.env, RUNX_CWD: tempDir },
+        receiptDir,
+        runxHome: path.join(tempDir, "home"),
+      });
+
+      expect(result.status).toBe("success");
+      if (result.status !== "success") {
+        return;
+      }
+
+      expect(result.steps.map((step) => step.skill)).toEqual(["fs.read", "run:agent-step"]);
+      expect(result.steps[0]?.runner).toBe("tool");
+      expect(result.steps[1]?.runner).toBe("agent-step");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves project-local tools before builtin tools", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-local-tool-"));
+    const receiptDir = path.join(tempDir, "receipts");
+    const toolDir = path.join(tempDir, ".runx", "tools", "demo", "echo");
+    await mkdir(toolDir, { recursive: true });
+    await writeFile(
+      path.join(toolDir, "tool.yaml"),
+      `name: demo.echo
+description: Echo a local tool payload.
+source:
+  type: cli-tool
+  command: node
+  args:
+    - -e
+    - "process.stdout.write(JSON.stringify({ message: process.env.RUNX_INPUT_MESSAGE || '' }))"
+inputs:
+  message:
+    type: string
+    required: true
+scopes:
+  - demo.echo
+runx:
+  artifacts:
+    wrap_as: echoed
+`,
+    );
+
+    const chain = validateChain(
+      parseChainYaml(`
+name: local-tool
+steps:
+  - id: echo
+    tool: demo.echo
+    inputs:
+      message: local-first
+`),
+    );
+
+    const caller: Caller = {
+      answer: async () => ({}),
+      approve: async () => false,
+      report: () => undefined,
+    };
+
+    try {
+      const result = await runLocalChain({
+        chain,
+        chainDirectory: tempDir,
+        caller,
+        env: { ...process.env, RUNX_CWD: tempDir },
+        receiptDir,
+        runxHome: path.join(tempDir, "home"),
+      });
+
+      expect(result.status).toBe("success");
+      if (result.status !== "success") {
+        return;
+      }
+
+      expect(result.steps[0]?.skill).toBe("demo.echo");
+      expect(result.steps[0]?.stdout).toContain("local-first");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("writes structured JSON deterministically through fs.write_json", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-write-json-tool-"));
+    const receiptDir = path.join(tempDir, "receipts");
+
+    const chain = validateChain(
+      parseChainYaml(`
+name: write-json
+steps:
+  - id: write_config
+    tool: fs.write_json
+    inputs:
+      path: config/output.json
+      data:
+        feature: docs
+        enabled: true
+  - id: read_back
+    tool: fs.read
+    inputs:
+      path: config/output.json
+      repo_root: ${JSON.stringify(tempDir)}
+`),
+    );
+
+    const caller: Caller = {
+      answer: async () => ({}),
+      approve: async () => false,
+      report: () => undefined,
+    };
+
+    try {
+      const result = await runLocalChain({
+        chain,
+        chainDirectory: tempDir,
+        caller,
+        env: { ...process.env, RUNX_CWD: tempDir },
+        receiptDir,
+        runxHome: path.join(tempDir, "home"),
+      });
+
+      expect(result.status).toBe("success");
+      expect(JSON.parse(await readFile(path.join(tempDir, "config", "output.json"), "utf8"))).toEqual({
+        feature: "docs",
+        enabled: true,
+      });
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("reads git branch and changed file names through deterministic git tools", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-git-tools-"));
+    const receiptDir = path.join(tempDir, "receipts");
+    const caller: Caller = {
+      answer: async () => ({}),
+      approve: async () => false,
+      report: () => undefined,
+    };
+
+    try {
+      await writeFile(path.join(tempDir, "tracked.txt"), "base\n");
+      const git = (args: readonly string[]) => {
+        const result = spawnSync("git", ["-C", tempDir, ...args], { encoding: "utf8" });
+        if (result.status !== 0) {
+          throw new Error(result.stderr || result.stdout);
+        }
+      };
+      git(["init", "-b", "main"]);
+      git(["config", "user.email", "tool@test.local"]);
+      git(["config", "user.name", "Tool Test"]);
+      git(["add", "tracked.txt"]);
+      git(["commit", "-m", "init"]);
+      await writeFile(path.join(tempDir, "tracked.txt"), "changed\n");
+
+      const chain = validateChain(
+        parseChainYaml(`
+name: git-tools
+steps:
+  - id: branch
+    tool: git.current_branch
+    inputs:
+      repo_root: ${JSON.stringify(tempDir)}
+  - id: diff
+    tool: git.diff_name_only
+    inputs:
+      repo_root: ${JSON.stringify(tempDir)}
+      base: HEAD
+`),
+      );
+
+      const result = await runLocalChain({
+        chain,
+        chainDirectory: tempDir,
+        caller,
+        env: { ...process.env, RUNX_CWD: tempDir },
+        receiptDir,
+        runxHome: path.join(tempDir, "home"),
+      });
+
+      expect(result.status).toBe("success");
+      if (result.status !== "success") {
+        return;
+      }
+      expect(result.steps[0]?.stdout).toContain("\"branch\":\"main\"");
+      expect(result.steps[1]?.stdout).toContain("tracked.txt");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("captures CLI help output through cli.capture_help", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-cli-help-tool-"));
+    const receiptDir = path.join(tempDir, "receipts");
+    const caller: Caller = {
+      answer: async () => ({}),
+      approve: async () => false,
+      report: () => undefined,
+    };
+
+    const chain = validateChain(
+      parseChainYaml(`
+name: capture-help
+steps:
+  - id: help
+    tool: cli.capture_help
+    inputs:
+      command: node
+`),
+    );
+
+    try {
+      const result = await runLocalChain({
+        chain,
+        chainDirectory: tempDir,
+        caller,
+        env: { ...process.env, RUNX_CWD: tempDir },
+        receiptDir,
+        runxHome: path.join(tempDir, "home"),
+      });
+
+      expect(result.status).toBe("success");
+      if (result.status !== "success") {
+        return;
+      }
+      expect(result.steps[0]?.stdout).toContain("Usage:");
+      expect(result.steps[0]?.skill).toBe("cli.capture_help");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+});

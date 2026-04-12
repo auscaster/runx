@@ -62,11 +62,11 @@ describe("publishSkillMarkdown", () => {
       expect(result).toMatchObject({
         status: "published",
         skill_id: "0state/sourcey",
-        runner_names: ["agent", "sourcey-cli"],
+        runner_names: ["agent", "sourcey"],
         record: {
           markdown,
           x_manifest: xManifest,
-          runner_names: ["agent", "sourcey-cli"],
+          runner_names: ["agent", "sourcey"],
         },
       });
       expect(result.x_digest).toMatch(/^[a-f0-9]{64}$/);

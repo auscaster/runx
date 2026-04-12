@@ -47,7 +47,7 @@ const fixtureResults: readonly SkillSearchResult[] = [
     trust_tier: "external-unverified",
     required_scopes: [],
     tags: ["sourcey", "docs"],
-    runner_mode: "x-metadata",
+    runner_mode: "x-manifest",
     runner_names: ["sourcey-docs-cli"],
     x_digest: hashString(fixtureXManifest),
     x_trust_tier: "external-unverified",

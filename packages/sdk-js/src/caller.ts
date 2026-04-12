@@ -1,4 +1,5 @@
-import type { ApprovalGate, Caller, ExecutionEvent, Question } from "../../runner-local/src/index.js";
+import type { AgentWorkRequest, ApprovalGate } from "../../executor/src/index.js";
+import type { Caller, ExecutionEvent, Question } from "../../runner-local/src/index.js";
 
 export interface StructuredApproval {
   readonly gate: ApprovalGate;
@@ -7,6 +8,7 @@ export interface StructuredApproval {
 
 export interface StructuredCallerTrace {
   readonly questionBundles: readonly (readonly Question[])[];
+  readonly agentRequests: readonly AgentWorkRequest[];
   readonly approvals: readonly StructuredApproval[];
   readonly events: readonly ExecutionEvent[];
 }
@@ -22,12 +24,14 @@ export type StructuredCaller = Caller & {
 
 export function createStructuredCaller(options: StructuredCallerOptions = {}): StructuredCaller {
   const questionBundles: (readonly Question[])[] = [];
+  const agentRequests: AgentWorkRequest[] = [];
   const approvals: StructuredApproval[] = [];
   const events: ExecutionEvent[] = [];
 
   return {
     trace: {
       questionBundles,
+      agentRequests,
       approvals,
       events,
     },
@@ -43,6 +47,18 @@ export function createStructuredCaller(options: StructuredCallerOptions = {}): S
       const approved =
         typeof options.approvals === "boolean" ? options.approvals : Boolean(options.approvals?.[gate.id]);
       approvals.push({ gate, approved });
+      return approved;
+    },
+    resolveAgentResult: async (request) => {
+      agentRequests.push(request);
+      return options.answers?.[request.id];
+    },
+    resolveApproval: async (gate) => {
+      const approved =
+        typeof options.approvals === "boolean" ? options.approvals : options.approvals?.[gate.id];
+      if (approved !== undefined) {
+        approvals.push({ gate, approved });
+      }
       return approved;
     },
     report: (event) => {

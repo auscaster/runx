@@ -92,7 +92,7 @@ The lifecycle commands, in typical order:
 ## Review handoff
 
 The `review` command opens the review round and returns the review file
-path and adversarial prompt. The actual review is **caller-mediated**: the
+path and adversarial prompt. The actual review is **reviewer-mediated**: the
 chain routes it through the caller boundary so the reviewer may be a human,
 the controlling agent, or a peer agent. The `agent` runner on this skill
 receives `task_id`, `review_file`, and `review_prompt` and must fill the
@@ -136,5 +136,5 @@ The spec file (`.ai/specs/.../<task-id>.yaml`) contains:
 ## Structured output
 
 Commands `review`, `complete`, `status`, and `validate` are run with
-`--json` so chain policy and caller-mediated steps consume structured
+`--json` so chain policy and reviewer-facing steps consume structured
 fields, not terminal prose.

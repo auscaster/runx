@@ -1,6 +1,6 @@
 name: sequential-chain
 kind: chain
-target: ../chains/sequential/runx.yaml
+target: ../chains/sequential/chain.yaml
 expect:
   status: success
   receipt:

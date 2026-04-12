@@ -1,0 +1,63 @@
+name: shell.exec
+description: Execute an explicit command as a high-risk escape hatch.
+source:
+  type: cli-tool
+  command: node
+  args:
+    - -e
+    - |
+      const { spawnSync } = require("node:child_process");
+      const path = require("node:path");
+
+      const inputs = JSON.parse(process.env.RUNX_INPUTS_JSON || "{}");
+      const command = String(inputs.command || "");
+      if (!command) {
+        throw new Error("command is required.");
+      }
+      const args = Array.isArray(inputs.args) ? inputs.args.map((value) => String(value)) : [];
+      const cwd = path.resolve(String(inputs.cwd || inputs.repo_root || process.env.RUNX_CWD || process.cwd()));
+
+      const result = spawnSync(command, args, {
+        cwd,
+        encoding: "utf8",
+        shell: false,
+      });
+
+      if (result.error) {
+        throw result.error;
+      }
+
+      process.stdout.write(JSON.stringify({
+        command,
+        args,
+        cwd,
+        stdout: result.stdout ?? "",
+        stderr: result.stderr ?? "",
+        exit_code: result.status ?? 0,
+      }));
+      if ((result.status ?? 0) !== 0) {
+        process.exit(result.status ?? 1);
+      }
+inputs:
+  command:
+    type: string
+    required: true
+    description: Command to execute.
+  args:
+    type: json
+    required: false
+    description: Array of string arguments.
+  cwd:
+    type: string
+    required: false
+    description: Working directory override.
+  repo_root:
+    type: string
+    required: false
+    description: Repository root fallback for cwd.
+scopes:
+  - shell.exec
+mutating: true
+runx:
+  artifacts:
+    wrap_as: shell_execution

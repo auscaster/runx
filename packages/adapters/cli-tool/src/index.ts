@@ -187,6 +187,7 @@ function buildChildEnv(
 
   return {
     ...baseEnv,
+    RUNX_CWD: baseEnv.RUNX_CWD ?? baseEnv.INIT_CWD ?? process.cwd(),
     ...inputEnv(inputs),
   };
 }

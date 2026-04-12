@@ -2,8 +2,11 @@ export const runnerLocalPackage = "@runx/runner-local";
 
 export * from "./skill-install.js";
 
+const runnerLocalModuleDirectory = path.dirname(fileURLToPath(import.meta.url));
+
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { createA2aAdapter, createFixtureA2aTransport } from "../../adapters/a2a/src/index.js";
 import {
@@ -12,29 +15,41 @@ import {
   createRunEventEntry,
   materializeArtifacts,
   readJournalEntries,
+  SYSTEM_ARTIFACT_TYPES,
   type ArtifactContract,
   type ArtifactEnvelope,
 } from "../../artifacts/src/index.js";
 import { runFanout } from "./fanout.js";
 import { createCliToolAdapter } from "../../adapters/cli-tool/src/index.js";
 import { createMcpAdapter } from "../../adapters/mcp/src/index.js";
-import { executeSkill, type AdapterInvokeResult, type CredentialEnvelope, type SkillAdapter } from "../../executor/src/index.js";
+import {
+  executeSkill,
+  type AgentContextProvenance,
+  type AdapterInvokeResult,
+  type AgentWorkRequest,
+  type ApprovalGate,
+  type CredentialEnvelope,
+  type SkillAdapter,
+} from "../../executor/src/index.js";
 import { createFileMemoryStore } from "../../memory/src/index.js";
 import {
   parseChainYaml,
   parseRunnerManifestYaml,
   parseSkillMarkdown,
+  parseToolManifestYaml,
   validateChain,
   validateSkillArtifactContract,
   validateRunnerManifest,
   validateSkillSource,
   validateSkill,
+  validateToolManifest,
   type ChainDefinition,
   type ChainPolicy,
   type ChainStep,
   type SkillInput,
   type SkillRunnerDefinition,
   type SkillSandbox,
+  type ValidatedTool,
   type ValidatedSkill,
 } from "../../parser/src/index.js";
 import {
@@ -47,6 +62,7 @@ import {
 } from "../../policy/src/index.js";
 import {
   hashStable,
+  listLocalReceipts,
   listVerifiedLocalReceipts,
   readVerifiedLocalReceipt,
   uniqueReceiptId,
@@ -79,13 +95,6 @@ export interface Question {
   readonly type: string;
 }
 
-export interface ApprovalGate {
-  readonly id: string;
-  readonly reason: string;
-  readonly type?: string;
-  readonly summary?: Readonly<Record<string, unknown>>;
-}
-
 export interface ApprovalDecision {
   readonly gate: ApprovalGate;
   readonly approved: boolean;
@@ -108,6 +117,8 @@ export interface ExecutionEvent {
 export interface Caller {
   readonly answer: (questions: readonly Question[]) => Promise<Readonly<Record<string, unknown>>>;
   readonly approve: (gate: ApprovalGate) => Promise<boolean>;
+  readonly resolveAgentResult?: (request: AgentWorkRequest) => Promise<unknown | undefined>;
+  readonly resolveApproval?: (gate: ApprovalGate) => Promise<boolean | undefined>;
   readonly report: (event: ExecutionEvent) => void | Promise<void>;
 }
 
@@ -130,6 +141,11 @@ export interface RunLocalSkillOptions {
   readonly resumeFromRunId?: string;
 }
 
+interface ResolvedRunnerSelection {
+  readonly skill: ValidatedSkill;
+  readonly selectedRunnerName?: string;
+}
+
 interface RunResolvedSkillOptions {
   readonly skill: ValidatedSkill;
   readonly skillDirectory: string;
@@ -146,6 +162,9 @@ interface RunResolvedSkillOptions {
   readonly receiptMetadata?: Readonly<Record<string, unknown>>;
   readonly resumeFromRunId?: string;
   readonly skillPathForMissingContext?: string;
+  readonly orchestrationRunId?: string;
+  readonly orchestrationStepId?: string;
+  readonly currentContext?: readonly MaterializedContextEdge[];
 }
 
 export interface AuthResolver {
@@ -178,6 +197,17 @@ interface ResolvedSkillReference {
   readonly xManifestCandidates: readonly string[];
 }
 
+interface ResolvedToolReference {
+  readonly requestedName: string;
+  readonly toolName: string;
+  readonly toolPath: string;
+  readonly toolDirectory: string;
+}
+
+function chainStepExecutionDirectory(step: ChainStep, stepExecutablePath: string, chainDirectory: string): string {
+  return step.skill || step.tool ? path.dirname(stepExecutablePath) : chainDirectory;
+}
+
 export type RunLocalSkillResult =
   | {
       readonly status: "missing_context";
@@ -190,6 +220,22 @@ export type RunLocalSkillResult =
       readonly reasons: readonly string[];
       readonly approval?: ApprovalDecision;
       readonly receipt?: LocalSkillReceipt;
+    }
+  | {
+      readonly status: "needs_agent";
+      readonly skill: ValidatedSkill;
+      readonly inputs: Readonly<Record<string, unknown>>;
+      readonly runId: string;
+      readonly requests: readonly AgentWorkRequest[];
+      readonly stepIds?: readonly string[];
+    }
+  | {
+      readonly status: "needs_approval";
+      readonly skill: ValidatedSkill;
+      readonly inputs: Readonly<Record<string, unknown>>;
+      readonly runId: string;
+      readonly gates: readonly ApprovalGate[];
+      readonly stepIds?: readonly string[];
     }
   | {
       readonly status: "success" | "failure";
@@ -280,6 +326,26 @@ export type RunLocalChainResult =
       readonly receipt?: LocalChainReceipt;
     }
   | {
+      readonly status: "needs_agent";
+      readonly chain: ChainDefinition;
+      readonly stepIds: readonly string[];
+      readonly skillPath: string;
+      readonly skill: ValidatedSkill;
+      readonly requests: readonly AgentWorkRequest[];
+      readonly state: SequentialChainState;
+      readonly runId: string;
+    }
+  | {
+      readonly status: "needs_approval";
+      readonly chain: ChainDefinition;
+      readonly stepIds: readonly string[];
+      readonly skillPath: string;
+      readonly skill: ValidatedSkill;
+      readonly gates: readonly ApprovalGate[];
+      readonly state: SequentialChainState;
+      readonly runId: string;
+    }
+  | {
       readonly status: "success" | "failure";
       readonly chain: ChainDefinition;
       readonly state: SequentialChainState;
@@ -360,36 +426,25 @@ export function createCallerAgentStepAdapter(caller: Caller): SkillAdapter {
     type: "agent-step",
     invoke: async (request) => {
       const startedAt = Date.now();
-      const skillName = request.skillName ?? "agent-step";
-      const questionId = `agent_step.${normalizeQuestionId(request.source.task ?? skillName)}.output`;
-      const answers = await caller.answer([
-        {
-          id: questionId,
-          prompt: renderAgentStepPrompt(request),
-          description: "Return the structured output for this agent-step.",
-          required: true,
-          type: "json",
-        },
-      ]);
-      const output = answers[questionId];
+      const mediationRequest = buildAgentStepRequest(request);
+      const output = await caller.resolveAgentResult?.(mediationRequest);
 
       if (output === undefined || output === null || output === "") {
-        const errorMessage = `agent-step '${request.source.task ?? skillName}' did not receive output from the caller`;
         return {
-          status: "failure",
+          status: "needs_agent",
           stdout: "",
-          stderr: errorMessage,
+          stderr: "",
           exitCode: null,
           signal: null,
           durationMs: Date.now() - startedAt,
-          errorMessage,
+          request: mediationRequest,
           metadata: {
             agent_hook: {
               source_type: "agent-step",
               agent: request.source.agent,
               task: request.source.task,
-              route: "caller",
-              status: "failure",
+              route: "yielded",
+              status: "needs_agent",
             },
           },
         };
@@ -407,7 +462,7 @@ export function createCallerAgentStepAdapter(caller: Caller): SkillAdapter {
             source_type: "agent-step",
             agent: request.source.agent,
             task: request.source.task,
-            route: "caller",
+            route: "provided",
             status: "success",
           },
         },
@@ -421,33 +476,23 @@ export function createCallerAgentAdapter(caller: Caller): SkillAdapter {
     type: "agent",
     invoke: async (request) => {
       const startedAt = Date.now();
-      const skillName = request.skillName ?? "skill";
-      const questionId = `agent.${normalizeQuestionId(skillName)}.output`;
-      const answers = await caller.answer([
-        {
-          id: questionId,
-          prompt: renderAgentRunnerPrompt(request),
-          description: "Run this standard skill through the controlling caller and return its reported output.",
-          required: true,
-          type: "json",
-        },
-      ]);
-      const output = answers[questionId];
+      const mediationRequest = buildAgentRunnerRequest(request);
+      const output = await caller.resolveAgentResult?.(mediationRequest);
 
       if (output === undefined || output === null || output === "") {
-        const errorMessage = `agent runner '${skillName}' did not receive output from the caller`;
         return {
-          status: "failure",
+          status: "needs_agent",
           stdout: "",
-          stderr: errorMessage,
+          stderr: "",
           exitCode: null,
           signal: null,
           durationMs: Date.now() - startedAt,
-          errorMessage,
+          request: mediationRequest,
           metadata: {
             agent_runner: {
-              skill: skillName,
-              status: "failure",
+              skill: mediationRequest.envelope.skill,
+              route: "yielded",
+              status: "needs_agent",
             },
           },
         };
@@ -462,7 +507,8 @@ export function createCallerAgentAdapter(caller: Caller): SkillAdapter {
         durationMs: Date.now() - startedAt,
         metadata: {
           agent_runner: {
-            skill: skillName,
+            skill: mediationRequest.envelope.skill,
+            route: "provided",
             status: "success",
           },
         },
@@ -476,17 +522,30 @@ export function createCallerApprovalAdapter(caller: Caller): SkillAdapter {
     type: "approval",
     invoke: async (request) => {
       const startedAt = Date.now();
-      const summary = isPlainRecord(request.inputs.summary) ? request.inputs.summary : request.inputs;
-      const gate: ApprovalGate = {
-        id: String(request.inputs.gate_id ?? `${request.skillName ?? "approval"}.gate`),
-        type: "approval",
-        reason:
-          typeof request.inputs.reason === "string"
-            ? request.inputs.reason
-            : `Approval required for ${request.skillName ?? "approval"}.`,
-        summary,
-      };
-      const approved = await caller.approve(gate);
+      const gate = buildApprovalGate(request);
+      const approved = await caller.resolveApproval?.(gate);
+
+      if (approved === undefined) {
+        return {
+          status: "needs_approval",
+          stdout: "",
+          stderr: "",
+          exitCode: null,
+          signal: null,
+          durationMs: Date.now() - startedAt,
+          gate,
+          metadata: {
+            approval: {
+              gate_id: gate.id,
+              gate_type: gate.type,
+              decision: "pending",
+              reason: gate.reason,
+              summary: gate.summary,
+            },
+          },
+        };
+      }
+
       return {
         status: "success",
         stdout: JSON.stringify({
@@ -516,7 +575,16 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
   const resolvedSkill = await resolveSkillReference(options.skillPath);
   const rawMarkdown = await readFile(resolvedSkill.skillPath, "utf8");
   const rawSkill = parseSkillMarkdown(rawMarkdown);
-  const skill = await resolveSkillRunner(validateSkill(rawSkill, { mode: "strict" }), resolvedSkill.xManifestCandidates, options.runner);
+  const resumedRunnerName =
+    options.runner || !options.resumeFromRunId
+      ? undefined
+      : await readResumedSelectedRunner(options.receiptDir ?? defaultReceiptDir(options.env), options.resumeFromRunId);
+  const runnerSelection = await resolveSkillRunner(
+    validateSkill(rawSkill, { mode: "strict" }),
+    resolvedSkill.xManifestCandidates,
+    options.runner ?? resumedRunnerName,
+  );
+  const skill = runnerSelection.skill;
 
   await options.caller.report({
     type: "skill_loaded",
@@ -538,7 +606,7 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
     message: `Resolved ${Object.keys(inputResolution.inputs).length} input(s).`,
   });
 
-  return await runResolvedSkill({
+  const result = await runResolvedSkill({
     skill,
     skillDirectory: resolvedSkill.skillDirectory,
     inputs: inputResolution.inputs,
@@ -555,10 +623,48 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
     resumeFromRunId: options.resumeFromRunId,
     skillPathForMissingContext: resolvedSkill.skillPath,
   });
+
+  if (result.status === "needs_agent") {
+    await appendPendingSkillJournalEntries({
+      receiptDir: options.receiptDir ?? defaultReceiptDir(options.env),
+      runId: result.runId,
+      skill,
+      startedAt: new Date().toISOString(),
+      kind: "agent_requested",
+      detail: {
+        selected_runner: runnerSelection.selectedRunnerName,
+        request_ids: result.requests.map((request) => request.id),
+        step_ids: result.stepIds ?? [],
+        inputs: result.inputs,
+      },
+      includeRunStarted: !options.resumeFromRunId,
+    });
+  }
+
+  if (result.status === "needs_approval") {
+    await appendPendingSkillJournalEntries({
+      receiptDir: options.receiptDir ?? defaultReceiptDir(options.env),
+      runId: result.runId,
+      skill,
+      startedAt: new Date().toISOString(),
+      kind: "approval_requested",
+      detail: {
+        selected_runner: runnerSelection.selectedRunnerName,
+        gate_ids: result.gates.map((gate) => gate.id),
+        step_ids: result.stepIds ?? [],
+        inputs: result.inputs,
+      },
+      includeRunStarted: !options.resumeFromRunId,
+    });
+  }
+
+  return result;
 }
 
 async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLocalSkillResult> {
   const { skill } = options;
+  const runId = options.resumeFromRunId ?? uniqueReceiptId("rx");
+  const contextEnvelopeRunId = options.orchestrationRunId ?? runId;
 
   const structuralAdmission = admitLocalSkill(skill, {
     allowedSourceTypes: options.allowedSourceTypes,
@@ -653,6 +759,28 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
       };
     }
 
+    if (chainResult.status === "needs_agent") {
+      return {
+        status: "needs_agent",
+        skill,
+        inputs: options.inputs,
+        runId: chainResult.runId,
+        requests: chainResult.requests,
+        stepIds: chainResult.stepIds,
+      };
+    }
+
+    if (chainResult.status === "needs_approval") {
+      return {
+        status: "needs_approval",
+        skill,
+        inputs: options.inputs,
+        runId: chainResult.runId,
+        gates: chainResult.gates,
+        stepIds: chainResult.stepIds,
+      };
+    }
+
     let state = createSingleStepState(skill.name);
     state = transitionSingleStep(state, { type: "admit" });
     state = transitionSingleStep(state, { type: "start", at: chainResult.receipt.started_at ?? new Date().toISOString() });
@@ -695,9 +823,16 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
 
   let state = createSingleStepState(skill.name);
   state = transitionSingleStep(state, { type: "admit" });
-  const runId = options.resumeFromRunId ?? uniqueReceiptId("rx");
   const startedAt = new Date().toISOString();
-  state = transitionSingleStep(state, { type: "start", at: startedAt });
+  const preparedAgentContext = await prepareAgentContext({
+    skill,
+    inputs: options.inputs,
+    env: options.env,
+    receiptDir: options.receiptDir ?? defaultReceiptDir(options.env),
+    runId: contextEnvelopeRunId,
+    stepId: options.orchestrationStepId,
+    currentContext: options.currentContext,
+  });
 
   const credentialResolution = await options.authResolver?.resolveCredential({
     skill,
@@ -727,8 +862,35 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
     ],
     env: options.env,
     credential: credentialResolution?.credential,
+    allowedTools: executionSkill.allowedTools,
+    runId: contextEnvelopeRunId,
+    stepId: options.orchestrationStepId,
+    currentContext: preparedAgentContext.currentContext,
+    historicalContext: preparedAgentContext.historicalContext,
+    contextProvenance: preparedAgentContext.provenance,
   });
 
+  if (execution.status === "needs_agent") {
+    return {
+      status: "needs_agent",
+      skill,
+      inputs: options.inputs,
+      runId,
+      requests: [execution.request],
+    };
+  }
+
+  if (execution.status === "needs_approval") {
+    return {
+      status: "needs_approval",
+      skill,
+      inputs: options.inputs,
+      runId,
+      gates: [execution.gate],
+    };
+  }
+
+  state = transitionSingleStep(state, { type: "start", at: startedAt });
   const completedAt = new Date().toISOString();
   if (execution.status === "success") {
     state = transitionSingleStep(state, {
@@ -773,6 +935,7 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
         runnerTrustMetadata(skill.source.type),
         execution.metadata,
         credentialResolution?.receiptMetadata,
+        preparedAgentContext.receiptMetadata,
         sandboxApproval ? approvalReceiptMetadata(sandboxApproval) : undefined,
         options.receiptMetadata,
       ),
@@ -792,6 +955,7 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
     status: execution.status,
     artifactEnvelopes: artifactResult.envelopes,
     receiptId: receipt.id,
+    includeRunStarted: !options.resumeFromRunId,
   });
   await indexReceiptIfEnabled(receipt, options.receiptDir ?? defaultReceiptDir(options.env), options);
 
@@ -919,11 +1083,11 @@ async function resolveSkillRunner(
   skill: ValidatedSkill,
   xManifestCandidates: readonly string[],
   runnerName: string | undefined,
-): Promise<ValidatedSkill> {
+): Promise<ResolvedRunnerSelection> {
   const manifestPath = await findSkillXManifestPath(xManifestCandidates);
   if (!manifestPath) {
     if (!runnerName) {
-      return skill;
+      return { skill };
     }
     throw new Error(`Runner '${runnerName}' requested but no x.yaml or ${skill.name}.x.yaml was found for skill '${skill.name}'.`);
   }
@@ -936,7 +1100,7 @@ async function resolveSkillRunner(
 
   const selectedRunnerName = runnerName ?? defaultRunnerName(manifest.runners);
   if (!selectedRunnerName) {
-    return skill;
+    return { skill };
   }
 
   const runner = manifest.runners[selectedRunnerName];
@@ -944,7 +1108,10 @@ async function resolveSkillRunner(
     throw new Error(`Runner '${selectedRunnerName}' is not defined for skill '${skill.name}'.`);
   }
 
-  return applyRunner(skill, runner);
+  return {
+    skill: applyRunner(skill, runner),
+    selectedRunnerName,
+  };
 }
 
 async function findSkillXManifestPath(candidates: readonly string[]): Promise<string | undefined> {
@@ -983,6 +1150,7 @@ function applyRunner(skill: ValidatedSkill, runner: SkillRunnerDefinition): Vali
     idempotency: runner.idempotency ?? skill.idempotency,
     mutating: runner.mutating ?? skill.mutating,
     artifacts: runner.artifacts ?? skill.artifacts,
+    allowedTools: runner.allowedTools ?? skill.allowedTools,
     runx: runner.runx ?? skill.runx,
   };
 }
@@ -1020,6 +1188,107 @@ async function resolveSkillReference(skillPath: string): Promise<ResolvedSkillRe
             path.join(skillDirectory, `${skillName}.x.yaml`),
           ],
   };
+}
+
+async function resolveToolReference(toolName: string, searchFromDirectory: string): Promise<ResolvedToolReference> {
+  const segments = toolName.split(".").filter((segment) => segment.length > 0);
+  if (segments.length < 2) {
+    throw new Error(`Tool '${toolName}' must include a namespace, for example fs.read.`);
+  }
+
+  const searchRoots = await resolveToolRoots(searchFromDirectory);
+  for (const root of searchRoots) {
+    const toolPath = path.join(root, ...segments, "tool.yaml");
+    if (await pathExists(toolPath)) {
+      return {
+        requestedName: toolName,
+        toolName,
+        toolPath,
+        toolDirectory: path.dirname(toolPath),
+      };
+    }
+  }
+
+  throw new Error(`Tool '${toolName}' was not found in configured tool roots.`);
+}
+
+async function resolveToolRoots(searchFromDirectory: string): Promise<readonly string[]> {
+  const roots: string[] = [];
+  const seen = new Set<string>();
+  let current = path.resolve(searchFromDirectory);
+
+  while (true) {
+    const candidate = path.join(current, ".runx", "tools");
+    if (!seen.has(candidate) && await isDirectory(candidate)) {
+      roots.push(candidate);
+      seen.add(candidate);
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      break;
+    }
+    current = parent;
+  }
+
+  for (const builtinRoot of await resolveBuiltinToolRoots()) {
+    if (!seen.has(builtinRoot)) {
+      roots.push(builtinRoot);
+      seen.add(builtinRoot);
+    }
+  }
+
+  return roots;
+}
+
+async function resolveBuiltinToolRoots(): Promise<readonly string[]> {
+  const roots: string[] = [];
+  const seen = new Set<string>();
+  const envRoots = (process.env.RUNX_TOOL_ROOTS ?? "")
+    .split(path.delimiter)
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+    .map((value) => path.resolve(value));
+
+  for (const envRoot of envRoots) {
+    if (!seen.has(envRoot) && await isDirectory(envRoot)) {
+      roots.push(envRoot);
+      seen.add(envRoot);
+    }
+  }
+
+  let current = runnerLocalModuleDirectory;
+
+  while (true) {
+    const candidate = path.join(current, "tools");
+    if (!seen.has(candidate) && await isDirectory(candidate)) {
+      roots.push(candidate);
+      seen.add(candidate);
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      break;
+    }
+    current = parent;
+  }
+
+  return roots;
+}
+
+async function isDirectory(candidatePath: string): Promise<boolean> {
+  try {
+    return (await stat(candidatePath)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+async function pathExists(candidatePath: string): Promise<boolean> {
+  try {
+    await stat(candidatePath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function materializeInlineChain(skill: ValidatedSkill): ChainDefinition {
@@ -1063,6 +1332,7 @@ async function appendSkillJournalEntries(options: {
   readonly status: "success" | "failure";
   readonly artifactEnvelopes: readonly ArtifactEnvelope[];
   readonly receiptId: string;
+  readonly includeRunStarted?: boolean;
 }): Promise<void> {
   const producer = {
     skill: options.skill.name,
@@ -1072,13 +1342,17 @@ async function appendSkillJournalEntries(options: {
     receiptDir: options.receiptDir,
     runId: options.runId,
     entries: [
-      createRunEventEntry({
-        runId: options.runId,
-        producer,
-        kind: "run_started",
-        status: "started",
-        createdAt: options.startedAt,
-      }),
+      ...(options.includeRunStarted === false
+        ? []
+        : [
+            createRunEventEntry({
+              runId: options.runId,
+              producer,
+              kind: "run_started",
+              status: "started",
+              createdAt: options.startedAt,
+            }),
+          ]),
       ...options.artifactEnvelopes,
       ...options.artifactEnvelopes.map((envelope) =>
         createReceiptLinkEntry({
@@ -1098,6 +1372,46 @@ async function appendSkillJournalEntries(options: {
         detail: {
           receipt_id: options.receiptId,
         },
+      }),
+    ],
+  });
+}
+
+async function appendPendingSkillJournalEntries(options: {
+  readonly receiptDir: string;
+  readonly runId: string;
+  readonly skill: ValidatedSkill;
+  readonly startedAt: string;
+  readonly kind: "agent_requested" | "approval_requested";
+  readonly detail: Readonly<Record<string, unknown>>;
+  readonly includeRunStarted?: boolean;
+}): Promise<void> {
+  const producer = {
+    skill: options.skill.name,
+    runner: options.skill.source.type,
+  };
+  await appendJournalEntries({
+    receiptDir: options.receiptDir,
+    runId: options.runId,
+    entries: [
+      ...(options.includeRunStarted === false
+        ? []
+        : [
+            createRunEventEntry({
+              runId: options.runId,
+              producer,
+              kind: "run_started",
+              status: "started",
+              createdAt: options.startedAt,
+            }),
+          ]),
+      createRunEventEntry({
+        runId: options.runId,
+        producer,
+        kind: options.kind,
+        status: "waiting",
+        detail: options.detail,
+        createdAt: options.startedAt,
       }),
     ],
   });
@@ -1145,6 +1459,35 @@ async function appendChainJournalEntries(options: {
           receipt_id: options.receiptId,
           ...options.detail,
         },
+        createdAt: options.createdAt,
+      }),
+    ],
+  });
+}
+
+async function appendPendingChainJournalEntry(options: {
+  readonly receiptDir: string;
+  readonly runId: string;
+  readonly topLevelSkillName: string;
+  readonly stepId: string;
+  readonly kind: "step_waiting_agent" | "step_waiting_approval";
+  readonly detail: Readonly<Record<string, unknown>>;
+  readonly createdAt: string;
+}): Promise<void> {
+  await appendJournalEntries({
+    receiptDir: options.receiptDir,
+    runId: options.runId,
+    entries: [
+      createRunEventEntry({
+        runId: options.runId,
+        stepId: options.stepId,
+        producer: {
+          skill: options.topLevelSkillName,
+          runner: "chain",
+        },
+        kind: options.kind,
+        status: "waiting",
+        detail: options.detail,
         createdAt: options.createdAt,
       }),
     ],
@@ -1203,7 +1546,7 @@ function resolveTransitionGateValue(
 function hydrateChainFromJournal(options: {
   readonly entries: readonly ArtifactEnvelope[];
   readonly chain: ChainDefinition;
-  readonly chainSkillCache: ReadonlyMap<string, ValidatedSkill>;
+  readonly chainStepCache: ReadonlyMap<string, ValidatedSkill>;
   readonly skillEnvironment?: {
     readonly name: string;
     readonly body: string;
@@ -1262,7 +1605,9 @@ function hydrateChainFromJournal(options: {
   let state = options.stateRef.value;
   for (const chainStep of options.chainSteps) {
     const step = stepsById.get(chainStep.id);
-    const stepSkill = options.chainSkillCache.get(chainStep.id) ?? (step?.run ? buildInlineChainStepSkill(step, options.skillEnvironment) : undefined);
+    const stepSkill =
+      options.chainStepCache.get(chainStep.id)
+      ?? (step?.run ? buildInlineChainStepSkill(step, options.skillEnvironment) : undefined);
     const event = latestEvents.get(chainStep.id);
     if (!step || !stepSkill || !event) {
       break;
@@ -1270,12 +1615,20 @@ function hydrateChainFromJournal(options: {
     const stepArtifacts = artifactsByStep.get(chainStep.id) ?? [];
     const stepFields = reconstructStepFields(stepArtifacts, stepSkill.artifacts);
     const receiptId = receiptLinksForStep(stepArtifacts, receiptLinks)[0];
-    state = transitionSequentialChain(state, {
-      type: "start_step",
-      stepId: chainStep.id,
-      at: entryTimestamp(event),
-    });
+    if (event.data.kind === "step_started") {
+      state = transitionSequentialChain(state, {
+        type: "start_step",
+        stepId: chainStep.id,
+        at: entryTimestamp(event),
+      });
+      break;
+    }
     if (event.data.kind === "step_succeeded") {
+      state = transitionSequentialChain(state, {
+        type: "start_step",
+        stepId: chainStep.id,
+        at: entryTimestamp(event),
+      });
       state = transitionSequentialChain(state, {
         type: "step_succeeded",
         stepId: chainStep.id,
@@ -1290,6 +1643,7 @@ function hydrateChainFromJournal(options: {
         receiptId: receiptId ?? "",
         fields: stepFields,
         artifactIds: stepArtifacts.map((artifact) => artifact.meta.artifact_id),
+        artifacts: stepArtifacts.filter(isDomainArtifactEnvelope),
       });
       options.stepRuns.push({
         stepId: chainStep.id,
@@ -1309,6 +1663,11 @@ function hydrateChainFromJournal(options: {
     }
     if (event.data.kind === "step_failed") {
       state = transitionSequentialChain(state, {
+        type: "start_step",
+        stepId: chainStep.id,
+        at: entryTimestamp(event),
+      });
+      state = transitionSequentialChain(state, {
         type: "step_failed",
         stepId: chainStep.id,
         at: entryTimestamp(event),
@@ -1316,6 +1675,9 @@ function hydrateChainFromJournal(options: {
           ? String((event.data.detail as Record<string, unknown>).reason)
           : "previous attempt failed",
       });
+      break;
+    }
+    if (event.data.kind === "step_waiting_agent" || event.data.kind === "step_waiting_approval") {
       break;
     }
     break;
@@ -1400,12 +1762,12 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
   const chain = chainResolution.chain;
   const chainDirectory = chainResolution.chainDirectory;
   const chainId = options.runId ?? options.resumeFromRunId ?? uniqueReceiptId("cx");
-  const chainSkillCache = await loadChainSkills(chain, chainDirectory);
+  const chainStepCache = await loadChainStepExecutables(chain, chainDirectory);
   const chainGrant = options.chainGrant ?? defaultLocalChainGrant();
   const chainSteps = chain.steps.map((step) => ({
     id: step.id,
     contextFrom: unique(step.contextEdges.map((edge) => edge.fromStep)),
-    retry: step.retry ?? chainSkillCache.get(step.id)?.retry,
+    retry: step.retry ?? chainStepCache.get(step.id)?.retry,
     fanoutGroup: step.fanoutGroup,
   }));
   let state = createSequentialChainState(chainId, chainSteps);
@@ -1419,7 +1781,7 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
     hydrateChainFromJournal({
       entries: await readJournalEntries(receiptDir, options.resumeFromRunId),
       chain,
-      chainSkillCache,
+      chainStepCache,
       skillEnvironment: options.skillEnvironment,
       chainSteps,
       stepRuns,
@@ -1505,7 +1867,7 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
         const resolvedStep = await resolveChainStepExecution({
           step,
           chainDirectory,
-          chainSkillCache,
+          chainStepCache,
           skillEnvironment: options.skillEnvironment,
         });
         const stepSkillPath = resolvedStep.skillPath;
@@ -1563,40 +1925,13 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
         });
       }
 
-      // Transition all branches to started before parallel execution
-      for (const prep of branchPreps) {
-        state = transitionSequentialChain(state, {
-          type: "start_step", stepId: prep.step.id, at: new Date().toISOString(),
-        });
-        await appendJournalEntries({
-          receiptDir,
-          runId: chainId,
-          entries: [
-            createRunEventEntry({
-              runId: chainId,
-              stepId: prep.step.id,
-              producer: {
-                skill: chainProducerSkillName(options, chain),
-                runner: "chain",
-              },
-              kind: "step_started",
-              status: "started",
-              detail: {
-                skill: prep.stepReference,
-                runner: chainStepRunner(prep.step) ?? "default",
-              },
-            }),
-          ],
-        });
-      }
-
       // Parallel execution: all branches run concurrently
       const branchTasks = branchPreps.map((prep) => ({
         id: prep.step.id,
         fn: async (_signal: AbortSignal) => {
           return await runResolvedSkill({
             skill: prep.stepSkill,
-            skillDirectory: prep.step.skill ? path.dirname(prep.stepSkillPath) : chainDirectory,
+            skillDirectory: chainStepExecutionDirectory(prep.step, prep.stepSkillPath, chainDirectory),
             inputs: prep.stepInputs,
             caller: options.caller,
             env: options.env,
@@ -1608,11 +1943,17 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
             allowedSourceTypes: options.allowedSourceTypes,
             authResolver: options.authResolver,
             receiptMetadata: mergeMetadata(prep.retryContext.receiptMetadata, governanceReceiptMetadata(prep.step, prep.governance)),
+            orchestrationRunId: chainId,
+            orchestrationStepId: prep.step.id,
+            currentContext: prep.context,
           });
         },
       }));
 
       const fanoutResults = await runFanout(branchTasks);
+      const pendingAgentRequests: AgentWorkRequest[] = [];
+      const pendingApprovalGates: ApprovalGate[] = [];
+      const pendingStepIds: string[] = [];
 
       // Apply results to state machine in declaration order
       for (let i = 0; i < branchPreps.length; i++) {
@@ -1620,6 +1961,11 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
         const result = fanoutResults[i];
 
         if (result.status === "aborted" || !result.value) {
+          state = transitionSequentialChain(state, {
+            type: "start_step",
+            stepId: prep.step.id,
+            at: new Date().toISOString(),
+          });
           state = transitionSequentialChain(state, {
             type: "step_failed", stepId: prep.step.id,
             at: new Date().toISOString(),
@@ -1630,8 +1976,49 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
 
         const stepResult = result.value;
 
+        if (stepResult.status === "needs_agent") {
+          pendingAgentRequests.push(...stepResult.requests);
+          pendingStepIds.push(prep.step.id);
+          await appendPendingChainJournalEntry({
+            receiptDir,
+            runId: chainId,
+            topLevelSkillName: chainProducerSkillName(options, chain),
+            stepId: prep.step.id,
+            kind: "step_waiting_agent",
+            detail: {
+              request_ids: stepResult.requests.map((request) => request.id),
+              runner: chainStepRunner(prep.step) ?? "default",
+            },
+            createdAt: new Date().toISOString(),
+          });
+          continue;
+        }
+
+        if (stepResult.status === "needs_approval") {
+          pendingApprovalGates.push(...stepResult.gates);
+          pendingStepIds.push(prep.step.id);
+          await appendPendingChainJournalEntry({
+            receiptDir,
+            runId: chainId,
+            topLevelSkillName: chainProducerSkillName(options, chain),
+            stepId: prep.step.id,
+            kind: "step_waiting_approval",
+            detail: {
+              gate_ids: stepResult.gates.map((gate) => gate.id),
+              runner: chainStepRunner(prep.step) ?? "default",
+            },
+            createdAt: new Date().toISOString(),
+          });
+          continue;
+        }
+
         // In fanout, missing_context and policy_denied are branch failures, not chain halts
         if (stepResult.status === "missing_context" || stepResult.status === "policy_denied") {
+          state = transitionSequentialChain(state, {
+            type: "start_step",
+            stepId: prep.step.id,
+            at: new Date().toISOString(),
+          });
           await appendJournalEntries({
             receiptDir,
             runId: chainId,
@@ -1664,6 +2051,33 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
           continue;
         }
 
+        const stepStartedAt = new Date().toISOString();
+        state = transitionSequentialChain(state, {
+          type: "start_step",
+          stepId: prep.step.id,
+          at: stepStartedAt,
+        });
+        await appendJournalEntries({
+          receiptDir,
+          runId: chainId,
+          entries: [
+            createRunEventEntry({
+              runId: chainId,
+              stepId: prep.step.id,
+              producer: {
+                skill: chainProducerSkillName(options, chain),
+                runner: "chain",
+              },
+              kind: "step_started",
+              status: "started",
+              detail: {
+                skill: prep.stepReference,
+                runner: chainStepRunner(prep.step) ?? "default",
+              },
+              createdAt: stepStartedAt,
+            }),
+          ],
+        });
         const stepCompletedAt = new Date().toISOString();
         const artifactResult = materializeArtifacts({
           stdout: stepResult.execution.stdout,
@@ -1704,6 +2118,7 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
           receiptId: stepResult.receipt.id,
           fields: artifactResult.fields,
           artifactIds: artifactResult.envelopes.map((envelope) => envelope.meta.artifact_id),
+          artifacts: artifactResult.envelopes,
         });
         finalOutput = stepResult.execution.stdout;
         await appendChainJournalEntries({
@@ -1732,6 +2147,34 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
               at: stepCompletedAt,
               error: stepResult.execution.errorMessage ?? stepResult.execution.stderr,
             });
+      }
+
+      if (pendingAgentRequests.length > 0 && pendingApprovalGates.length > 0) {
+        throw new Error("fanout yielded both agent requests and approval gates; split the mediation boundary.");
+      }
+      if (pendingApprovalGates.length > 0) {
+        return {
+          status: "needs_approval",
+          chain,
+          stepIds: pendingStepIds,
+          skillPath: branchPreps.find((prep) => pendingStepIds.includes(prep.step.id))?.stepSkillPath ?? chainDirectory,
+          skill: branchPreps.find((prep) => pendingStepIds.includes(prep.step.id))?.stepSkill ?? branchPreps[0]!.stepSkill,
+          gates: pendingApprovalGates,
+          state,
+          runId: chainId,
+        };
+      }
+      if (pendingAgentRequests.length > 0) {
+        return {
+          status: "needs_agent",
+          chain,
+          stepIds: pendingStepIds,
+          skillPath: branchPreps.find((prep) => pendingStepIds.includes(prep.step.id))?.stepSkillPath ?? chainDirectory,
+          skill: branchPreps.find((prep) => pendingStepIds.includes(prep.step.id))?.stepSkill ?? branchPreps[0]!.stepSkill,
+          requests: pendingAgentRequests,
+          state,
+          runId: chainId,
+        };
       }
 
       const followUpPlan = planSequentialChainTransition(state, chainSteps, chain.fanoutGroups);
@@ -1781,7 +2224,7 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
     const resolvedStep = await resolveChainStepExecution({
       step,
       chainDirectory,
-      chainSkillCache,
+      chainStepCache,
       skillEnvironment: options.skillEnvironment,
     });
     const stepSkillPath = resolvedStep.skillPath;
@@ -1868,35 +2311,9 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
       };
     }
 
-    state = transitionSequentialChain(state, {
-      type: "start_step",
-      stepId: step.id,
-      at: new Date().toISOString(),
-    });
-    await appendJournalEntries({
-      receiptDir,
-      runId: chainId,
-        entries: [
-          createRunEventEntry({
-            runId: chainId,
-            stepId: step.id,
-            producer: {
-              skill: chainProducerSkillName(options, chain),
-              runner: "chain",
-            },
-            kind: "step_started",
-            status: "started",
-            detail: {
-              skill: resolvedStep.reference,
-              runner: chainStepRunner(step) ?? "default",
-            },
-          }),
-        ],
-      });
-
     const stepResult = await runResolvedSkill({
       skill: stepSkill,
-      skillDirectory: step.skill ? path.dirname(stepSkillPath) : chainDirectory,
+      skillDirectory: chainStepExecutionDirectory(step, stepSkillPath, chainDirectory),
       inputs: stepInputs,
       caller: options.caller,
       env: options.env,
@@ -1908,7 +2325,60 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
       allowedSourceTypes: options.allowedSourceTypes,
       authResolver: options.authResolver,
       receiptMetadata: mergeMetadata(retryContext.receiptMetadata, governanceReceiptMetadata(step, governance)),
+      orchestrationRunId: chainId,
+      orchestrationStepId: step.id,
+      currentContext: context,
     });
+
+    if (stepResult.status === "needs_agent") {
+      await appendPendingChainJournalEntry({
+        receiptDir,
+        runId: chainId,
+        topLevelSkillName: chainProducerSkillName(options, chain),
+        stepId: step.id,
+        kind: "step_waiting_agent",
+        detail: {
+          request_ids: stepResult.requests.map((request) => request.id),
+          runner: chainStepRunner(step) ?? "default",
+        },
+        createdAt: new Date().toISOString(),
+      });
+      return {
+        status: "needs_agent",
+        chain,
+        stepIds: [step.id],
+        skillPath: stepSkillPath,
+        skill: stepSkill,
+        requests: stepResult.requests,
+        state,
+        runId: chainId,
+      };
+    }
+
+    if (stepResult.status === "needs_approval") {
+      await appendPendingChainJournalEntry({
+        receiptDir,
+        runId: chainId,
+        topLevelSkillName: chainProducerSkillName(options, chain),
+        stepId: step.id,
+        kind: "step_waiting_approval",
+        detail: {
+          gate_ids: stepResult.gates.map((gate) => gate.id),
+          runner: chainStepRunner(step) ?? "default",
+        },
+        createdAt: new Date().toISOString(),
+      });
+      return {
+        status: "needs_approval",
+        chain,
+        stepIds: [step.id],
+        skillPath: stepSkillPath,
+        skill: stepSkill,
+        gates: stepResult.gates,
+        state,
+        runId: chainId,
+      };
+    }
 
     if (stepResult.status === "missing_context") {
       await appendJournalEntries({
@@ -1970,6 +2440,33 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
       };
     }
 
+    const stepStartedAt = new Date().toISOString();
+    state = transitionSequentialChain(state, {
+      type: "start_step",
+      stepId: step.id,
+      at: stepStartedAt,
+    });
+    await appendJournalEntries({
+      receiptDir,
+      runId: chainId,
+      entries: [
+        createRunEventEntry({
+          runId: chainId,
+          stepId: step.id,
+          producer: {
+            skill: chainProducerSkillName(options, chain),
+            runner: "chain",
+          },
+          kind: "step_started",
+          status: "started",
+          detail: {
+            skill: resolvedStep.reference,
+            runner: chainStepRunner(step) ?? "default",
+          },
+          createdAt: stepStartedAt,
+        }),
+      ],
+    });
     const stepCompletedAt = new Date().toISOString();
     const artifactResult = materializeArtifacts({
       stdout: stepResult.execution.stdout,
@@ -2011,6 +2508,7 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
       receiptId: stepResult.receipt.id,
       fields: artifactResult.fields,
       artifactIds: artifactResult.envelopes.map((envelope) => envelope.meta.artifact_id),
+      artifacts: artifactResult.envelopes,
     });
     lastReceiptId = stepResult.receipt.id;
     finalOutput = stepResult.execution.stdout;
@@ -2206,6 +2704,7 @@ interface ChainStepOutput {
   readonly receiptId: string;
   readonly fields: Readonly<Record<string, unknown>>;
   readonly artifactIds: readonly string[];
+  readonly artifacts: readonly ArtifactEnvelope[];
 }
 
 interface MaterializedContextEdge {
@@ -2213,6 +2712,7 @@ interface MaterializedContextEdge {
   readonly fromStep: string;
   readonly output: string;
   readonly receiptId?: string;
+  readonly artifact?: ArtifactEnvelope;
   readonly value: unknown;
 }
 
@@ -2225,10 +2725,13 @@ function findChainStep(chain: ChainDefinition, stepId: string): ChainStep {
 }
 
 function chainStepReference(step: ChainStep): string {
-  return step.skill ?? `run:${String(step.run?.type ?? "unknown")}`;
+  return step.skill ?? step.tool ?? `run:${String(step.run?.type ?? "unknown")}`;
 }
 
 function chainStepRunner(step: ChainStep): string | undefined {
+  if (step.tool) {
+    return "tool";
+  }
   return typeof step.run?.type === "string" ? step.run.type : step.runner;
 }
 
@@ -2251,9 +2754,19 @@ function materializeContext(
       fromStep: edge.fromStep,
       output: edge.output,
       receiptId: sourceOutput.receiptId,
+      artifact: resolveOutputArtifact(sourceOutput, edge.output),
       value: resolveOutputPath(sourceOutput, edge.output),
     };
   });
+}
+
+function resolveOutputArtifact(output: ChainStepOutput, outputPath: string): ArtifactEnvelope | undefined {
+  const [field] = outputPath.split(".", 1);
+  if (!field) {
+    return undefined;
+  }
+  const candidate = output.fields[field];
+  return isArtifactEnvelopeValue(candidate) ? candidate : undefined;
 }
 
 function resolveOutputPath(output: ChainStepOutput, outputPath: string): unknown {
@@ -2272,6 +2785,164 @@ function resolveOutputPath(output: ChainStepOutput, outputPath: string): unknown
     }
     return value[key];
   }, record);
+}
+
+const MAX_HISTORICAL_AGENT_ARTIFACTS = 12;
+
+interface PreparedAgentContext {
+  readonly currentContext: readonly ArtifactEnvelope[];
+  readonly historicalContext: readonly ArtifactEnvelope[];
+  readonly provenance: readonly AgentContextProvenance[];
+  readonly receiptMetadata?: Readonly<Record<string, unknown>>;
+}
+
+function isArtifactEnvelopeValue(value: unknown): value is ArtifactEnvelope {
+  if (!isPlainRecord(value) || !isPlainRecord(value.meta)) {
+    return false;
+  }
+  return (
+    typeof value.version === "string"
+    && "data" in value
+    && typeof value.meta.artifact_id === "string"
+    && typeof value.meta.run_id === "string"
+  );
+}
+
+function isDomainArtifactEnvelope(entry: ArtifactEnvelope): boolean {
+  return entry.type !== null && !SYSTEM_ARTIFACT_TYPES.has(entry.type);
+}
+
+function dedupeArtifacts(artifacts: readonly ArtifactEnvelope[]): readonly ArtifactEnvelope[] {
+  const seen = new Set<string>();
+  const uniqueArtifacts: ArtifactEnvelope[] = [];
+  for (const artifact of artifacts) {
+    if (seen.has(artifact.meta.artifact_id)) {
+      continue;
+    }
+    seen.add(artifact.meta.artifact_id);
+    uniqueArtifacts.push(artifact);
+  }
+  return uniqueArtifacts;
+}
+
+function resolveProjectScopeKeyHash(
+  inputs: Readonly<Record<string, unknown>>,
+  env?: NodeJS.ProcessEnv,
+): string | undefined {
+  const projectScope = resolveProjectScopePath(inputs, env);
+  if (!projectScope) {
+    return undefined;
+  }
+  return hashStable({ project_scope: projectScope });
+}
+
+function resolveProjectScopePath(
+  inputs: Readonly<Record<string, unknown>>,
+  env?: NodeJS.ProcessEnv,
+): string | undefined {
+  const candidate =
+    firstString(inputs.project)
+    ?? firstString(inputs.repo_root)
+    ?? firstString(inputs.repoRoot)
+    ?? env?.RUNX_PROJECT
+    ?? env?.RUNX_CWD
+    ?? env?.INIT_CWD;
+  if (!candidate) {
+    return undefined;
+  }
+  return path.resolve(env?.RUNX_CWD ?? env?.INIT_CWD ?? process.cwd(), candidate);
+}
+
+function firstString(value: unknown): string | undefined {
+  if (typeof value === "string" && value.length > 0) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.find((entry): entry is string => typeof entry === "string" && entry.length > 0);
+  }
+  return undefined;
+}
+
+function receiptProjectScopeKeyHash(receipt: LocalReceipt): string | undefined {
+  if (receipt.kind !== "skill_execution" || !isPlainRecord(receipt.metadata)) {
+    return undefined;
+  }
+  const contextScope = receipt.metadata.context_scope;
+  if (!isPlainRecord(contextScope)) {
+    return undefined;
+  }
+  const keyHash = contextScope.project_key_hash;
+  return typeof keyHash === "string" ? keyHash : undefined;
+}
+
+async function loadHistoricalAgentContext(options: {
+  readonly receiptDir: string;
+  readonly skillName: string;
+  readonly projectKeyHash?: string;
+  readonly excludeRunId: string;
+}): Promise<readonly ArtifactEnvelope[]> {
+  if (!options.projectKeyHash) {
+    return [];
+  }
+  const receipts = await listLocalReceipts(options.receiptDir);
+  const candidate = receipts.find((receipt) =>
+    receipt.kind === "skill_execution"
+    && receipt.id !== options.excludeRunId
+    && receipt.status === "success"
+    && receipt.subject.skill_name === options.skillName
+    && receiptProjectScopeKeyHash(receipt) === options.projectKeyHash
+    && Array.isArray(receipt.artifact_ids)
+    && receipt.artifact_ids.length > 0,
+  );
+  if (!candidate || candidate.kind !== "skill_execution") {
+    return [];
+  }
+  const entries = await readJournalEntries(options.receiptDir, candidate.id);
+  return entries.filter(isDomainArtifactEnvelope).slice(-MAX_HISTORICAL_AGENT_ARTIFACTS);
+}
+
+async function prepareAgentContext(options: {
+  readonly skill: ValidatedSkill;
+  readonly inputs: Readonly<Record<string, unknown>>;
+  readonly env?: NodeJS.ProcessEnv;
+  readonly receiptDir: string;
+  readonly runId: string;
+  readonly stepId?: string;
+  readonly currentContext?: readonly MaterializedContextEdge[];
+}): Promise<PreparedAgentContext> {
+  const currentContext = dedupeArtifacts(
+    (options.currentContext ?? [])
+      .map((edge) => edge.artifact)
+      .filter((artifact): artifact is ArtifactEnvelope => artifact !== undefined && isDomainArtifactEnvelope(artifact)),
+  );
+  const provenance = (options.currentContext ?? [])
+    .filter((edge) => edge.artifact !== undefined)
+    .map((edge) => ({
+      input: edge.input,
+      output: edge.output,
+      from_step: edge.fromStep,
+      artifact_id: edge.artifact?.meta.artifact_id,
+      receipt_id: edge.receiptId,
+    }));
+  const projectKeyHash = resolveProjectScopeKeyHash(options.inputs, options.env);
+  const historicalContext = await loadHistoricalAgentContext({
+    receiptDir: options.receiptDir,
+    skillName: options.skill.name,
+    projectKeyHash,
+    excludeRunId: options.runId,
+  });
+  return {
+    currentContext,
+    historicalContext,
+    provenance,
+    receiptMetadata: projectKeyHash
+      ? {
+          context_scope: {
+            project_key_hash: projectKeyHash,
+          },
+        }
+      : undefined,
+  };
 }
 
 function defaultLocalChainGrant(): ChainScopeGrant {
@@ -2459,19 +3130,56 @@ function parseStructuredOutput(stdout: string): Readonly<Record<string, unknown>
 async function loadValidatedSkill(skillPath: string, runner?: string): Promise<ValidatedSkill> {
   const resolvedSkill = await resolveSkillReference(skillPath);
   const rawSkill = parseSkillMarkdown(await readFile(resolvedSkill.skillPath, "utf8"));
-  return await resolveSkillRunner(validateSkill(rawSkill, { mode: "strict" }), resolvedSkill.xManifestCandidates, runner);
+  const selection = await resolveSkillRunner(
+    validateSkill(rawSkill, { mode: "strict" }),
+    resolvedSkill.xManifestCandidates,
+    runner,
+  );
+  return selection.skill;
 }
 
-async function loadChainSkills(
+async function loadValidatedTool(toolName: string, searchFromDirectory: string): Promise<ValidatedSkill> {
+  const resolvedTool = await resolveToolReference(toolName, searchFromDirectory);
+  const manifestContents = await readFile(resolvedTool.toolPath, "utf8");
+  const tool = validateToolManifest(parseToolManifestYaml(manifestContents));
+  return validatedToolToExecutableSkill(tool);
+}
+
+function validatedToolToExecutableSkill(tool: ValidatedTool): ValidatedSkill {
+  return {
+    name: tool.name,
+    description: tool.description,
+    body: tool.description ?? "",
+    source: tool.source,
+    inputs: tool.inputs,
+    risk: tool.risk,
+    runtime: tool.runtime,
+    retry: tool.retry,
+    idempotency: tool.idempotency,
+    mutating: tool.mutating,
+    artifacts: tool.artifacts,
+    runx: tool.runx,
+    raw: {
+      frontmatter: {},
+      rawFrontmatter: "",
+      body: tool.description ?? "",
+    },
+  };
+}
+
+async function loadChainStepExecutables(
   chain: ChainDefinition,
   chainDirectory: string,
 ): Promise<ReadonlyMap<string, ValidatedSkill>> {
   const skills = new Map<string, ValidatedSkill>();
   for (const step of chain.steps) {
-    if (!step.skill) {
+    if (step.skill) {
+      skills.set(step.id, await loadValidatedSkill(path.resolve(chainDirectory, step.skill), step.runner));
       continue;
     }
-    skills.set(step.id, await loadValidatedSkill(path.resolve(chainDirectory, step.skill), step.runner));
+    if (step.tool) {
+      skills.set(step.id, await loadValidatedTool(step.tool, chainDirectory));
+    }
   }
   return skills;
 }
@@ -2479,7 +3187,7 @@ async function loadChainSkills(
 async function resolveChainStepExecution(options: {
   readonly step: ChainStep;
   readonly chainDirectory: string;
-  readonly chainSkillCache: ReadonlyMap<string, ValidatedSkill>;
+  readonly chainStepCache: ReadonlyMap<string, ValidatedSkill>;
   readonly skillEnvironment?: {
     readonly name: string;
     readonly body: string;
@@ -2491,14 +3199,25 @@ async function resolveChainStepExecution(options: {
 }> {
   if (options.step.skill) {
     return {
-      skill: options.chainSkillCache.get(options.step.id) ?? (await loadValidatedSkill(path.resolve(options.chainDirectory, options.step.skill), options.step.runner)),
+      skill:
+        options.chainStepCache.get(options.step.id)
+        ?? (await loadValidatedSkill(path.resolve(options.chainDirectory, options.step.skill), options.step.runner)),
       skillPath: path.resolve(options.chainDirectory, options.step.skill),
       reference: options.step.skill,
     };
   }
 
+  if (options.step.tool) {
+    const resolvedTool = await resolveToolReference(options.step.tool, options.chainDirectory);
+    return {
+      skill: options.chainStepCache.get(options.step.id) ?? (await loadValidatedTool(options.step.tool, options.chainDirectory)),
+      skillPath: resolvedTool.toolPath,
+      reference: options.step.tool,
+    };
+  }
+
   if (!options.step.run) {
-    throw new Error(`Chain step '${options.step.id}' is missing skill or run.`);
+    throw new Error(`Chain step '${options.step.id}' is missing skill, tool, or run.`);
   }
 
   return {
@@ -2537,6 +3256,8 @@ function buildInlineChainStepSkill(
     idempotency: step.idempotencyKey ? { key: step.idempotencyKey } : undefined,
     mutating: step.mutating,
     artifacts: validateSkillArtifactContract(step.artifacts, `steps.${step.id}.artifacts`),
+    allowedTools: step.allowedTools,
+    runx: step.allowedTools ? { allowed_tools: step.allowedTools } : undefined,
     raw: {
       frontmatter: {},
       rawFrontmatter: "",
@@ -2649,12 +3370,13 @@ function defaultA2aAdapters(): readonly SkillAdapter[] {
 }
 
 function runnerTrustMetadata(sourceType: string): Readonly<Record<string, unknown>> {
-  const callerMediated = sourceType === "agent" || sourceType === "agent-step" || sourceType === "approval";
+  const approvalMediated = sourceType === "approval";
+  const agentMediated = sourceType === "agent" || sourceType === "agent-step";
   return {
     runner: {
       type: sourceType,
-      enforcement: callerMediated ? "caller-mediated" : "runx-enforced",
-      attestation: callerMediated ? "agent-reported" : "runx-observed",
+      enforcement: approvalMediated ? "approval-mediated" : agentMediated ? "agent-mediated" : "runx-enforced",
+      attestation: approvalMediated ? "decision-reported" : agentMediated ? "agent-reported" : "runx-observed",
     },
   };
 }
@@ -2663,35 +3385,60 @@ function normalizeQuestionId(value: string): string {
   return value.replace(/[^a-zA-Z0-9_.-]+/g, "_");
 }
 
-function renderAgentStepPrompt(request: Parameters<SkillAdapter["invoke"]>[0]): string {
-  return JSON.stringify(
-    {
-      source_type: "agent-step",
-      agent: request.source.agent,
-      task: request.source.task,
-      skill: request.skillName ?? "agent-step",
+function buildAgentStepRequest(request: Parameters<SkillAdapter["invoke"]>[0]): AgentWorkRequest {
+  const skillName = request.skillName ?? "agent-step";
+  return {
+    id: `agent_step.${normalizeQuestionId(request.source.task ?? skillName)}.output`,
+    source_type: "agent-step",
+    agent: request.source.agent,
+    task: request.source.task,
+    envelope: {
+      run_id: request.runId ?? "rx_pending",
+      step_id: request.stepId,
+      skill: skillName,
       instructions: request.skillBody?.trim() ?? "",
       inputs: request.inputs,
+      allowed_tools: request.allowedTools ?? [],
+      current_context: request.currentContext ?? [],
+      historical_context: request.historicalContext ?? [],
+      provenance: request.contextProvenance ?? [],
       expected_outputs: request.source.outputs ?? {},
+      trust_boundary: "agent-mediated: runx yields skill context and receipts the supplied result on completion",
     },
-    null,
-    2,
-  );
+  };
 }
 
-function renderAgentRunnerPrompt(request: Parameters<SkillAdapter["invoke"]>[0]): string {
-  return JSON.stringify(
-    {
-      runner: "agent",
-      skill: request.skillName ?? "skill",
+function buildAgentRunnerRequest(request: Parameters<SkillAdapter["invoke"]>[0]): AgentWorkRequest {
+  const skillName = request.skillName ?? "skill";
+  return {
+    id: `agent.${normalizeQuestionId(skillName)}.output`,
+    source_type: "agent",
+    envelope: {
+      run_id: request.runId ?? "rx_pending",
+      step_id: request.stepId,
+      skill: skillName,
       instructions: request.skillBody?.trim() ?? "",
       inputs: request.inputs,
-      trust_boundary:
-        "caller-mediated: runx receipts the caller-reported result but cannot enforce tool scopes inside the caller runtime",
+      allowed_tools: request.allowedTools ?? [],
+      current_context: request.currentContext ?? [],
+      historical_context: request.historicalContext ?? [],
+      provenance: request.contextProvenance ?? [],
+      trust_boundary: "agent-mediated: runx yields skill context and receipts the supplied result on completion",
     },
-    null,
-    2,
-  );
+  };
+}
+
+function buildApprovalGate(request: Parameters<SkillAdapter["invoke"]>[0]): ApprovalGate {
+  const summary = isPlainRecord(request.inputs.summary) ? request.inputs.summary : request.inputs;
+  return {
+    id: String(request.inputs.gate_id ?? `${request.skillName ?? "approval"}.gate`),
+    type: "approval",
+    reason:
+      typeof request.inputs.reason === "string"
+        ? request.inputs.reason
+        : `Approval required for ${request.skillName ?? "approval"}.`,
+    summary,
+  };
 }
 
 async function resolveInputs(
@@ -2703,6 +3450,9 @@ async function resolveInputs(
 > {
   const answers = options.answersPath ? await readAnswersFile(options.answersPath) : {};
   const resolved: Record<string, unknown> = {};
+  const resumedInputs = options.resumeFromRunId
+    ? await readResumedInputs(options.receiptDir ?? defaultReceiptDir(options.env), options.resumeFromRunId)
+    : {};
 
   for (const [key, input] of Object.entries(skill.inputs)) {
     if (input.default !== undefined) {
@@ -2710,7 +3460,9 @@ async function resolveInputs(
     }
   }
 
-  Object.assign(resolved, answers, options.inputs ?? {});
+  assignDefined(resolved, resumedInputs);
+  assignDefined(resolved, answers);
+  assignDefined(resolved, options.inputs ?? {});
 
   const missing = missingRequiredInputs(skill.inputs, resolved);
   if (missing.length === 0) {
@@ -2735,6 +3487,50 @@ async function resolveInputs(
     status: "resolved",
     inputs: resolved,
   };
+}
+
+async function readResumedInputs(receiptDir: string, runId: string): Promise<Record<string, unknown>> {
+  const entries = await readJournalEntries(receiptDir, runId);
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]!;
+    if (entry.type !== "run_event") {
+      continue;
+    }
+    const kind = typeof entry.data.kind === "string" ? entry.data.kind : "";
+    const detail = isPlainRecord(entry.data.detail) ? entry.data.detail : undefined;
+    if (!detail || (kind !== "agent_requested" && kind !== "approval_requested")) {
+      continue;
+    }
+    if (isPlainRecord(detail.inputs)) {
+      return { ...detail.inputs };
+    }
+  }
+  return {};
+}
+
+async function readResumedSelectedRunner(receiptDir: string, runId: string): Promise<string | undefined> {
+  const entries = await readJournalEntries(receiptDir, runId);
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]!;
+    if (entry.type !== "run_event") {
+      continue;
+    }
+    const kind = typeof entry.data.kind === "string" ? entry.data.kind : "";
+    const detail = isPlainRecord(entry.data.detail) ? entry.data.detail : undefined;
+    if (!detail || (kind !== "agent_requested" && kind !== "approval_requested")) {
+      continue;
+    }
+    return typeof detail.selected_runner === "string" ? detail.selected_runner : undefined;
+  }
+  return undefined;
+}
+
+function assignDefined(target: Record<string, unknown>, value: Readonly<Record<string, unknown>>): void {
+  for (const [key, candidate] of Object.entries(value)) {
+    if (candidate !== undefined) {
+      target[key] = candidate;
+    }
+  }
 }
 
 async function readAnswersFile(answersPath: string): Promise<Record<string, unknown>> {

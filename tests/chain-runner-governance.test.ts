@@ -15,12 +15,12 @@ const caller: Caller = {
 
 describe("chain runner governance", () => {
   it("selects a named cli-tool X runner from a chain step", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-runner-cli-"));
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-composite-runner-cli-"));
 
     try {
       const skillDir = path.join(tempDir, "skills", "package-echo");
       await writePackageEchoSkill(skillDir);
-      const chainPath = path.join(tempDir, "runx.yaml");
+      const chainPath = path.join(tempDir, "chain.yaml");
       await writeFile(
         chainPath,
         `name: chain-runner-cli
@@ -66,8 +66,8 @@ steps:
   });
 
   it("selects an A2A X runner from a chain step", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-runner-a2a-"));
-    const chainPath = path.join(tempDir, "runx.yaml");
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-composite-runner-a2a-"));
+    const chainPath = path.join(tempDir, "chain.yaml");
 
     try {
       await writeFile(
@@ -111,7 +111,7 @@ steps:
     try {
       const skillDir = path.join(tempDir, "skills", "package-echo");
       await writePackageEchoSkill(skillDir);
-      const chainPath = path.join(tempDir, "runx.yaml");
+      const chainPath = path.join(tempDir, "chain.yaml");
       await writeFile(
         chainPath,
         `name: chain-scope-deny

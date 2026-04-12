@@ -8,9 +8,11 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "node scripts/build-packages.mjs",
-    "typecheck": "tsc -p tsconfig.base.json --noEmit",
-    "test": "vitest run",
+    "build": "node scripts/build-workspace.mjs --pack",
+    "build:pack": "node scripts/build-workspace.mjs --pack",
+    "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
+    "test": "node scripts/test-workspace.mjs",
+    "test:fast": "vitest run --config vitest.fast.config.ts",
     "lint": "pnpm typecheck"
   },
   "devDependencies": {

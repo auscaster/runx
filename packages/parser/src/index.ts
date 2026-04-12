@@ -81,11 +81,17 @@ export interface ValidatedSkill {
   readonly idempotency?: SkillIdempotencyPolicy;
   readonly mutating?: boolean;
   readonly artifacts?: SkillArtifactContract;
+  readonly allowedTools?: readonly string[];
   readonly runx?: Record<string, unknown>;
   readonly raw: RawSkillIR;
 }
 
 export interface RawRunnerManifestIR {
+  readonly document: Record<string, unknown>;
+  readonly raw: string;
+}
+
+export interface RawToolManifestIR {
   readonly document: Record<string, unknown>;
   readonly raw: string;
 }
@@ -102,14 +108,62 @@ export interface SkillRunnerDefinition {
   readonly idempotency?: SkillIdempotencyPolicy;
   readonly mutating?: boolean;
   readonly artifacts?: SkillArtifactContract;
+  readonly allowedTools?: readonly string[];
   readonly runx?: Record<string, unknown>;
   readonly raw: Record<string, unknown>;
+}
+
+export interface HarnessCallerFixture {
+  readonly answers?: Readonly<Record<string, unknown>>;
+  readonly approvals?: Readonly<Record<string, boolean>>;
+}
+
+export interface HarnessReceiptExpectation {
+  readonly kind?: "skill_execution" | "chain_execution";
+  readonly status?: "success" | "failure";
+  readonly subject?: Readonly<Record<string, unknown>>;
+}
+
+export interface HarnessExpectation {
+  readonly status?: "success" | "failure" | "missing_context" | "policy_denied" | "needs_agent" | "needs_approval";
+  readonly receipt?: HarnessReceiptExpectation;
+  readonly steps?: readonly string[];
+}
+
+export interface RunnerHarnessCase {
+  readonly name: string;
+  readonly runner?: string;
+  readonly inputs: Readonly<Record<string, unknown>>;
+  readonly env: Readonly<Record<string, string>>;
+  readonly caller: HarnessCallerFixture;
+  readonly expect: HarnessExpectation;
+}
+
+export interface RunnerHarnessManifest {
+  readonly cases: readonly RunnerHarnessCase[];
 }
 
 export interface SkillRunnerManifest {
   readonly skill?: string;
   readonly runners: Readonly<Record<string, SkillRunnerDefinition>>;
+  readonly harness?: RunnerHarnessManifest;
   readonly raw: RawRunnerManifestIR;
+}
+
+export interface ValidatedTool {
+  readonly name: string;
+  readonly description?: string;
+  readonly source: SkillSource;
+  readonly inputs: Readonly<Record<string, SkillInput>>;
+  readonly scopes: readonly string[];
+  readonly risk?: unknown;
+  readonly runtime?: unknown;
+  readonly retry?: SkillRetryPolicy;
+  readonly idempotency?: SkillIdempotencyPolicy;
+  readonly mutating?: boolean;
+  readonly artifacts?: SkillArtifactContract;
+  readonly runx?: Record<string, unknown>;
+  readonly raw: RawToolManifestIR;
 }
 
 export interface ValidateSkillOptions {
@@ -171,6 +225,23 @@ export function parseRunnerManifestYaml(yaml: string): RawRunnerManifestIR {
   };
 }
 
+export function parseToolManifestYaml(yaml: string): RawToolManifestIR {
+  const document = parseDocument(yaml, { prettyErrors: false });
+  if (document.errors.length > 0) {
+    throw new SkillParseError(document.errors.map((error) => error.message).join("; "));
+  }
+
+  const parsed = document.toJS();
+  if (!isRecord(parsed)) {
+    throw new SkillParseError("Tool manifest YAML must parse to an object.");
+  }
+
+  return {
+    document: parsed,
+    raw: yaml,
+  };
+}
+
 export function validateSkill(raw: RawSkillIR, options: ValidateSkillOptions = {}): ValidatedSkill {
   const mode = options.mode ?? "strict";
   const name = requiredString(raw.frontmatter.name, "name");
@@ -199,6 +270,10 @@ export function validateSkill(raw: RawSkillIR, options: ValidateSkillOptions = {
     idempotency: validateSkillIdempotency(raw.frontmatter.idempotency ?? runx?.idempotency, "idempotency"),
     mutating: validateSkillMutation(raw.frontmatter.mutating ?? recordField(risk, "mutating") ?? runx?.mutating, "mutating"),
     artifacts: validateArtifactContract(recordField(runx, "artifacts"), "runx.artifacts"),
+    allowedTools: validateAllowedTools(
+      recordField(runx, "allowed_tools") ?? recordField(runx, "allowedTools"),
+      "runx.allowed_tools",
+    ),
     runx,
     raw,
   };
@@ -225,14 +300,53 @@ export function validateRunnerManifest(raw: RawRunnerManifestIR): SkillRunnerMan
       idempotency: validateSkillIdempotency(runner.idempotency ?? runx?.idempotency, `runners.${name}.idempotency`),
       mutating: validateSkillMutation(runner.mutating ?? recordField(risk, "mutating") ?? runx?.mutating, `runners.${name}.mutating`),
       artifacts: validateArtifactContract(recordField(runx, "artifacts"), `runners.${name}.runx.artifacts`),
+      allowedTools: validateAllowedTools(
+        recordField(runx, "allowed_tools") ?? recordField(runx, "allowedTools"),
+        `runners.${name}.runx.allowed_tools`,
+      ),
       runx,
       raw: runner,
     };
   }
 
+  const harness = validateHarnessManifest(optionalRecord(raw.document.harness, "harness"), "harness");
+  for (const entry of harness?.cases ?? []) {
+    if (entry.runner && !runners[entry.runner]) {
+      throw new SkillValidationError(`harness.cases runner ${entry.runner} is not declared in runners.`);
+    }
+  }
+
   return {
     skill: optionalString(raw.document.skill, "skill"),
     runners,
+    harness,
+    raw,
+  };
+}
+
+export function validateToolManifest(raw: RawToolManifestIR): ValidatedTool {
+  const name = requiredString(raw.document.name, "name");
+  const description = optionalString(raw.document.description, "description");
+  const runx = optionalRecord(raw.document.runx, "runx");
+  const risk = raw.document.risk;
+  const source = validateToolSource(validateSource(requiredRecord(raw.document.source, "source"), runx), "source.type");
+
+  return {
+    name,
+    description,
+    source,
+    inputs: validateInputs(optionalRecord(raw.document.inputs, "inputs") ?? {}),
+    scopes: optionalStringArray(raw.document.scopes, "scopes") ?? [],
+    risk,
+    runtime: raw.document.runtime,
+    retry: validateSkillRetry(raw.document.retry ?? runx?.retry, "retry"),
+    idempotency: validateSkillIdempotency(raw.document.idempotency ?? runx?.idempotency, "idempotency"),
+    mutating: validateSkillMutation(
+      raw.document.mutating ?? recordField(risk, "mutating") ?? runx?.mutating,
+      "mutating",
+    ),
+    artifacts: validateArtifactContract(recordField(runx, "artifacts"), "runx.artifacts"),
+    runx,
     raw,
   };
 }
@@ -310,6 +424,13 @@ function validateSource(source: Record<string, unknown>, runx: Record<string, un
 function validateChainSource(value: unknown): ChainDefinition {
   const chain = requiredRecord(value, "source.chain");
   return validateChainDocument(chain);
+}
+
+function validateToolSource(source: SkillSource, field: string): SkillSource {
+  if (!["cli-tool", "mcp", "a2a"].includes(source.type)) {
+    throw new SkillValidationError(`${field} must be one of cli-tool, mcp, or a2a for tool manifests.`);
+  }
+  return source;
 }
 
 function validateSandbox(value: unknown): SkillSandbox | undefined {
@@ -421,6 +542,19 @@ function validateArtifactContract(value: unknown, field: string): SkillArtifactC
   };
 }
 
+function validateAllowedTools(value: unknown, field: string): readonly string[] | undefined {
+  const allowedTools = optionalStringArray(value, field);
+  if (!allowedTools) {
+    return undefined;
+  }
+  return allowedTools.map((entry) => {
+    if (entry.trim() === "") {
+      throw new SkillValidationError(`${field} entries must not be empty.`);
+    }
+    return entry;
+  });
+}
+
 function validateNamedEmits(value: unknown, field: string): Readonly<Record<string, string>> | undefined {
   const record = optionalRecord(value, field);
   if (!record) {
@@ -432,6 +566,122 @@ function validateNamedEmits(value: unknown, field: string): Readonly<Record<stri
     }
   }
   return record as Readonly<Record<string, string>>;
+}
+
+function validateHarnessManifest(value: Record<string, unknown> | undefined, field: string): RunnerHarnessManifest | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const casesValue = value.cases;
+  if (!Array.isArray(casesValue)) {
+    throw new SkillValidationError(`${field}.cases must be an array.`);
+  }
+  return {
+    cases: casesValue.map((entry, index) =>
+      validateHarnessCase(requiredRecord(entry, `${field}.cases[${index}]`), `${field}.cases[${index}]`),
+    ),
+  };
+}
+
+function validateHarnessCase(value: Record<string, unknown>, field: string): RunnerHarnessCase {
+  return {
+    name: requiredString(value.name, `${field}.name`),
+    runner: optionalNonEmptyString(value.runner, `${field}.runner`),
+    inputs: optionalRecord(value.inputs, `${field}.inputs`) ?? {},
+    env: validateHarnessEnv(optionalRecord(value.env, `${field}.env`) ?? {}, `${field}.env`),
+    caller: validateHarnessCaller(optionalRecord(value.caller, `${field}.caller`) ?? {}, `${field}.caller`),
+    expect: validateHarnessExpectation(requiredRecord(value.expect, `${field}.expect`), `${field}.expect`),
+  };
+}
+
+function validateHarnessCaller(value: Record<string, unknown>, field: string): HarnessCallerFixture {
+  return {
+    answers: optionalRecord(value.answers, `${field}.answers`),
+    approvals: validateHarnessApprovals(optionalRecord(value.approvals, `${field}.approvals`) ?? {}, `${field}.approvals`),
+  };
+}
+
+function validateHarnessExpectation(value: Record<string, unknown>, field: string): HarnessExpectation {
+  return {
+    status: optionalHarnessStatus(value.status, `${field}.status`),
+    receipt: validateHarnessReceiptExpectation(optionalRecord(value.receipt, `${field}.receipt`), `${field}.receipt`),
+    steps: optionalStringArray(value.steps, `${field}.steps`),
+  };
+}
+
+function validateHarnessReceiptExpectation(
+  value: Record<string, unknown> | undefined,
+  field: string,
+): HarnessReceiptExpectation | undefined {
+  if (!value) {
+    return undefined;
+  }
+  return {
+    kind: optionalHarnessReceiptKind(value.kind, `${field}.kind`),
+    status: optionalHarnessReceiptStatus(value.status, `${field}.status`),
+    subject: optionalRecord(value.subject, `${field}.subject`),
+  };
+}
+
+function validateHarnessEnv(value: Record<string, unknown>, field: string): Readonly<Record<string, string>> {
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => {
+      if (typeof entry !== "string") {
+        throw new SkillValidationError(`${field}.${key} must be a string.`);
+      }
+      return [key, entry];
+    }),
+  );
+}
+
+function validateHarnessApprovals(value: Record<string, unknown>, field: string): Readonly<Record<string, boolean>> {
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => {
+      if (typeof entry !== "boolean") {
+        throw new SkillValidationError(`${field}.${key} must be a boolean.`);
+      }
+      return [key, entry];
+    }),
+  );
+}
+
+function optionalHarnessStatus(value: unknown, field: string): HarnessExpectation["status"] {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (
+    value === "success" ||
+    value === "failure" ||
+    value === "missing_context" ||
+    value === "policy_denied" ||
+    value === "needs_agent" ||
+    value === "needs_approval"
+  ) {
+    return value;
+  }
+  throw new SkillValidationError(
+    `${field} must be success, failure, missing_context, policy_denied, needs_agent, or needs_approval.`,
+  );
+}
+
+function optionalHarnessReceiptStatus(value: unknown, field: string): HarnessReceiptExpectation["status"] {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (value === "success" || value === "failure") {
+    return value;
+  }
+  throw new SkillValidationError(`${field} must be success or failure.`);
+}
+
+function optionalHarnessReceiptKind(value: unknown, field: string): HarnessReceiptExpectation["kind"] {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (value === "skill_execution" || value === "chain_execution") {
+    return value;
+  }
+  throw new SkillValidationError(`${field} must be skill_execution or chain_execution.`);
 }
 
 function requiredString(value: unknown, field: string): string {

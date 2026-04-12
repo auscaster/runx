@@ -45,7 +45,8 @@ describe("CLI approval flow", () => {
 
       expect(exitCode).toBe(1);
       expect(stdout.contents()).toContain("Approve? Type 'yes' to approve [y/N]");
-      expect(stderr.contents()).toContain("Policy denied skill execution");
+      expect(stderr.contents()).toContain("policy denied");
+      expect(stderr.contents()).toContain("unrestricted-local-dev sandbox requires explicit caller approval");
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

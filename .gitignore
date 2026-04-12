@@ -7,11 +7,15 @@ node_modules/
 
 # build output
 dist/
+.build/
 coverage/
 .turbo/
 *.tsbuildinfo
 __pycache__/
 *.py[cod]
+packages/cli/*.tgz
+packages/cli/skills/
+packages/cli/tools/
 
 # environment
 .env

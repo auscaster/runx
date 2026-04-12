@@ -98,6 +98,37 @@ steps:
     });
   });
 
+  it("validates tool steps and allowed tool declarations for agent steps", () => {
+    const chain = validateChain(
+      parseChainYaml(`
+name: tool-aware
+steps:
+  - id: readme
+    tool: fs.read
+    inputs:
+      path: README.md
+  - id: plan
+    run:
+      type: agent-step
+      agent: builder
+      task: plan
+    allowed_tools:
+      - fs.read
+      - git.status
+    context:
+      readme: readme.stdout
+`),
+    );
+
+    expect(chain.steps[0]).toMatchObject({
+      id: "readme",
+      tool: "fs.read",
+      skill: undefined,
+      run: undefined,
+    });
+    expect(chain.steps[1]?.allowedTools).toEqual(["fs.read", "git.status"]);
+  });
+
   it("validates mutating retry idempotency metadata", () => {
     const chain = validateChain(
       parseChainYaml(`

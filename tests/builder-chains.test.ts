@@ -49,7 +49,6 @@ describe("builder skill objective-to-skill", () => {
         env: process.env,
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
-        allowedSourceTypes: ["cli-tool", "mcp", "agent-step", "chain"],
       });
 
       expect(result.status).toBe("success");
@@ -91,7 +90,6 @@ describe("builder skill improve-skill", () => {
         env: process.env,
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
-        allowedSourceTypes: ["cli-tool", "mcp", "agent-step", "chain"],
       });
 
       expect(result.status).toBe("success");
@@ -115,10 +113,8 @@ describe("builder skill improve-skill", () => {
 
 function createBuilderCaller(): Caller {
   return {
-    answer: async (questions) =>
-      Object.fromEntries(
-        questions.map((question) => [question.id, answerForAgentStep(question.id)]),
-      ),
+    answer: async () => ({}),
+    resolveAgentResult: async (request) => answerForAgentStep(request.id),
     approve: async () => false,
     report: () => undefined,
   };

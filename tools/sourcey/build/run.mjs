@@ -1,0 +1,101 @@
+import { existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import path from "node:path";
+
+const inputs = JSON.parse(process.env.RUNX_INPUTS_JSON || "{}");
+
+function requiredString(name) {
+  const value = inputs[name];
+  if (value === undefined || value === null || value === "") {
+    throw new Error(`${name} is required.`);
+  }
+  return String(value);
+}
+
+function parseDocsInputs(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {
+      return { mode: "config", description: value };
+    }
+  }
+  return { mode: "config" };
+}
+
+function sourceyEnv() {
+  const env = { ...process.env };
+  delete env.RUNX_INPUTS_JSON;
+  for (const key of Object.keys(env)) {
+    if (key.startsWith("RUNX_INPUT_")) {
+      delete env[key];
+    }
+  }
+  return env;
+}
+
+const inputBase = process.env.RUNX_CWD || process.env.INIT_CWD || process.cwd();
+const project = path.resolve(inputBase, requiredString("project"));
+const homepageUrl = requiredString("homepage_url");
+const brandName = requiredString("brand_name");
+const docsInputs = parseDocsInputs(inputs.docs_inputs);
+const sourcey = String(inputs.sourcey_bin || process.env.SOURCEY_BIN || "sourcey");
+const outputDir = path.resolve(project, String(inputs.output_dir || ".sourcey/runx-docs"));
+const command = /\.(mjs|cjs|js)$/.test(sourcey) ? process.execPath : sourcey;
+const sourceyArgs = /\.(mjs|cjs|js)$/.test(sourcey) ? [sourcey] : [];
+const mode = String(docsInputs.mode || "config");
+
+sourceyArgs.push("build");
+if (mode === "openapi") {
+  const spec = docsInputs.spec || docsInputs.openapi;
+  if (!spec) {
+    throw new Error("docs_inputs.spec or docs_inputs.openapi is required when docs_inputs.mode is 'openapi'.");
+  }
+  sourceyArgs.push(path.resolve(project, String(spec)));
+} else if (mode === "config") {
+  const configPath = path.resolve(project, String(docsInputs.config || "sourcey.config.ts"));
+  if (!existsSync(configPath)) {
+    throw new Error(`Sourcey config not found: ${configPath}`);
+  }
+  sourceyArgs.push("--config", configPath);
+} else {
+  throw new Error(`Unsupported docs_inputs.mode: ${mode}`);
+}
+sourceyArgs.push("-o", outputDir, "--quiet");
+
+const result = spawnSync(command, sourceyArgs, {
+  cwd: project,
+  env: sourceyEnv(),
+  encoding: "utf8",
+  shell: false,
+});
+
+if (result.error) {
+  console.error(result.error.message);
+  process.exit(1);
+}
+if (result.status !== 0) {
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
+  process.exit(result.status ?? 1);
+}
+
+const indexPath = path.join(outputDir, "index.html");
+process.stdout.write(
+  JSON.stringify({
+    project,
+    brand_name: brandName,
+    homepage_url: homepageUrl,
+    docs_inputs: docsInputs,
+    output_dir: outputDir,
+    command: "sourcey build",
+    generated: existsSync(indexPath),
+    index_path: indexPath,
+  }),
+);

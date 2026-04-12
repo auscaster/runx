@@ -5,8 +5,10 @@ import {
   SkillValidationError,
   parseRunnerManifestYaml,
   parseSkillMarkdown,
+  parseToolManifestYaml,
   validateRunnerManifest,
   validateSkill,
+  validateToolManifest,
 } from "./index.js";
 
 const validSkill = `---
@@ -234,6 +236,22 @@ Decompose the objective.
     });
   });
 
+  it("validates allowed_tools metadata on agent-mediated skills", () => {
+    const skill = validateSkill(
+      parseSkillMarkdown(`---
+name: governed-agent
+runx:
+  allowed_tools:
+    - fs.read
+    - git.status
+---
+Governed agent.
+`),
+    );
+
+    expect(skill.allowedTools).toEqual(["fs.read", "git.status"]);
+  });
+
   it("validates a2a source metadata", () => {
     const skill = validateSkill(
       parseSkillMarkdown(`---
@@ -373,6 +391,56 @@ Bad MCP skill.
   });
 });
 
+describe("validateToolManifest", () => {
+  it("validates a deterministic tool manifest", () => {
+    const tool = validateToolManifest(
+      parseToolManifestYaml(`name: fs.read
+description: Read a file.
+source:
+  type: cli-tool
+  command: node
+  args:
+    - -e
+    - "process.stdout.write('ok')"
+inputs:
+  path:
+    type: string
+    required: true
+scopes:
+  - fs.read
+runx:
+  artifacts:
+    wrap_as: file_read
+`),
+    );
+
+    expect(tool).toMatchObject({
+      name: "fs.read",
+      source: {
+        type: "cli-tool",
+        command: "node",
+      },
+      scopes: ["fs.read"],
+      artifacts: {
+        wrapAs: "file_read",
+      },
+    });
+  });
+
+  it("rejects non-deterministic tool manifests", () => {
+    expect(() =>
+      validateToolManifest(
+        parseToolManifestYaml(`name: bad.tool
+source:
+  type: agent-step
+  agent: codex
+  task: think
+`),
+      ),
+    ).toThrow("source.type must be one of cli-tool, mcp, or a2a for tool manifests.");
+  });
+});
+
 describe("validateRunnerManifest", () => {
   it("validates A2A runner metadata outside the standard skill file", () => {
     const manifest = validateRunnerManifest(
@@ -406,5 +474,86 @@ runners:
         },
       },
     });
+  });
+
+  it("validates optional inline harness cases", () => {
+    const manifest = validateRunnerManifest(
+      parseRunnerManifestYaml(`skill: evolve
+runners:
+  evolve:
+    type: agent
+harness:
+  cases:
+    - name: plan-only
+      runner: evolve
+      inputs:
+        objective: add release notes
+      caller:
+        approvals:
+          evolve.plan.approval: true
+      expect:
+        status: success
+        receipt:
+          kind: chain_execution
+`),
+    );
+
+    expect(manifest.harness?.cases).toEqual([
+      {
+        name: "plan-only",
+        runner: "evolve",
+        inputs: { objective: "add release notes" },
+        env: {},
+        caller: {
+          approvals: {
+            "evolve.plan.approval": true,
+          },
+        },
+        expect: {
+          status: "success",
+          receipt: {
+            kind: "chain_execution",
+          },
+        },
+      },
+    ]);
+  });
+
+  it("rejects invalid inline harness approval values", () => {
+    expect(() =>
+      validateRunnerManifest(
+        parseRunnerManifestYaml(`skill: evolve
+runners:
+  evolve:
+    type: agent
+harness:
+  cases:
+    - name: bad
+      caller:
+        approvals:
+          evolve.plan.approval: yes
+      expect:
+        status: success
+`),
+      ),
+    ).toThrow("harness.cases[0].caller.approvals.evolve.plan.approval must be a boolean.");
+  });
+
+  it("rejects inline harness cases that reference unknown runners", () => {
+    expect(() =>
+      validateRunnerManifest(
+        parseRunnerManifestYaml(`skill: evolve
+runners:
+  evolve:
+    type: agent
+harness:
+  cases:
+    - name: missing-runner
+      runner: missing
+      expect:
+        status: success
+`),
+      ),
+    ).toThrow("harness.cases runner missing is not declared in runners.");
   });
 });

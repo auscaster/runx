@@ -17,7 +17,7 @@ const caller: Caller = {
 };
 
 describe("bug-to-PR composite skill", () => {
-  it("models review-open, caller-mediated review, and completion as separate execution steps", async () => {
+  it("models authored spec, authored fix, and authored review as explicit boundaries around the scafld lifecycle", async () => {
     const manifest = validateRunnerManifest(
       parseRunnerManifestYaml(await readFile(path.resolve("skills/bug-to-pr/x.yaml"), "utf8")),
     );
@@ -29,42 +29,73 @@ describe("bug-to-PR composite skill", () => {
     }
     const chain = runner.source.chain;
 
-    expect(chain.steps.map((step) => step.id)).toContain("scafld-review-open");
+    expect(chain.steps.map((step) => step.id)).toEqual([
+      "scafld-new",
+      "author-spec",
+      "write-spec",
+      "scafld-validate",
+      "scafld-approve",
+      "scafld-start",
+      "author-fix",
+      "write-fix",
+      "scafld-exec",
+      "scafld-audit",
+      "scafld-review-open",
+      "reviewer-boundary",
+      "write-review",
+      "scafld-complete",
+    ]);
+    expect(chain.steps.find((step) => step.id === "write-spec")).toMatchObject({
+      tool: "fs.write",
+      context: {
+        path: "author-spec.spec_draft.data.path",
+        contents: "author-spec.spec_contents",
+      },
+    });
+    expect(chain.steps.find((step) => step.id === "write-fix")).toMatchObject({
+      tool: "fs.write",
+      context: {
+        path: "author-fix.fix_draft.data.path",
+        contents: "author-fix.change_contents",
+      },
+    });
     expect(chain.steps.find((step) => step.id === "reviewer-boundary")).toMatchObject({
-      runner: "agent",
+      run: {
+        type: "agent-step",
+        task: "bug-to-pr-review",
+      },
       context: {
         review_file: "scafld-review-open.review_file",
         review_prompt: "scafld-review-open.review_prompt",
       },
     });
+    expect(chain.steps.find((step) => step.id === "write-review")).toMatchObject({
+      tool: "fs.write",
+      context: {
+        path: "scafld-review-open.review_file",
+        contents: "reviewer-boundary.review_contents",
+      },
+    });
     expect(chain.steps.find((step) => step.id === "scafld-complete")).toMatchObject({
       context: {
-        reviewer_result: "reviewer-boundary.stdout",
+        reviewer_result: "reviewer-boundary.review_decision.data",
       },
     });
   });
 
-  it.skipIf(!existsSync(scafldBin))("surfaces the current spec-authoring gap cleanly through the composite receipt", async () => {
+  it.skipIf(!existsSync(scafldBin))("completes the full bug-to-pr lane through authored spec, fix, and review outputs", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-bug-to-pr-skill-"));
     const receiptDir = path.join(tempDir, "receipts");
     const taskId = "bug-to-pr-skill-fixture";
     const caller: Caller = {
-      answer: async (questions) => {
-        await writePassingReviewFile(path.join(tempDir, ".ai", "reviews", `${taskId}.md`), taskId);
-        return {
-          [questions[0]?.id ?? "agent.scafld.output"]: {
-            task_id: taskId,
-            review_file: `.ai/reviews/${taskId}.md`,
-            verdict: "pass",
-          },
-        };
-      },
+      answer: async () => ({}),
+      resolveAgentResult: async (request) => answerForBugToPrStep(tempDir, taskId, request.id),
       approve: async () => false,
       report: () => undefined,
     };
 
     try {
-      initScafldRepo(tempDir);
+      await initScafldRepo(tempDir);
 
       const result = await runLocalSkill({
         skillPath: path.resolve("skills/bug-to-pr"),
@@ -81,11 +112,10 @@ describe("bug-to-PR composite skill", () => {
         env: process.env,
         receiptDir,
         runxHome: path.join(tempDir, ".runx-test-home"),
-        allowedSourceTypes: ["cli-tool", "mcp", "agent-step", "agent", "chain"],
       });
 
-      expect(result.status).toBe("failure");
-      if (result.status !== "failure") {
+      expect(result.status).toBe("success");
+      if (result.status !== "success") {
         return;
       }
       expect(result.receipt.kind).toBe("chain_execution");
@@ -93,11 +123,28 @@ describe("bug-to-PR composite skill", () => {
         return;
       }
       expect(result.receipt.subject.chain_name).toBe("bug-to-pr");
-      expect(result.execution.stdout).toContain("spec has validation errors");
-      expect(result.execution.stdout).toContain("TODO placeholder");
+      expect(JSON.parse(result.execution.stdout)).toMatchObject({
+        task_id: taskId,
+        completed_state: "completed",
+        verdict: "pass",
+        blocking_count: 0,
+        non_blocking_count: 0,
+      });
       expect(result.receipt.steps.map((step) => [step.step_id, step.status])).toEqual([
         ["scafld-new", "success"],
-        ["scafld-approve", "failure"],
+        ["author-spec", "success"],
+        ["write-spec", "success"],
+        ["scafld-validate", "success"],
+        ["scafld-approve", "success"],
+        ["scafld-start", "success"],
+        ["author-fix", "success"],
+        ["write-fix", "success"],
+        ["scafld-exec", "success"],
+        ["scafld-audit", "success"],
+        ["scafld-review-open", "success"],
+        ["reviewer-boundary", "success"],
+        ["write-review", "success"],
+        ["scafld-complete", "success"],
       ]);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
@@ -110,7 +157,7 @@ describe("bug-to-PR composite skill", () => {
     const taskId = "bug-to-pr-json-fixture";
 
     try {
-      initScafldRepo(tempDir);
+      await initScafldRepo(tempDir);
       await writeActiveSpec(tempDir, taskId);
 
       const reviewResult = await runScafldSkill(tempDir, receiptDir, {
@@ -177,11 +224,12 @@ async function runScafldSkill(
   });
 }
 
-function initScafldRepo(repo: string): void {
+async function initScafldRepo(repo: string): Promise<void> {
   runChecked("git", ["init", "-b", "main"], repo);
   runChecked("git", ["config", "user.email", "smoke@example.com"], repo);
   runChecked("git", ["config", "user.name", "Smoke Test"], repo);
   runChecked(scafldBin, ["init"], repo);
+  await writeFile(path.join(repo, "app.txt"), "base\n");
   runChecked("git", ["add", "."], repo);
   runChecked("git", ["commit", "-m", "init"], repo);
 }
@@ -227,10 +275,118 @@ planning_log:
   );
 }
 
+async function answerForBugToPrStep(
+  repo: string,
+  taskId: string,
+  requestId: string,
+): Promise<Readonly<Record<string, unknown>> | undefined> {
+  if (requestId === "agent_step.bug-to-pr-author-spec.output") {
+    return {
+      spec_draft: {
+        path: `.ai/specs/drafts/${taskId}.yaml`,
+        changed_files: [`.ai/specs/in_progress/${taskId}.yaml`, "app.txt"],
+      },
+      spec_contents: buildBugToPrSpec(taskId),
+    };
+  }
+  if (requestId === "agent_step.bug-to-pr-apply-fix.output") {
+    return {
+      fix_draft: {
+        path: "app.txt",
+        rationale: "Apply the bounded fixture fix declared in the spec.",
+      },
+      change_contents: "fixed\n",
+    };
+  }
+  if (requestId === "agent_step.bug-to-pr-review.output") {
+    const reviewFile = `.ai/reviews/${taskId}.md`;
+    return {
+      review_decision: {
+        review_file: reviewFile,
+        verdict: "pass",
+        blocking_count: 0,
+      },
+      review_contents: await buildPassingReviewContents(path.join(repo, reviewFile), taskId),
+    };
+  }
+  return undefined;
+}
+
+function buildBugToPrSpec(taskId: string): string {
+  return `spec_version: "1.1"
+task_id: "${taskId}"
+created: "2026-04-10T00:00:00Z"
+updated: "2026-04-10T00:00:00Z"
+status: "draft"
+
+task:
+  title: "Fixture bug to PR"
+  summary: "Apply one bounded fixture fix and archive the completed review."
+  size: "micro"
+  risk_level: "low"
+  context:
+    packages:
+      - "fixture"
+    invariants:
+      - "bounded_scope"
+  objectives:
+    - "Replace the fixture app contents with the fixed output."
+  touchpoints:
+    - area: "fixture"
+      description: "Update the tracked fixture file and keep the scafld spec declared."
+  acceptance:
+    definition_of_done:
+      - id: "dod1"
+        description: "app.txt contains the fixed output"
+        status: "pending"
+    validation:
+      - id: "v1"
+        type: "test"
+        description: "app.txt contains the fixed output"
+        command: "grep -q '^fixed$' app.txt"
+        expected: "exit code 0"
+
+planning_log:
+  - timestamp: "2026-04-10T00:00:00Z"
+    actor: "test"
+    summary: "Fixture spec authored by the bug-to-pr lane"
+
+phases:
+  - id: "phase1"
+    name: "Apply fixture fix"
+    objective: "Write the bounded file change and validate it"
+    changes:
+      - file: ".ai/specs/in_progress/${taskId}.yaml"
+        action: "update"
+        content_spec: |
+          The in-progress scafld spec is tracked and must stay in sync with the
+          declared scope throughout execution.
+      - file: "app.txt"
+        action: "update"
+        content_spec: |
+          Replace the fixture contents with the fixed output.
+    acceptance_criteria:
+      - id: "ac1_1"
+        type: "test"
+        description: "app.txt contains the fixed output"
+        command: "grep -q '^fixed$' app.txt"
+        expected: "exit code 0"
+    status: "pending"
+
+rollback:
+  strategy: "per_phase"
+  commands:
+    phase1: "git checkout HEAD -- .ai/specs/in_progress/${taskId}.yaml app.txt"
+`;
+}
+
 async function writePassingReviewFile(reviewPath: string, taskId: string): Promise<void> {
-  await writeFile(
-    reviewPath,
-    `# Review: ${taskId}
+  await writeFile(reviewPath, await buildPassingReviewContents(reviewPath, taskId));
+}
+
+async function buildPassingReviewContents(reviewPath: string, taskId: string): Promise<string> {
+  await mkdir(path.dirname(reviewPath), { recursive: true });
+  return `# Review: ${taskId}
 
 ## Spec
 Bug to PR JSON Fixture
@@ -291,8 +447,7 @@ None.
 ### Verdict
 
 pass
-`,
-  );
+`;
 }
 
 function runChecked(command: string, args: readonly string[], cwd: string): void {

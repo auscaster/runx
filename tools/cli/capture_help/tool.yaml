@@ -1,0 +1,65 @@
+name: cli.capture_help
+description: Capture help output from a CLI command deterministically.
+source:
+  type: cli-tool
+  command: node
+  args:
+    - -e
+    - |
+      const { spawnSync } = require("node:child_process");
+      const path = require("node:path");
+
+      const inputs = JSON.parse(process.env.RUNX_INPUTS_JSON || "{}");
+      const command = String(inputs.command || "");
+      if (!command) {
+        throw new Error("command is required.");
+      }
+      const args = Array.isArray(inputs.args) ? inputs.args.map((value) => String(value)) : [];
+      const helpFlag = String(inputs.help_flag || "--help");
+      const cwd = path.resolve(String(inputs.cwd || inputs.repo_root || process.env.RUNX_CWD || process.cwd()));
+      const result = spawnSync(command, [...args, helpFlag], {
+        cwd,
+        encoding: "utf8",
+        shell: false,
+      });
+      if (result.error) {
+        throw result.error;
+      }
+      process.stdout.write(JSON.stringify({
+        command,
+        args,
+        help_flag: helpFlag,
+        cwd,
+        stdout: result.stdout ?? "",
+        stderr: result.stderr ?? "",
+        exit_code: result.status ?? 0,
+      }));
+      if ((result.status ?? 0) !== 0) {
+        process.exit(result.status ?? 1);
+      }
+inputs:
+  command:
+    type: string
+    required: true
+    description: CLI command to invoke.
+  args:
+    type: json
+    required: false
+    description: Array of arguments to pass before the help flag.
+  help_flag:
+    type: string
+    required: false
+    description: Help flag to append; defaults to --help.
+  cwd:
+    type: string
+    required: false
+    description: Working directory override.
+  repo_root:
+    type: string
+    required: false
+    description: Repository root fallback for cwd.
+scopes:
+  - cli.read
+runx:
+  artifacts:
+    wrap_as: cli_help

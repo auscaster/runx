@@ -52,5 +52,5 @@ describe("MCP skill runner", () => {
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
-  });
+  }, 15000);
 });

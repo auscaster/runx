@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { parseRunnerManifestYaml, validateRunnerManifest } from "../packages/parser/src/index.js";
 
 describe("scafld bug-to-PR skill contract", () => {
-  it("parses as a composite skill over one scafld capability plus a reviewer boundary", async () => {
+  it("parses as a composite skill with explicit author, write, execute, and review phases", async () => {
     const manifest = validateRunnerManifest(
       parseRunnerManifestYaml(await readFile(path.resolve("skills/bug-to-pr/x.yaml"), "utf8")),
     );
@@ -21,37 +21,86 @@ describe("scafld bug-to-PR skill contract", () => {
     expect(chain.name).toBe("bug-to-pr");
     expect(chain.steps.map((step) => step.id)).toEqual([
       "scafld-new",
+      "author-spec",
+      "write-spec",
+      "scafld-validate",
       "scafld-approve",
       "scafld-start",
+      "author-fix",
+      "write-fix",
       "scafld-exec",
       "scafld-audit",
       "scafld-review-open",
       "reviewer-boundary",
+      "write-review",
       "scafld-complete",
     ]);
     expect(chain.steps.map((step) => step.skill ?? "")).toEqual([
       "../scafld",
+      "",
+      "",
       "../scafld",
       "../scafld",
       "../scafld",
+      "",
+      "",
       "../scafld",
       "../scafld",
       "../scafld",
+      "",
+      "",
       "../scafld",
+    ]);
+    expect(chain.steps.map((step) => step.tool ?? "")).toEqual([
+      "",
+      "",
+      "fs.write",
+      "",
+      "",
+      "",
+      "",
+      "fs.write",
+      "",
+      "",
+      "",
+      "",
+      "fs.write",
+      "",
     ]);
     expect(chain.steps.map((step) => step.inputs.command)).toEqual([
       "spec",
+      undefined,
+      undefined,
+      "validate",
       "approve",
       "start",
+      undefined,
+      undefined,
       "execute",
       "audit",
       "review",
       undefined,
+      undefined,
       "complete",
     ]);
     expect(chain.steps.some((step) => (step.skill ?? "").includes("fixture-agent"))).toBe(false);
+    expect(chain.steps.find((step) => step.id === "author-spec")).toMatchObject({
+      run: {
+        type: "agent-step",
+        task: "bug-to-pr-author-spec",
+      },
+    });
+    expect(chain.steps.find((step) => step.id === "author-fix")).toMatchObject({
+      run: {
+        type: "agent-step",
+        task: "bug-to-pr-apply-fix",
+      },
+    });
     expect(chain.steps.find((step) => step.id === "reviewer-boundary")).toMatchObject({
-      runner: "agent",
+      run: {
+        type: "agent-step",
+        task: "bug-to-pr-review",
+      },
       context: {
         review_file: "scafld-review-open.review_file",
         review_prompt: "scafld-review-open.review_prompt",
@@ -59,7 +108,7 @@ describe("scafld bug-to-PR skill contract", () => {
     });
     expect(chain.steps.find((step) => step.id === "scafld-complete")).toMatchObject({
       context: {
-        reviewer_result: "reviewer-boundary.stdout",
+        reviewer_result: "reviewer-boundary.review_decision.data",
       },
     });
   });

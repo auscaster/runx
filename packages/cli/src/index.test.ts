@@ -16,12 +16,10 @@ describe("parseArgs", () => {
       "--non-interactive",
       "--receipt-dir",
       "/tmp/receipts",
-      "--allow-agent-step",
     ]);
 
     expect(parsed.nonInteractive).toBe(true);
     expect(parsed.receiptDir).toBe("/tmp/receipts");
-    expect(parsed.allowAgentStep).toBe(true);
     expect(parsed.inputs).toEqual({});
   });
 

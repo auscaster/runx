@@ -21,7 +21,7 @@ describe("local chain runner", () => {
 
     try {
       const result = await runLocalChain({
-        chainPath: path.resolve("fixtures/chains/sequential/runx.yaml"),
+        chainPath: path.resolve("fixtures/chains/sequential/chain.yaml"),
         caller: nonInteractiveCaller,
         receiptDir,
         runxHome,
@@ -89,13 +89,13 @@ describe("local chain runner", () => {
   });
 
   it("inspects a sequential chain receipt", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-inspect-"));
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-composite-inspect-"));
     const receiptDir = path.join(tempDir, "receipts");
     const runxHome = path.join(tempDir, "home");
 
     try {
       const result = await runLocalChain({
-        chainPath: path.resolve("fixtures/chains/sequential/runx.yaml"),
+        chainPath: path.resolve("fixtures/chains/sequential/chain.yaml"),
         caller: nonInteractiveCaller,
         receiptDir,
         runxHome,
@@ -132,7 +132,7 @@ describe("local chain runner", () => {
 
     try {
       const result = await runLocalChain({
-        chainPath: path.resolve("fixtures/chains/sequential/runx.yaml"),
+        chainPath: path.resolve("fixtures/chains/sequential/chain.yaml"),
         caller: nonInteractiveCaller,
         receiptDir,
         runxHome: path.join(tempDir, "home"),
@@ -150,7 +150,10 @@ describe("local chain runner", () => {
       );
 
       expect(inspectExit).toBe(0);
-      expect(stdout.contents()).toContain(`${result.receipt.id} chain_execution sequential-echo success`);
+      expect(stdout.contents()).toContain("sequential-echo");
+      expect(stdout.contents()).toContain("chain_execution");
+      expect(stdout.contents()).toContain(result.receipt.id);
+      expect(stdout.contents()).toContain("verified");
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

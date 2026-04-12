@@ -42,12 +42,12 @@ runners:
       name: bug-to-pr
       owner: runx
       notes:
-        status: skeleton
+        status: governed
         rationale: >
-          This execution graph intentionally contains only the self-contained
-          scafld skill plus one caller-mediated review boundary. Writing the
-          review artifact and deciding whether it passes are outside the
-          subprocess and must stay visible.
+          This execution graph keeps cognition and mutation separate. Agent
+          phases author the spec, fix, and review contents. Deterministic
+          fs.write phases make the on-disk mutations visible before the
+          scafld lifecycle advances.
       steps:
         - id: scafld-new
           skill: ../scafld
@@ -56,6 +56,42 @@ runners:
           mutation: true
           inputs:
             command: spec
+        - id: author-spec
+          run:
+            type: agent-step
+            agent: builder
+            task: bug-to-pr-author-spec
+            outputs:
+              spec_draft: object
+              spec_contents: string
+          instructions: >
+            Replace the scafld draft TODOs with a valid bounded spec for this
+            bug-to-PR lane. spec_draft.path must point at the scafld draft spec
+            file relative to the fixture root. spec_contents must be the full
+            YAML text to write. The spec must declare every tracked file that
+            will be changed before scafld audit runs, including the in-progress
+            spec path if that file will appear in git diff. Keep the scope
+            minimal and make acceptance criteria executable.
+          allowed_tools:
+            - fs.read
+            - git.status
+          artifacts:
+            named_emits:
+              spec_draft: spec_draft
+        - id: write-spec
+          tool: fs.write
+          scopes:
+            - fs.write
+          mutation: true
+          context:
+            path: author-spec.spec_draft.data.path
+            contents: author-spec.spec_contents
+        - id: scafld-validate
+          skill: ../scafld
+          scopes:
+            - scafld:spec:validate
+          inputs:
+            command: validate
         - id: scafld-approve
           skill: ../scafld
           scopes:
@@ -70,6 +106,36 @@ runners:
           mutation: true
           inputs:
             command: start
+        - id: author-fix
+          run:
+            type: agent-step
+            agent: builder
+            task: bug-to-pr-apply-fix
+            outputs:
+              fix_draft: object
+              change_contents: string
+          instructions: >
+            Produce the bounded fix described by the approved spec. fix_draft.path
+            must reference one declared tracked file relative to the fixture root.
+            change_contents must be the full file contents to write. Do not widen
+            scope, and do not rely on hidden edits outside the deterministic
+            write phase.
+          allowed_tools:
+            - fs.read
+            - git.status
+          context:
+            spec_draft: author-spec.spec_draft.data
+          artifacts:
+            named_emits:
+              fix_draft: fix_draft
+        - id: write-fix
+          tool: fs.write
+          scopes:
+            - fs.write
+          mutation: true
+          context:
+            path: author-fix.fix_draft.data.path
+            contents: author-fix.change_contents
         - id: scafld-exec
           skill: ../scafld
           scopes:
@@ -91,21 +157,43 @@ runners:
           inputs:
             command: review
         - id: reviewer-boundary
-          skill: ../scafld
-          runner: agent
+          run:
+            type: agent-step
+            agent: reviewer
+            task: bug-to-pr-review
+            outputs:
+              review_decision: object
+              review_contents: string
           scopes:
             - scafld:review:fill
+          allowed_tools:
+            - fs.read
           context:
             review_file: scafld-review-open.review_file
             review_prompt: scafld-review-open.review_prompt
-          inputs:
-            instruction: "Fill the scafld review artifact at review_file before scafld complete runs."
+            fix_draft: author-fix.fix_draft.data
+          instructions: >
+            Fill the scafld review artifact requested by review_prompt. Produce
+            review_decision with at least review_file and verdict, plus
+            review_contents as the full markdown review file to write. Keep the
+            review grounded in the declared change set.
+          artifacts:
+            named_emits:
+              review_decision: review_decision
+        - id: write-review
+          tool: fs.write
+          scopes:
+            - fs.write
+          mutation: true
+          context:
+            path: scafld-review-open.review_file
+            contents: reviewer-boundary.review_contents
         - id: scafld-complete
           skill: ../scafld
           scopes:
             - scafld:archive:write
           mutation: true
           context:
-            reviewer_result: reviewer-boundary.stdout
+            reviewer_result: reviewer-boundary.review_decision.data
           inputs:
             command: complete

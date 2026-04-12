@@ -137,12 +137,12 @@ describe("skill-publish CLI", () => {
           x_digest: string;
         };
       };
-      expect(report.publish.runner_names).toEqual(["agent", "sourcey-cli"]);
+      expect(report.publish.runner_names).toEqual(["agent", "sourcey"]);
       expect(report.publish.x_digest).toMatch(/^[a-f0-9]{64}$/);
       await expect(createFileRegistryStore(registryDir).getVersion("0state/sourcey", "1.0.0")).resolves.toMatchObject({
         markdown: await readFile(path.resolve("skills/sourcey/SKILL.md"), "utf8"),
         x_manifest: await readFile(path.resolve("skills/sourcey/x.yaml"), "utf8"),
-        runner_names: ["agent", "sourcey-cli"],
+        runner_names: ["agent", "sourcey"],
       });
     } finally {
       await rm(tempDir, { recursive: true, force: true });

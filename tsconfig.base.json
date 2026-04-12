@@ -6,10 +6,6 @@
     "strict": true,
     "declaration": true,
     "sourceMap": true,
-    "rootDir": ".",
-    "outDir": "dist",
     "types": ["node"]
-  },
-  "include": ["packages/**/*.ts", "plugins/**/*.ts", "tests/**/*.ts", "vitest.config.ts"],
-  "exclude": ["dist", "**/dist", "coverage", "node_modules"]
+  }
 }

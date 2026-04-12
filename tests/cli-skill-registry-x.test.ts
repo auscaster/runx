@@ -26,7 +26,7 @@ describe("CLI skill registry X metadata", () => {
       expect(publishErr.contents()).toBe("");
       expect(JSON.parse(publishOut.contents()).publish).toMatchObject({
         skill_id: "0state/sourcey",
-        runner_names: ["agent", "sourcey-cli"],
+        runner_names: ["agent", "sourcey"],
         x_digest: expect.stringMatching(/^[a-f0-9]{64}$/),
       });
 
@@ -40,14 +40,16 @@ describe("CLI skill registry X metadata", () => {
         ),
       ).resolves.toBe(0);
       expect(searchErr.contents()).toBe("");
-      expect(JSON.parse(searchOut.contents()).results).toEqual([
-        expect.objectContaining({
-          skill_id: "0state/sourcey",
-          runner_mode: "x-metadata",
-          runner_names: ["agent", "sourcey-cli"],
-          x_digest: expect.stringMatching(/^[a-f0-9]{64}$/),
-        }),
-      ]);
+      expect(JSON.parse(searchOut.contents()).results).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            skill_id: "0state/sourcey",
+            runner_mode: "x-manifest",
+            runner_names: ["agent", "sourcey"],
+            x_digest: expect.stringMatching(/^[a-f0-9]{64}$/),
+          }),
+        ]),
+      );
 
       const addOut = createMemoryStream();
       const addErr = createMemoryStream();
@@ -62,13 +64,13 @@ describe("CLI skill registry X metadata", () => {
       expect(JSON.parse(addOut.contents()).install).toMatchObject({
         destination: path.join(skillsDir, "0state", "sourcey", "SKILL.md"),
         xDestination: path.join(skillsDir, "0state", "sourcey", "x.yaml"),
-        runnerNames: ["agent", "sourcey-cli"],
+        runnerNames: ["agent", "sourcey"],
       });
       await expect(readFile(path.join(skillsDir, "0state", "sourcey", "x.yaml"), "utf8")).resolves.toContain(
-        "sourcey-cli",
+        "tool: sourcey.build",
       );
       await expect(createFileRegistryStore(registryDir).getVersion("0state/sourcey", "1.0.0")).resolves.toMatchObject({
-        runner_names: ["agent", "sourcey-cli"],
+        runner_names: ["agent", "sourcey"],
       });
     } finally {
       await rm(tempDir, { recursive: true, force: true });

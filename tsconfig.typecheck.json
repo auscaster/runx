@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "incremental": true,
+    "noEmit": true,
+    "tsBuildInfoFile": "node_modules/.cache/tsc/typecheck.tsbuildinfo"
+  },
+  "include": [
+    "packages/**/*.ts",
+    "apps/**/*.ts",
+    "plugins/**/*.ts",
+    "tests/**/*.ts",
+    "vitest.config.ts",
+    "vitest.fast.config.ts"
+  ],
+  "exclude": ["dist", "**/dist", ".build", "coverage", "node_modules"]
+}

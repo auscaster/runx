@@ -1,10 +1,49 @@
 export const executorPackage = "@runx/executor";
 
+import type { ArtifactEnvelope } from "../../artifacts/src/index.js";
 import type { ValidatedSkill } from "../../parser/src/index.js";
+
+export interface AgentContextProvenance {
+  readonly input: string;
+  readonly output: string;
+  readonly from_step?: string;
+  readonly artifact_id?: string;
+  readonly receipt_id?: string;
+}
+
+export interface AgentContextEnvelope {
+  readonly run_id: string;
+  readonly step_id?: string;
+  readonly skill: string;
+  readonly instructions: string;
+  readonly inputs: Readonly<Record<string, unknown>>;
+  readonly allowed_tools: readonly string[];
+  readonly current_context: readonly ArtifactEnvelope[];
+  readonly historical_context: readonly ArtifactEnvelope[];
+  readonly provenance: readonly AgentContextProvenance[];
+  readonly expected_outputs?: Readonly<Record<string, unknown>>;
+  readonly trust_boundary: string;
+}
+
+export interface AgentWorkRequest {
+  readonly id: string;
+  readonly source_type: "agent" | "agent-step";
+  readonly agent?: string;
+  readonly task?: string;
+  readonly envelope: AgentContextEnvelope;
+}
+
+export interface ApprovalGate {
+  readonly id: string;
+  readonly reason: string;
+  readonly type?: string;
+  readonly summary?: Readonly<Record<string, unknown>>;
+}
 
 export interface AdapterInvokeRequest {
   readonly skillName?: string;
   readonly skillBody?: string;
+  readonly allowedTools?: readonly string[];
   readonly source: ValidatedSkill["source"];
   readonly inputs: Readonly<Record<string, unknown>>;
   readonly resolvedInputs?: Readonly<Record<string, string>>;
@@ -12,18 +51,46 @@ export interface AdapterInvokeRequest {
   readonly env?: NodeJS.ProcessEnv;
   readonly credential?: CredentialEnvelope;
   readonly signal?: AbortSignal;
+  readonly runId?: string;
+  readonly stepId?: string;
+  readonly currentContext?: readonly ArtifactEnvelope[];
+  readonly historicalContext?: readonly ArtifactEnvelope[];
+  readonly contextProvenance?: readonly AgentContextProvenance[];
 }
 
-export interface AdapterInvokeResult {
-  readonly status: "success" | "failure";
-  readonly stdout: string;
-  readonly stderr: string;
-  readonly exitCode: number | null;
-  readonly signal: NodeJS.Signals | null;
-  readonly durationMs: number;
-  readonly errorMessage?: string;
-  readonly metadata?: Readonly<Record<string, unknown>>;
-}
+export type AdapterInvokeResult =
+  | {
+      readonly status: "success" | "failure";
+      readonly stdout: string;
+      readonly stderr: string;
+      readonly exitCode: number | null;
+      readonly signal: NodeJS.Signals | null;
+      readonly durationMs: number;
+      readonly errorMessage?: string;
+      readonly metadata?: Readonly<Record<string, unknown>>;
+    }
+  | {
+      readonly status: "needs_agent";
+      readonly stdout: string;
+      readonly stderr: string;
+      readonly exitCode: null;
+      readonly signal: null;
+      readonly durationMs: number;
+      readonly request: AgentWorkRequest;
+      readonly errorMessage?: string;
+      readonly metadata?: Readonly<Record<string, unknown>>;
+    }
+  | {
+      readonly status: "needs_approval";
+      readonly stdout: string;
+      readonly stderr: string;
+      readonly exitCode: null;
+      readonly signal: null;
+      readonly durationMs: number;
+      readonly gate: ApprovalGate;
+      readonly errorMessage?: string;
+      readonly metadata?: Readonly<Record<string, unknown>>;
+    };
 
 export interface SkillAdapter {
   readonly type: string;
@@ -48,6 +115,12 @@ export interface ExecuteSkillOptions {
   readonly env?: NodeJS.ProcessEnv;
   readonly credential?: CredentialEnvelope;
   readonly signal?: AbortSignal;
+  readonly allowedTools?: readonly string[];
+  readonly runId?: string;
+  readonly stepId?: string;
+  readonly currentContext?: readonly ArtifactEnvelope[];
+  readonly historicalContext?: readonly ArtifactEnvelope[];
+  readonly contextProvenance?: readonly AgentContextProvenance[];
 }
 
 export async function executeSkill(options: ExecuteSkillOptions): Promise<AdapterInvokeResult> {
@@ -68,6 +141,7 @@ export async function executeSkill(options: ExecuteSkillOptions): Promise<Adapte
   return await adapter.invoke({
     skillName: options.skill.name,
     skillBody: options.skill.body,
+    allowedTools: options.allowedTools ?? options.skill.allowedTools,
     source: options.skill.source,
     inputs: options.inputs,
     resolvedInputs: options.resolvedInputs,
@@ -75,5 +149,10 @@ export async function executeSkill(options: ExecuteSkillOptions): Promise<Adapte
     env: options.env,
     credential: options.credential,
     signal: options.signal,
+    runId: options.runId,
+    stepId: options.stepId,
+    currentContext: options.currentContext,
+    historicalContext: options.historicalContext,
+    contextProvenance: options.contextProvenance,
   });
 }

@@ -7,8 +7,8 @@ import { describe, expect, it } from "vitest";
 import { runLocalSkill, type Caller } from "../packages/runner-local/src/index.js";
 
 const caller: Caller = {
-  answer: async (questions) =>
-    Object.fromEntries(questions.map((question) => [question.id, { status: "agent", id: question.id }])),
+  answer: async () => ({}),
+  resolveAgentResult: async (request) => ({ status: "agent", id: request.id }),
   approve: async () => false,
   report: () => undefined,
 };

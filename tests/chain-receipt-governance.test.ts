@@ -19,7 +19,7 @@ describe("chain receipt governance metadata", () => {
 
     try {
       await writeGovernedSkill(path.join(tempDir, "skills", "governed-echo"));
-      const chainPath = path.join(tempDir, "runx.yaml");
+      const chainPath = path.join(tempDir, "chain.yaml");
       await writeFile(
         chainPath,
         `name: chain-receipt-governance
@@ -89,7 +89,7 @@ steps:
 
     try {
       await writeGovernedSkill(path.join(tempDir, "skills", "governed-echo"));
-      const chainPath = path.join(tempDir, "runx.yaml");
+      const chainPath = path.join(tempDir, "chain.yaml");
       await writeFile(
         chainPath,
         `name: chain-receipt-denied

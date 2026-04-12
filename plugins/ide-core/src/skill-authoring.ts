@@ -85,7 +85,7 @@ export function skillSnippets(): readonly SkillSnippet[] {
     {
       name: "Input Resolution",
       prefix: "runx-inputs",
-      description: "Required input declaration for caller-mediated context collection.",
+      description: "Required input declaration for runtime context collection.",
       body: ["inputs:", "  ${1:project}:", "    type: ${2:string}", "    required: true", "    description: ${3:Input description}"],
     },
     {

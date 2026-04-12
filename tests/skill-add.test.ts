@@ -62,10 +62,10 @@ describe("skill-add", () => {
         digest: version.digest,
         xDigest: version.x_digest,
         xDestination: path.join(skillsDir, "sourcey", "x.yaml"),
-        runnerNames: ["agent", "sourcey-cli"],
+        runnerNames: ["agent", "sourcey"],
       });
       await expect(readFile(path.join(skillsDir, "sourcey", "SKILL.md"), "utf8")).resolves.toBe(markdown);
-      await expect(readFile(path.join(skillsDir, "sourcey", "x.yaml"), "utf8")).resolves.toContain("sourcey-cli");
+      await expect(readFile(path.join(skillsDir, "sourcey", "x.yaml"), "utf8")).resolves.toContain("tool: sourcey.build");
       await expect(readFile(path.join(skillsDir, "sourcey", "runx.lock.json"), "utf8")).resolves.toContain(
         '"source": "runx-registry"',
       );
@@ -151,9 +151,9 @@ describe("skill-add", () => {
 
       expect(install.destination).toBe(path.join(skillsDir, "0state", "sourcey", "SKILL.md"));
       expect(install.xDestination).toBe(path.join(skillsDir, "0state", "sourcey", "x.yaml"));
-      expect(install.runnerNames).toEqual(["agent", "sourcey-cli"]);
+      expect(install.runnerNames).toEqual(["agent", "sourcey"]);
       await expect(readFile(path.join(skillsDir, "0state", "sourcey", "SKILL.md"), "utf8")).resolves.toBe(markdown);
-      await expect(readFile(path.join(skillsDir, "0state", "sourcey", "x.yaml"), "utf8")).resolves.toContain("sourcey-cli");
+      await expect(readFile(path.join(skillsDir, "0state", "sourcey", "x.yaml"), "utf8")).resolves.toContain("tool: sourcey.build");
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

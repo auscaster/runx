@@ -47,15 +47,17 @@ describe("local skill runner", () => {
     }
   });
 
-  it("runs a standard-only skill through the caller-mediated agent runner", async () => {
+  it("runs a standard-only skill through the agent-mediated runner", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-standard-skill-"));
     const caller: Caller = {
-      answer: async (questions) => ({
-        [questions[0]?.id ?? "agent.standard-only.output"]: {
+      answer: async () => ({}),
+      resolveAgentResult: async (request) =>
+        request.id === "agent.standard-only.output"
+          ? {
           status: "done",
           summary: "caller executed the portable skill",
-        },
-      }),
+        }
+          : undefined,
       approve: async () => false,
       report: () => undefined,
     };
@@ -90,7 +92,7 @@ describe("local skill runner", () => {
         },
         runner: {
           type: "agent",
-          enforcement: "caller-mediated",
+          enforcement: "agent-mediated",
           attestation: "agent-reported",
         },
       });

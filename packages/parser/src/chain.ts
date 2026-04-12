@@ -57,6 +57,7 @@ export interface ChainPolicy {
 export interface ChainStep {
   readonly id: string;
   readonly skill?: string;
+  readonly tool?: string;
   readonly run?: Readonly<Record<string, unknown>>;
   readonly instructions?: string;
   readonly artifacts?: Readonly<Record<string, unknown>>;
@@ -65,6 +66,7 @@ export interface ChainStep {
   readonly context: Readonly<Record<string, string>>;
   readonly contextEdges: readonly ChainContextEdge[];
   readonly scopes: readonly string[];
+  readonly allowedTools?: readonly string[];
   readonly retry?: ChainRetryPolicy;
   readonly policy?: Readonly<Record<string, unknown>>;
   readonly fanoutGroup?: string;
@@ -159,20 +161,22 @@ function validateStep(
   }
 
   const skill = optionalNonEmptyString(rawStep.skill, `${field}.skill`);
+  const tool = optionalNonEmptyString(rawStep.tool, `${field}.tool`);
   const run = optionalRecord(rawStep.run, `${field}.run`);
-  if ((skill ? 1 : 0) + (run ? 1 : 0) !== 1) {
-    throw new ChainValidationError(`${field} must declare exactly one of skill or run.`);
+  if ((skill ? 1 : 0) + (tool ? 1 : 0) + (run ? 1 : 0) !== 1) {
+    throw new ChainValidationError(`${field} must declare exactly one of skill, tool, or run.`);
   }
   if (run && typeof run.type !== "string") {
     throw new ChainValidationError(`${field}.run.type is required.`);
   }
   const runner = optionalNonEmptyString(rawStep.runner, `${field}.runner`);
-  if (run && runner) {
+  if ((run || tool) && runner) {
     throw new ChainValidationError(`${field}.runner is only valid for nested skill steps.`);
   }
   const inputs = optionalRecord(rawStep.inputs, `${field}.inputs`) ?? {};
   const context = optionalStringRecord(rawStep.context, `${field}.context`) ?? {};
   const scopes = optionalStringArray(rawStep.scopes, `${field}.scopes`) ?? [];
+  const allowedTools = optionalStringArray(rawStep.allowed_tools ?? rawStep.allowedTools, `${field}.allowed_tools`);
   const retry = validateRetry(rawStep.retry, `${field}.retry`);
   const policy = optionalRecord(rawStep.policy, `${field}.policy`);
   const fanoutGroup = optionalString(rawStep.fanout_group ?? rawStep.fanoutGroup, `${field}.fanout_group`);
@@ -190,6 +194,7 @@ function validateStep(
   return {
     id,
     skill,
+    tool,
     run,
     instructions,
     artifacts,
@@ -198,6 +203,7 @@ function validateStep(
     context,
     contextEdges,
     scopes,
+    allowedTools,
     retry,
     policy,
     fanoutGroup,
@@ -228,8 +234,9 @@ function rejectUnsupportedStepFields(rawStep: Readonly<Record<string, unknown>>,
   if (mode === "fanout" && typeof (rawStep.fanout_group ?? rawStep.fanoutGroup) !== "string") {
     throw new ChainValidationError(`${field}.fanout_group is required when mode is fanout.`);
   }
-  if (rawStep.run !== undefined && rawStep.skill !== undefined) {
-    throw new ChainValidationError(`${field} must not declare both run and skill.`);
+  const declaredTargets = [rawStep.run, rawStep.skill, rawStep.tool].filter((value) => value !== undefined).length;
+  if (declaredTargets > 1) {
+    throw new ChainValidationError(`${field} must not declare more than one of run, skill, or tool.`);
   }
 }
 

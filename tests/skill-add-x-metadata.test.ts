@@ -9,8 +9,8 @@ import { createFileRegistryStore, ingestSkillMarkdown } from "../packages/regist
 import { installLocalSkill, runLocalSkill, type Caller } from "../packages/runner-local/src/index.js";
 
 const caller: Caller = {
-  answer: async (questions) =>
-    Object.fromEntries(questions.map((question) => [question.id, { status: "agent", id: question.id }])),
+  answer: async () => ({}),
+  resolveAgentResult: async (request) => ({ status: "agent", id: request.id }),
   approve: async () => false,
   report: () => undefined,
 };
@@ -193,7 +193,7 @@ runners:
     trust_tier: "external-unverified",
     required_scopes: [],
     tags: [],
-    runner_mode: "x-metadata",
+    runner_mode: "x-manifest",
     runner_names: ["portable-cli"],
     add_command: "runx skill add invalid-x:portable",
     run_command: "runx skill portable",

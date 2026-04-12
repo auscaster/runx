@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseHarnessFixture, runHarness } from "./runner.js";
+import { parseHarnessFixture, runHarness, runHarnessTarget } from "./runner.js";
 
 describe("harness runner", () => {
   it("parses fixture shape and caller traces", () => {
@@ -52,4 +52,23 @@ expect:
     expect(result.chainReceipt?.steps.map((step) => step.step_id)).toEqual(["first", "second"]);
     expect(result.chainReceipt?.steps[1]?.parent_receipt).toBe(result.chainReceipt?.steps[0]?.receipt_id);
   });
+
+  it(
+    "runs inline harness cases from a skill directory",
+    async () => {
+      const result = await runHarnessTarget("skills/evolve");
+
+      expect(result.source).toBe("inline");
+      if (!("cases" in result)) {
+        throw new Error("expected inline harness suite");
+      }
+      expect(result.status).toBe("success");
+      expect(result.assertionErrors).toEqual([]);
+      expect(result.cases.map((entry) => entry.fixture.name)).toEqual(["evolve-introspect", "evolve-plan-spec"]);
+      expect(result.cases[0]?.status).toBe("success");
+      expect(result.cases[0]?.receipt?.kind).toBe("chain_execution");
+      expect(result.cases[1]?.receipt?.kind).toBe("chain_execution");
+    },
+    15_000,
+  );
 });

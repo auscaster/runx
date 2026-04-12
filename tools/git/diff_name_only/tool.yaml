@@ -1,0 +1,46 @@
+name: git.diff_name_only
+description: List changed file names relative to a git base ref.
+source:
+  type: cli-tool
+  command: node
+  args:
+    - -e
+    - |
+      const { spawnSync } = require("node:child_process");
+      const path = require("node:path");
+
+      const inputs = JSON.parse(process.env.RUNX_INPUTS_JSON || "{}");
+      const repoRoot = path.resolve(String(inputs.repo_root || process.env.RUNX_CWD || process.cwd()));
+      const base = String(inputs.base || "HEAD");
+
+      const result = spawnSync("git", ["-C", repoRoot, "diff", "--name-only", "--relative", base], {
+        encoding: "utf8",
+        shell: false,
+      });
+      if (result.error) {
+        throw result.error;
+      }
+      if (result.status !== 0) {
+        if (result.stderr) process.stderr.write(result.stderr);
+        process.exit(result.status ?? 1);
+      }
+
+      process.stdout.write(JSON.stringify({
+        repo_root: repoRoot,
+        base,
+        files: result.stdout.split(/\\r?\\n/).map((line) => line.trim()).filter(Boolean),
+      }));
+inputs:
+  repo_root:
+    type: string
+    required: false
+    description: Repository root; defaults to RUNX_CWD or the current working directory.
+  base:
+    type: string
+    required: false
+    description: Base revision or tree-ish to diff against; defaults to HEAD.
+scopes:
+  - git.read
+runx:
+  artifacts:
+    wrap_as: git_diff

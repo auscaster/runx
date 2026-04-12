@@ -36,7 +36,7 @@ export async function searchRegistry(
       trust_tier: "runx-derived",
       required_scopes: version.required_scopes,
       tags: version.tags,
-      runner_mode: version.x_manifest ? "x-metadata" : "standard-only",
+      runner_mode: version.x_manifest ? "x-manifest" : "standard-only",
       runner_names: version.runner_names,
       x_digest: version.x_digest,
       x_trust_tier: version.x_manifest ? "runx-derived" : undefined,

@@ -34,7 +34,7 @@ describe("registry package", () => {
         source_type: "agent",
         version: "1.0.0",
         x_manifest: xManifest,
-        runner_names: ["agent", "sourcey-cli"],
+        runner_names: ["agent", "sourcey"],
       });
       expect(version.x_digest).toMatch(/^[a-f0-9]{64}$/);
       expect(version.markdown).toBe(markdown);
@@ -62,8 +62,8 @@ describe("registry package", () => {
         source_label: "runx registry",
         source_type: "agent",
         trust_tier: "runx-derived",
-        runner_mode: "x-metadata",
-        runner_names: ["agent", "sourcey-cli"],
+        runner_mode: "x-manifest",
+        runner_names: ["agent", "sourcey"],
         x_digest: version.x_digest,
       });
 
@@ -80,7 +80,7 @@ describe("registry package", () => {
         markdown,
         x_manifest: xManifest,
         x_digest: version.x_digest,
-        runner_names: ["agent", "sourcey-cli"],
+        runner_names: ["agent", "sourcey"],
       });
     } finally {
       await rm(tempDir, { recursive: true, force: true });

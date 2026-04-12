@@ -4,10 +4,13 @@
   "private": false,
   "type": "module",
   "bin": {
-    "runx": "./dist/index.js"
+    "runx": "./bin/runx.js"
   },
   "files": [
-    "dist"
+    "bin",
+    "dist",
+    "skills",
+    "tools"
   ],
   "scripts": {
     "runx": "tsx src/index.ts"

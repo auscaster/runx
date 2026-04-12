@@ -13,7 +13,7 @@ source:
   tool: echo
   arguments:
     message: "{{message}}"
-  timeout_seconds: 10
+  timeout_seconds: 15
 inputs:
   message:
     type: string

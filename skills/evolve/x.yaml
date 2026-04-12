@@ -1,6 +1,152 @@
 skill: evolve
 
+harness:
+  cases:
+    - name: evolve-introspect
+      runner: introspect
+      inputs:
+        repo_root: .
+      caller:
+        answers:
+          agent_step.evolve-introspect.output:
+            opportunity_report:
+              summary: Documentation and release hygiene are the highest-leverage gaps.
+              opportunities:
+                - id: docs-release-notes
+                  title: Add release notes workflow
+                  impact: high
+                  effort: low
+            recommended_objective:
+              objective: add release notes
+              rationale: Clear user-facing gap with bounded implementation scope.
+            change_plan:
+              steps:
+                - draft release notes process
+                - add docs
+              estimated_scope: small
+              risk_assessment: low
+            spec_document:
+              spec_version: "1.1"
+              task_id: evolve_release_notes
+              phases:
+                - scope
+                - model
+                - materialize
+      expect:
+        status: success
+        receipt:
+          kind: chain_execution
+          status: success
+    - name: evolve-plan-spec
+      runner: evolve
+      inputs:
+        objective: add release notes
+        repo_root: .
+        terminate: spec
+      caller:
+        answers:
+          agent_step.evolve-plan.output:
+            objective_brief:
+              objective: add release notes
+              target_type: repo
+              target_ref: .
+            diagnosis_report:
+              findings:
+                - docs missing
+              recommended_phases:
+                - plan
+                - act
+            change_plan:
+              steps:
+                - draft release notes
+              estimated_scope: small
+              risk_assessment: low
+            spec_document:
+              spec_version: "1.1"
+              task_id: evolve_release_notes
+              phases:
+                - plan
+                - act
+        approvals:
+          evolve.plan.approval: true
+      expect:
+        status: success
+        receipt:
+          kind: chain_execution
+          status: success
+
 runners:
+  introspect:
+    type: chain
+    inputs:
+      repo_root:
+        type: string
+        required: false
+        default: "."
+        description: "Repository root to inspect."
+    chain:
+      name: evolve-introspect
+      steps:
+        - id: preflight
+          run:
+            type: cli-tool
+            command: node
+            args:
+              - -e
+              - |
+                const fs = require("node:fs");
+                const path = require("node:path");
+                const inputs = JSON.parse(process.env.RUNX_INPUTS_JSON || "{}");
+                const callerRoot = process.env.RUNX_CWD || process.cwd();
+                const repoRoot = path.resolve(callerRoot, String(inputs.repo_root || "."));
+                const hasScafld = fs.existsSync(path.join(repoRoot, ".ai"));
+                const packageJsonPath = path.join(repoRoot, "package.json");
+                const packageJson = fs.existsSync(packageJsonPath)
+                  ? JSON.parse(fs.readFileSync(packageJsonPath, "utf8"))
+                  : null;
+                const languages = [];
+                if (packageJson) languages.push("javascript");
+                if (fs.existsSync(path.join(repoRoot, "pnpm-workspace.yaml"))) languages.push("typescript");
+                process.stdout.write(JSON.stringify({
+                  repo_profile: {
+                    root: repoRoot,
+                    has_scafld: hasScafld,
+                    languages,
+                    risk_signals: hasScafld ? [] : ["missing_scafld"]
+                  }
+                }));
+          artifacts:
+            named_emits:
+              repo_profile: repo_profile
+        - id: introspect
+          run:
+            type: agent-step
+            agent: builder
+            task: evolve-introspect
+            outputs:
+              opportunity_report: object
+              recommended_objective: object
+              change_plan: object
+              spec_document: object
+          instructions: >
+            Deeply analyze the current repository and recommend one bounded,
+            high-leverage improvement. Produce an opportunity_report,
+            recommended_objective, change_plan, and spec_document grounded in
+            real repo evidence. This is introspection and recommendation only:
+            do not propose hidden execution loops, mutations, or approval
+            gating in this runner.
+          allowed_tools:
+            - fs.read
+            - git.status
+            - shell.exec
+          context:
+            repo_profile: preflight.repo_profile.data
+          artifacts:
+            named_emits:
+              opportunity_report: opportunity_report
+              recommended_objective: recommended_objective
+              change_plan: change_plan
+              spec_document: spec_document
   evolve:
     default: true
     type: chain
@@ -32,7 +178,8 @@ runners:
                 const fs = require("node:fs");
                 const path = require("node:path");
                 const inputs = JSON.parse(process.env.RUNX_INPUTS_JSON || "{}");
-                const repoRoot = path.resolve(String(inputs.repo_root || "."));
+                const callerRoot = process.env.RUNX_CWD || process.cwd();
+                const repoRoot = path.resolve(callerRoot, String(inputs.repo_root || "."));
                 const hasScafld = fs.existsSync(path.join(repoRoot, ".ai"));
                 const packageJsonPath = path.join(repoRoot, "package.json");
                 const packageJson = fs.existsSync(packageJsonPath)
@@ -65,7 +212,13 @@ runners:
           instructions: >
             Using the evolve skill environment, produce a bounded objective_brief,
             diagnosis_report, change_plan, and spec_document. Keep them practical
-            and directly actionable for the current repository.
+            and directly actionable for the current repository. This is one
+            bounded planning pass, not an open-ended improvement loop. If a
+            revision path is needed, state it explicitly and keep it limited.
+          allowed_tools:
+            - fs.read
+            - git.status
+            - shell.exec
           context:
             repo_profile: preflight.repo_profile.data
           artifacts:

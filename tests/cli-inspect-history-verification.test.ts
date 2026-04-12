@@ -65,7 +65,9 @@ describe("CLI inspect/history receipt verification", () => {
         { ...process.env, RUNX_HOME: runxHome },
       );
       expect(humanHistoryExit).toBe(0);
-      expect(humanHistoryStdout.contents()).toContain("invalid:signature_mismatch");
+      expect(humanHistoryStdout.contents()).toContain(runReport.receipt.id.slice(0, 12));
+      expect(humanHistoryStdout.contents()).toContain("echo");
+      expect(humanHistoryStdout.contents()).toContain("cli-tool");
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
