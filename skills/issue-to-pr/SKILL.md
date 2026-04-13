@@ -33,6 +33,23 @@ The chain runs: `scafld new` -> author spec -> write spec -> validate -> approve
 boundary -> write review -> complete. Each step gets only the scopes it needs.
 See `x.yaml` for the full step graph.
 
+## Spec authoring contract
+
+The `issue-to-pr-author-spec` boundary must emit a full scafld `spec_version:
+"1.1"` YAML document, not a reduced project brief.
+
+That means the authored spec must include:
+
+- `spec_version`, `task_id`, `created`, `updated`, `status`
+- a `task` block with concrete scope and acceptance details
+- `planning_log`
+- at least one `phases[]` entry
+- `rollback`
+
+All changed-file declarations must use concrete repo-relative paths. The spec
+must never use prose placeholders like "the relevant docs file" inside
+`tracked_files`, `files_impacted`, `changes[].file`, or rollback commands.
+
 ## Inputs
 
 - `task_id`: scafld task id (default: `issue-to-pr-fixture`).

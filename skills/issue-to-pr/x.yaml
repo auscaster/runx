@@ -103,10 +103,20 @@ runners:
             relative to the fixture root. Prefer draft_spec_path when present;
             otherwise derive the exact created path from scafld_new_stdout,
             which comes from the preceding scafld new step. spec_contents must
-            be the full YAML text to write. The spec must declare every tracked
-            file that will be changed before scafld audit runs, including the
-            in-progress spec path if that file will appear in git diff. Keep
-            the scope minimal and make acceptance criteria executable.
+            be the full YAML text to write. spec_contents must be a complete
+            scafld v1.1 document with spec_version, task_id, created, updated,
+            status, a task block, planning_log, at least one phase, and
+            rollback. The spec must declare every tracked file that will be
+            changed before scafld audit runs, including the in-progress spec
+            path if that file will appear in git diff. Use concrete repo-relative
+            file paths only in tracked_files, task.context.files_impacted,
+            phases[].changes[].file, and rollback commands. Never use prose
+            placeholders such as "the relevant docs file" or "the minimal set
+            of files". If a required file path cannot be grounded from the
+            issue body or available evidence, keep the spec narrowly scoped and
+            state the missing path confirmation in assumptions or notes rather
+            than inventing it. Keep the scope minimal and make acceptance
+            criteria executable.
           allowed_tools:
             - fs.read
             - git.status
@@ -124,6 +134,13 @@ runners:
           context:
             path: author-spec.spec_draft.data.path
             contents: author-spec.spec_contents
+        - id: read-spec
+          label: read persisted spec
+          tool: fs.read
+          scopes:
+            - fs.read
+          context:
+            path: author-spec.spec_draft.data.path
         - id: scafld-validate
           label: validate spec
           skill: ../scafld
@@ -168,7 +185,8 @@ runners:
             - git.status
           context:
             spec_draft: author-spec.spec_draft.data
-            spec_contents: author-spec.spec_contents
+            spec_file: read-spec.file_read.data
+            spec_contents: read-spec.file_read.data.contents
           artifacts:
             named_emits:
               fix_draft: fix_draft
@@ -181,6 +199,13 @@ runners:
           context:
             path: author-fix.fix_draft.data.path
             contents: author-fix.change_contents
+        - id: read-fix
+          label: read persisted fix
+          tool: fs.read
+          scopes:
+            - fs.read
+          context:
+            path: author-fix.fix_draft.data.path
         - id: scafld-exec
           label: run task
           skill: ../scafld
@@ -221,7 +246,8 @@ runners:
             review_file: scafld-review-open.review_file
             review_prompt: scafld-review-open.review_prompt
             fix_draft: author-fix.fix_draft.data
-            change_contents: author-fix.change_contents
+            fix_file: read-fix.file_read.data
+            change_contents: read-fix.file_read.data.contents
           instructions: >
             Fill the scafld review artifact requested by review_prompt. Produce
             review_decision with at least review_file and verdict, plus
