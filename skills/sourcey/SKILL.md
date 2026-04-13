@@ -50,6 +50,11 @@ The current Sourcey runner deliberately uses a bounded subset:
 The current slice uses exactly one bounded revision window. It never loops
 until good and it never critiques indefinitely.
 
+When `docs_inputs` is supplied explicitly, treat that as a bounded instruction
+to use the existing config target. Do not overwrite the referenced config or
+invent replacement docs files merely because repository inspection evidence is
+thin. Missing evidence is not the same as missing files.
+
 ## Steps
 
 1. Inspect the project and discover a bounded documentation plan from real project evidence.

@@ -106,7 +106,12 @@ runners:
             authored. When the project already has a complete Sourcey config and
             pages, keep the bundle minimal. When config or pages are missing,
             create only the files required to build a strong first documentation
-            site grounded in the discovered evidence. This is one bounded
+            site grounded in the discovered evidence. If docs_inputs was supplied
+            explicitly and discovery did not establish that the referenced config
+            or docs files are missing, preserve the existing repo contents and
+            return an empty files array rather than overwriting the config with a
+            weaker placeholder bundle. Lack of repository inspection evidence is
+            not evidence that the files are absent. This is one bounded
             materialize pass, not an open-ended iteration loop.
           allowed_tools:
             - fs.read
