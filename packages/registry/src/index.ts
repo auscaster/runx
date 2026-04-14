@@ -8,7 +8,14 @@ export {
   type CreateRegistrySkillVersionResult,
   type IngestSkillOptions,
 } from "./ingest.js";
-export { resolveRunxLink, runxLinkForVersion, type RunxLinkResolution } from "./links.js";
+export {
+  resolveRunxLink,
+  runxLinkForVersion,
+  runxSkillPagePath,
+  runxSkillPageUrl,
+  runxSkillPageUrlForVersion,
+  type RunxLinkResolution,
+} from "./links.js";
 export { publishSkillMarkdown, type PublishSkillMarkdownOptions, type PublishSkillMarkdownResult } from "./publish.js";
 export { parseRegistrySkillRef, resolveRegistrySkill, type RegistrySkillResolution } from "./resolve.js";
 export { searchRegistry, type RegistrySearchResult } from "./search.js";

@@ -36,8 +36,8 @@ describe("recognizable work lanes", () => {
                   operator_notes: [],
                   issue_to_pr_request: {
                     task_id: "docs_issue_to_pr_command",
-                    issue_title: "README still references bug-to-pr instead of issue-to-pr",
-                    issue_body: "The public docs still tell users to run bug-to-pr as the canonical command.",
+                    issue_title: "README should point users to issue-to-pr",
+                    issue_body: "The public docs should present issue-to-pr as the canonical command.",
                     source: "github_issue",
                     source_id: "101",
                     source_url: "https://github.com/example/repo/issues/101",
@@ -66,9 +66,7 @@ describe("recognizable work lanes", () => {
                       rationale: "The problem is confined to the public documentation surface.",
                     },
                   ],
-                  shared_invariants: [
-                    "Keep bug-to-pr available as a compatibility alias.",
-                  ],
+                  shared_invariants: [],
                   success_criteria: [
                     "Public docs point to issue-to-pr as the canonical command.",
                   ],
@@ -85,9 +83,9 @@ describe("recognizable work lanes", () => {
         [
           "support-triage",
           "--title",
-          "README still references bug-to-pr instead of issue-to-pr",
+          "README should point users to issue-to-pr",
           "--body",
-          "The public docs still tell users to run bug-to-pr as the canonical command.",
+          "The public docs should present issue-to-pr as the canonical command.",
           "--source",
           "github_issue",
           "--source-id",

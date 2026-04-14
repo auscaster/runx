@@ -8,7 +8,6 @@ import { runHarnessTarget } from "../packages/harness/src/index.js";
 import { parseSkillMarkdown, parseRunnerManifestYaml, validateRunnerManifest, validateSkill } from "../packages/parser/src/index.js";
 
 const officialSkillPackages = [
-  "bug-to-pr",
   "content-pipeline",
   "draft-content",
   "ecosystem-vuln-scan",

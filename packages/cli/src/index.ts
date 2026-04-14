@@ -1332,16 +1332,11 @@ interface LocalSkillPackage {
 function resolveBundledSkillPath(skillName: string): string {
   const bundledDir = resolveBundledSkillsDir();
   if (bundledDir) {
-    const resolvedSkillName = bundledSkillCommandAliases[skillName] ?? skillName;
-    const candidate = path.join(bundledDir, resolvedSkillName);
+    const candidate = path.join(bundledDir, skillName);
     if (existsSync(candidate)) return candidate;
   }
   throw new Error(`Bundled skill not found: ${skillName}. The @runxai/cli package may be missing its \`skills/\` assets.`);
 }
-
-const bundledSkillCommandAliases: Readonly<Record<string, string>> = {
-  "bug-to-pr": "issue-to-pr",
-};
 
 async function runSkillSearch(
   query: string,
@@ -1471,8 +1466,7 @@ export function resolveSkillReference(ref: string, env: NodeJS.ProcessEnv): stri
   }
   const bundled = resolveBundledSkillsDir();
   if (bundled) {
-    const resolvedRef = bundledSkillCommandAliases[ref] ?? ref;
-    const named = path.join(bundled, resolvedRef);
+    const named = path.join(bundled, ref);
     if (existsSync(path.join(named, "SKILL.md"))) {
       return named;
     }

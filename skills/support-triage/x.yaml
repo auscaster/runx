@@ -4,8 +4,8 @@ harness:
   cases:
     - name: bounded-docs-fix
       inputs:
-        title: README still references bug-to-pr instead of issue-to-pr
-        body: The public docs still tell users to run bug-to-pr as the canonical command.
+        title: README should point users to issue-to-pr
+        body: The public docs should present issue-to-pr as the canonical command.
         source: github_issue
         source_id: "101"
         source_url: https://github.com/example/repo/issues/101
@@ -28,8 +28,8 @@ harness:
               operator_notes: []
               issue_to_pr_request:
                 task_id: docs_issue_to_pr_command
-                issue_title: README still references bug-to-pr instead of issue-to-pr
-                issue_body: The public docs still tell users to run bug-to-pr as the canonical command.
+                issue_title: README should point users to issue-to-pr
+                issue_body: The public docs should present issue-to-pr as the canonical command.
                 source: github_issue
                 source_id: "101"
                 source_url: https://github.com/example/repo/issues/101
@@ -53,7 +53,6 @@ harness:
                   mutating: true
                   rationale: The bug is confined to the public runx documentation surface.
               shared_invariants:
-                - Keep bug-to-pr available as a compatibility alias.
                 - Update only the canonical public wording for issue-to-pr.
               success_criteria:
                 - Public docs point to issue-to-pr as the canonical command.
@@ -194,6 +193,60 @@ harness:
                 - Do not open a mutation lane for guidance-only requests.
               success_criteria:
                 - The operator sends or adapts the documented API key rotation guidance.
+      expect:
+        status: success
+        receipt:
+          kind: skill_execution
+          status: success
+          subject:
+            skill_name: support-triage
+            source_type: agent-step
+    - name: request-review-before-mutation
+      inputs:
+        title: Clarify the affected repo before we start
+        body: The report mentions API failures and docs drift, but it is not yet clear whether this is one bounded fix or cross-repo work.
+        source: github_issue
+        source_id: "984"
+        source_url: https://github.com/example/repo/issues/984
+        product_context: Workspace repo with multiple bounded mutation surfaces
+      caller:
+        answers:
+          agent_step.support-triage.output:
+            triage_report:
+              category: other
+              severity: medium
+              summary: The report is directionally actionable but still too ambiguous to start a worker or planner safely.
+              suggested_reply: Please confirm which repo owns the failing path before we start governed mutation.
+              recommended_lane: manual-triage
+              rationale: The maintainer needs to confirm the target surface before runx opens a downstream lane.
+              needs_human: false
+              commence_decision: approve
+              action_decision: request_review
+              review_target: issue
+              review_comment: Please confirm whether the failing path belongs to the API repo, the docs repo, or both. runx is holding mutation until the target surface is explicit.
+              operator_notes:
+                - Do not open issue-to-pr until the target repo is explicit.
+            change_set:
+              change_set_id: change_set_support_984
+              source:
+                type: github_issue
+                id: "984"
+                url: https://github.com/example/repo/issues/984
+              summary: Clarify the affected repo before opening a governed worker or plan.
+              category: other
+              severity: medium
+              recommended_lane: manual-triage
+              commence_decision: approve
+              action_decision: request_review
+              target_surfaces:
+                - surface: workspace
+                  kind: other
+                  mutating: false
+                  rationale: Repo ownership is still ambiguous, so the supervisor must stop at a public review comment first.
+              shared_invariants:
+                - Do not guess the target repo from incomplete issue text.
+              success_criteria:
+                - The maintainer confirms the target surface before any planner or worker starts.
       expect:
         status: success
         receipt:

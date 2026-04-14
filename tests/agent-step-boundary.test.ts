@@ -149,25 +149,4 @@ describe("agent-step and harness-hook boundary", () => {
     expect(chain.steps.some((step) => /fixture-agent|helper-script|\.mjs$/.test(step.skill ?? ""))).toBe(false);
   });
 
-  it("keeps bug-to-pr as a compatibility wrapper over the canonical issue-to-pr skill", async () => {
-    const manifest = validateRunnerManifest(
-      parseRunnerManifestYaml(await readFile(path.resolve("skills/bug-to-pr/x.yaml"), "utf8")),
-    );
-    const runner = manifest.runners["bug-to-pr"];
-
-    expect(runner?.source.type).toBe("chain");
-    if (!runner || runner.source.type !== "chain" || !runner.source.chain) {
-      throw new Error("bug-to-pr runner must declare an inline chain.");
-    }
-    const chain = runner.source.chain;
-
-    expect(chain.steps).toHaveLength(1);
-    expect(chain.steps[0]).toMatchObject({
-      id: "delegate",
-      skill: "../issue-to-pr/SKILL.md",
-      runner: "issue-to-pr",
-      mutating: true,
-    });
-    expect(chain.steps.some((step) => /fixture-agent|helper-script|\.mjs$/.test(step.skill ?? ""))).toBe(false);
-  });
 });

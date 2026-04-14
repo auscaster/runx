@@ -179,11 +179,12 @@ function buildChildEnv(
   inputs: Readonly<Record<string, unknown>>,
   sandbox: CliToolSandbox | undefined,
 ): NodeJS.ProcessEnv {
+  const ambientEnv = env ?? process.env;
   const allowlist = sandbox?.envAllowlist;
   const baseEnv =
     allowlist === undefined
-      ? { ...env }
-      : Object.fromEntries(allowlist.filter((key) => env?.[key] !== undefined).map((key) => [key, env?.[key]]));
+      ? { ...ambientEnv }
+      : Object.fromEntries(allowlist.filter((key) => ambientEnv?.[key] !== undefined).map((key) => [key, ambientEnv?.[key]]));
 
   return {
     ...baseEnv,
