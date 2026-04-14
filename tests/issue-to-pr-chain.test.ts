@@ -68,6 +68,9 @@ describe("issue-to-PR composite skill", () => {
       required: false,
     });
     expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("repo_snapshot_path");
+    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("Never author acceptance criteria that depend on git history");
+    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("HEAD~1");
+    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("anchor on the exact expected text");
     expect(chain.steps.find((step) => step.id === "write-fix")).toMatchObject({
       tool: "fs.write_bundle",
       context: {
@@ -108,28 +111,6 @@ describe("issue-to-PR composite skill", () => {
       context: {
         reviewer_result: "reviewer-boundary.review_decision.data",
       },
-    });
-  });
-
-  it("keeps bug-to-pr as a thin compatibility wrapper over issue-to-pr", async () => {
-    const manifest = validateRunnerManifest(
-      parseRunnerManifestYaml(await readFile(path.resolve("skills/bug-to-pr/x.yaml"), "utf8")),
-    );
-    const runner = manifest.runners["bug-to-pr"];
-
-    expect(runner?.source.type).toBe("chain");
-    if (!runner || runner.source.type !== "chain" || !runner.source.chain) {
-      throw new Error("bug-to-pr runner must declare an inline chain.");
-    }
-    const chain = runner.source.chain;
-
-    expect(chain.name).toBe("bug-to-pr");
-    expect(chain.steps).toHaveLength(1);
-    expect(chain.steps[0]).toMatchObject({
-      id: "delegate",
-      skill: "../issue-to-pr/SKILL.md",
-      runner: "issue-to-pr",
-      mutating: true,
     });
   });
 
@@ -208,116 +189,6 @@ describe("issue-to-PR composite skill", () => {
       ]);
       expect(await readFile(path.join(tempDir, "app.txt"), "utf8")).toBe("fixed\n");
       expect(await readFile(path.join(tempDir, "notes.md"), "utf8")).toBe("governed\n");
-    } finally {
-      await rm(tempDir, { recursive: true, force: true });
-    }
-  }, 90_000);
-
-  it.skipIf(!existsSync(scafldBin))("keeps the bug-to-pr alias runnable through the canonical issue-to-pr lane", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-bug-to-pr-alias-"));
-    const receiptDir = path.join(tempDir, "receipts");
-    const taskId = "bug-to-pr-alias-fixture";
-    const caller: Caller = {
-      resolve: async (request) =>
-        request.kind === "cognitive_work"
-          ? {
-              actor: "agent",
-              payload: await answerForIssueToPrStep(tempDir, taskId, request.id),
-            }
-          : undefined,
-      report: () => undefined,
-    };
-
-    try {
-      await initScafldRepo(tempDir);
-
-      const result = await runLocalSkill({
-        skillPath: path.resolve("skills/bug-to-pr"),
-        inputs: {
-          fixture: tempDir,
-          task_id: taskId,
-          title: "Fixture bug to PR",
-          size: "micro",
-          risk: "low",
-          phase: "phase1",
-          draft_spec_path: `.ai/specs/drafts/${taskId}.yaml`,
-          scafld_bin: scafldBin,
-        },
-        caller,
-        env: process.env,
-        receiptDir,
-        runxHome: path.join(tempDir, ".runx-test-home"),
-      });
-
-      expect(result.status).toBe("success");
-      if (result.status !== "success") {
-        return;
-      }
-      expect(result.receipt.kind).toBe("chain_execution");
-      if (result.receipt.kind !== "chain_execution") {
-        return;
-      }
-      expect(result.receipt.subject.chain_name).toBe("bug-to-pr");
-      expect(result.receipt.steps).toHaveLength(1);
-      expect(result.receipt.steps[0]).toMatchObject({
-        step_id: "delegate",
-        status: "success",
-      });
-    } finally {
-      await rm(tempDir, { recursive: true, force: true });
-    }
-  }, 90_000);
-
-  it.skipIf(!existsSync(scafldBin))("keeps the bug-to-pr alias runnable with kebab-case caller inputs", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-bug-to-pr-kebab-"));
-    const receiptDir = path.join(tempDir, "receipts");
-    const taskId = "bug-to-pr-kebab-fixture";
-    const caller: Caller = {
-      resolve: async (request) =>
-        request.kind === "cognitive_work"
-          ? {
-              actor: "agent",
-              payload: await answerForIssueToPrStep(tempDir, taskId, request.id),
-            }
-          : undefined,
-      report: () => undefined,
-    };
-
-    try {
-      await initScafldRepo(tempDir);
-
-      const result = await runLocalSkill({
-        skillPath: path.resolve("skills/bug-to-pr"),
-        inputs: {
-          fixture: tempDir,
-          "task-id": taskId,
-          title: "Fixture bug to PR",
-          size: "micro",
-          risk: "low",
-          phase: "phase1",
-          "draft-spec-path": `.ai/specs/drafts/${taskId}.yaml`,
-          "scafld-bin": scafldBin,
-        },
-        caller,
-        env: process.env,
-        receiptDir,
-        runxHome: path.join(tempDir, ".runx-test-home"),
-      });
-
-      expect(result.status).toBe("success");
-      if (result.status !== "success") {
-        return;
-      }
-      expect(result.receipt.kind).toBe("chain_execution");
-      if (result.receipt.kind !== "chain_execution") {
-        return;
-      }
-      expect(result.receipt.subject.chain_name).toBe("bug-to-pr");
-      expect(result.receipt.steps).toHaveLength(1);
-      expect(result.receipt.steps[0]).toMatchObject({
-        step_id: "delegate",
-        status: "success",
-      });
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

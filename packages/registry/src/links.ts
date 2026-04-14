@@ -1,4 +1,5 @@
 import type { RegistrySkillVersion, RegistryStore } from "./store.js";
+import { splitSkillId } from "./store.js";
 
 export interface RunxLinkResolution {
   readonly link: string;
@@ -32,4 +33,21 @@ export function runxLinkForVersion(record: RegistrySkillVersion, registryUrl?: s
     install_command: `runx add ${ref}${registryFlag}`,
     run_command: `runx ${record.name}`,
   };
+}
+
+export function runxSkillPagePath(skillId: string, version?: string): string {
+  const [owner, name] = splitSkillId(skillId);
+  const encodedOwner = encodeURIComponent(owner);
+  const encodedName = encodeURIComponent(name);
+  const encodedVersion = version ? `@${encodeURIComponent(version)}` : "";
+  return `/x/${encodedOwner}/${encodedName}${encodedVersion}`;
+}
+
+export function runxSkillPageUrl(skillId: string, version: string | undefined, publicBaseUrl?: string): string {
+  const baseUrl = (publicBaseUrl ?? "https://runx.ai").replace(/\/$/, "");
+  return `${baseUrl}${runxSkillPagePath(skillId, version)}`;
+}
+
+export function runxSkillPageUrlForVersion(record: RegistrySkillVersion, publicBaseUrl?: string): string {
+  return runxSkillPageUrl(record.skill_id, record.version, publicBaseUrl);
 }

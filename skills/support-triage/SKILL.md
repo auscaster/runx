@@ -57,6 +57,12 @@ When present, these fields mean:
 - `action_decision=request_review` means the supervisor should post
   `review_comment` to the chosen `review_target` and stop there until a later
   approval or rerun authorizes mutation
+- `review_target=draft_pr` only makes sense when a draft PR already exists.
+  If no draft PR exists yet, the supervisor should fall back to the source
+  issue and say that clearly in the posted comment
+- `action_decision=proceed_to_plan` should usually still result in a public
+  supervisor comment so the hold/plan decision is visible outside the raw
+  receipt stream
 - `recommended_lane=issue-to-pr` alone does **not** authorize a build lane
 
 Always emit `change_set` alongside `triage_report`.

@@ -279,50 +279,6 @@ const customScenarios: readonly CustomDogfoodScenario[] = [
       sourceType: "agent-step",
     },
   },
-  {
-    skillName: "bug-to-pr",
-    prepare: async (tempDir) => {
-      const lane = await createIssueLaneFixture(tempDir);
-      return {
-        inputs: {
-          fixture: lane.repoDir,
-          task_id: "bug-to-pr-dogfood",
-          title: "Clarify the external dogfood guide",
-          issue_body: "Operators should be able to run the alias with no hidden caller help.",
-          source: "github_issue",
-          source_id: "241",
-          source_url: "https://github.com/0state/runx/issues/241",
-          target_repo: "0state/runx",
-          size: "micro",
-          risk: "low",
-          phase: "phase1",
-          draft_spec_path: ".ai/specs/drafts/bug-to-pr-dogfood.yaml",
-          scafld_bin: lane.scafldBin,
-        },
-        env: lane.env,
-      };
-    },
-    expectation: {
-      requestId: "agent_step.issue-to-pr-author-spec.output",
-      inputKeys: [
-        "fixture",
-        "task_id",
-        "title",
-        "issue_body",
-        "source",
-        "source_id",
-        "source_url",
-        "target_repo",
-        "size",
-        "risk",
-        "phase",
-        "draft_spec_path",
-        "scafld_bin",
-      ],
-      allowedTools: ["fs.read", "git.status"],
-      sourceType: "agent-step",
-    },
-  },
 ] as const;
 
 describe("official skills dogfood cleanly with a fresh caller", () => {

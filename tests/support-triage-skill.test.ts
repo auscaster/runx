@@ -39,7 +39,7 @@ describe("support-triage official skill", () => {
       throw new Error("expected inline harness suite for support-triage");
     }
     expect(result.assertionErrors).toEqual([]);
-    expect(result.cases.length).toBe(3);
+    expect(result.cases.length).toBe(4);
     expect(result.cases.every((entry) => entry.status === "success")).toBe(true);
   });
 });

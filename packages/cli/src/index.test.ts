@@ -202,8 +202,8 @@ runners:
     expect(parsed.inputs).toEqual({ project: "." });
   });
 
-  it("resolves bundled top-level compatibility aliases to their canonical skill packages", () => {
-    expect(resolveSkillReference("bug-to-pr", { ...process.env, RUNX_CWD: process.cwd() })).toBe(
+  it("resolves bundled top-level skill names to their canonical skill packages", () => {
+    expect(resolveSkillReference("issue-to-pr", { ...process.env, RUNX_CWD: process.cwd() })).toBe(
       path.resolve("packages/cli/skills/issue-to-pr"),
     );
   });

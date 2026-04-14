@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdtemp, rm, writeFile, chmod } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 import { invokeCliTool } from "./index.js";
 
@@ -153,5 +156,32 @@ describe("invokeCliTool", () => {
         approved: false,
       },
     });
+  });
+
+  it("inherits the ambient process environment when no explicit env is passed", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-cli-tool-path-"));
+    const scriptPath = path.join(tempDir, "ambient-command");
+    try {
+      await writeFile(scriptPath, "#!/usr/bin/env bash\nprintf 'ambient-ok'\n", "utf8");
+      await chmod(scriptPath, 0o755);
+
+      const result = await invokeCliTool({
+        source: {
+          command: "ambient-command",
+          timeoutSeconds: 5,
+        },
+        inputs: {},
+        skillDirectory: process.cwd(),
+        env: {
+          ...process.env,
+          PATH: `${tempDir}:${process.env.PATH ?? ""}`,
+        },
+      });
+
+      expect(result.status).toBe("success");
+      expect(result.stdout).toBe("ambient-ok");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
   });
 });

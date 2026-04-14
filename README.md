@@ -41,7 +41,7 @@ Recommended flows:
 runx search sourcey
 runx sourcey --project .
 runx evolve
-runx bug-to-pr --fixture /path/to/repo --task-id task-123
+runx issue-to-pr --fixture /path/to/repo --task-id task-123
 runx resume <run-id>
 runx inspect <receipt-id>
 runx history
@@ -81,7 +81,6 @@ The bundled catalog is skill-first. Public entrypoints are capabilities such as:
 - `sourcey`
 - `evolve`
 - `issue-to-pr`
-- `bug-to-pr` as a compatibility alias over `issue-to-pr`
 - `objective-to-skill`
 - `improve-skill`
 - `harness-author`
