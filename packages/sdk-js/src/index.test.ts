@@ -2,9 +2,10 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createFileRegistryStore, ingestSkillMarkdown } from "../../registry/src/index.js";
+import { hashString } from "../../receipts/src/index.js";
 import {
   connectPreprovision,
   createRunxSdk,
@@ -12,6 +13,13 @@ import {
   inspect,
   type ConnectService,
 } from "./index.js";
+
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  globalThis.fetch = originalFetch;
+});
 
 describe("TypeScript SDK", () => {
   it("runs a fixture skill and inspects its receipt through runner-local", async () => {
@@ -151,6 +159,83 @@ describe("TypeScript SDK", () => {
           status: "passed",
           case_count: 1,
         },
+      });
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("supports remote registry search/add through the hosted public API", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-sdk-js-remote-registry-"));
+    const installDir = path.join(tempDir, "skills");
+    const markdown = await readFile(path.resolve("skills/sourcey/SKILL.md"), "utf8");
+    const xManifest = await readFile(path.resolve("skills/sourcey/x.yaml"), "utf8");
+
+    try {
+      globalThis.fetch = vi.fn(async (input, init) => {
+        const url = String(input);
+        if (url === "https://runx.example.test/v1/skills?q=sourcey&limit=20") {
+          return new Response(JSON.stringify({
+            status: "success",
+            skills: [
+              {
+                skill_id: "runx/sourcey",
+                owner: "runx",
+                name: "sourcey",
+                version: "1.0.0",
+                source_type: "agent",
+                runner_mode: "x-manifest",
+                runner_names: ["agent", "sourcey"],
+                required_scopes: [],
+                tags: [],
+                trust_signals: [],
+                install_command: "runx add runx/sourcey@1.0.0 --registry https://runx.example.test",
+                run_command: "runx sourcey",
+              },
+            ],
+          }), { status: 200 });
+        }
+        expect(url).toBe("https://runx.example.test/v1/skills/runx/sourcey/acquire");
+        expect(init?.method).toBe("POST");
+        return new Response(JSON.stringify({
+          status: "success",
+          install_count: 1,
+          acquisition: {
+            skill_id: "runx/sourcey",
+            owner: "runx",
+            name: "sourcey",
+            version: "1.0.0",
+            digest: hashString(markdown),
+            markdown,
+            x_manifest: xManifest,
+            x_digest: hashString(xManifest),
+            runner_names: ["agent", "sourcey"],
+          },
+        }), { status: 200 });
+      }) as typeof fetch;
+
+      const sdk = createRunxSdk({
+        env: {
+          ...process.env,
+          RUNX_CWD: process.cwd(),
+          RUNX_HOME: path.join(tempDir, "home"),
+          RUNX_REGISTRY_URL: "https://runx.example.test",
+        },
+      });
+
+      const searchResults = await sdk.searchSkills({ query: "sourcey" });
+      expect(searchResults).toMatchObject([
+        {
+          skill_id: "runx/sourcey",
+          source: "runx-registry",
+        },
+      ]);
+
+      const install = await sdk.addSkill({ ref: "runx/sourcey@1.0.0", to: installDir });
+      expect(install).toMatchObject({
+        destination: path.join(installDir, "runx", "sourcey", "SKILL.md"),
+        skill_id: "runx/sourcey",
+        version: "1.0.0",
       });
     } finally {
       await rm(tempDir, { recursive: true, force: true });

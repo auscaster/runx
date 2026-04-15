@@ -307,7 +307,7 @@ harness:
     );
 
     expect(exitCode).toBe(1);
-    expect(stderr.contents()).toContain("Remote registry transport is not implemented in CE");
+    expect(stderr.contents()).toContain("Remote registry publish is not supported from the OSS CLI");
     expect(stdout.contents()).toBe("");
   });
 });

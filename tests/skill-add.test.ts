@@ -27,7 +27,7 @@ describe("skill-add", () => {
       });
 
       const exitCode = await runCli(
-        ["skill", "add", "registry:sourcey", "--to", skillsDir, "--registry", "https://runx.example.test", "--json"],
+        ["skill", "add", "registry:sourcey", "--to", skillsDir, "--json"],
         { stdin: process.stdin, stdout, stderr },
         {
           ...process.env,

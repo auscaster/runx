@@ -2,14 +2,18 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import os from "node:os";
 import path from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { runCli, parseArgs, resolveSkillReference } from "./index.js";
+import { hashString } from "../../receipts/src/index.js";
 import { createFileRegistryStore, ingestSkillMarkdown } from "../../registry/src/index.js";
 
 const tempDirs: string[] = [];
+const originalFetch = globalThis.fetch;
 
 afterEach(async () => {
+  vi.restoreAllMocks();
+  globalThis.fetch = originalFetch;
   await Promise.all(tempDirs.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
@@ -386,6 +390,54 @@ runners:
     expect(stdout.contents()).toContain("add  ");
     expect(stdout.contents()).toContain("runx add 0state/sourcey@1.0.0 --registry https://runx.example.test");
     expect(stdout.contents()).toContain("runx sourcey");
+  });
+
+  it("installs registry skills from the hosted public registry", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-cli-remote-add-"));
+    tempDirs.push(tempDir);
+    const installDir = path.join(tempDir, "skills");
+    const stdout = createMemoryStream();
+    const stderr = createMemoryStream();
+    const markdown = await readFile(path.resolve("skills/sourcey/SKILL.md"), "utf8");
+    const xManifest = await readFile(path.resolve("skills/sourcey/x.yaml"), "utf8");
+    const digest = hashString(markdown);
+    const xDigest = hashString(xManifest);
+
+    globalThis.fetch = vi.fn(async (input, init) => {
+      expect(String(input)).toBe("https://runx.example.test/v1/skills/0state/sourcey/acquire");
+      expect(init?.method).toBe("POST");
+      return new Response(JSON.stringify({
+        status: "success",
+        install_count: 1,
+        acquisition: {
+          skill_id: "0state/sourcey",
+          owner: "0state",
+          name: "sourcey",
+          version: "1.0.0",
+          digest,
+          markdown,
+          x_manifest: xManifest,
+          x_digest: xDigest,
+          runner_names: ["agent", "sourcey"],
+        },
+      }), { status: 200 });
+    }) as typeof fetch;
+
+    const exitCode = await runCli(
+      ["add", "0state/sourcey@1.0.0", "--registry", "https://runx.example.test", "--to", installDir],
+      { stdin: process.stdin, stdout, stderr },
+      {
+        ...process.env,
+        RUNX_CWD: process.cwd(),
+        RUNX_HOME: path.join(tempDir, "home"),
+      },
+    );
+
+    expect(exitCode).toBe(0);
+    expect(stderr.contents()).toBe("");
+    expect(stdout.contents()).toContain(path.join(installDir, "0state", "sourcey", "SKILL.md"));
+    await expect(readFile(path.join(installDir, "0state", "sourcey", "SKILL.md"), "utf8")).resolves.toBe(markdown);
+    await expect(readFile(path.join(installDir, "0state", "sourcey", "x.yaml"), "utf8")).resolves.toBe(xManifest);
   });
 
   it("renders top-level help with starter flows and admin commands", async () => {

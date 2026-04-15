@@ -1,7 +1,17 @@
 export const registryPackage = "@runx/registry";
 
 export { createLocalRegistryClient, type RegistryClient } from "./client.js";
-export { acquireRegistrySkill, type AcquiredRegistrySkill, type AcquireRegistrySkillOptions } from "./http-client.js";
+export {
+  acquireRegistrySkill,
+  readRemoteRegistrySkill,
+  resolveRemoteRegistryRef,
+  searchRemoteRegistry,
+  type AcquiredRegistrySkill,
+  type AcquireRegistrySkillOptions,
+  type RemoteRegistrySkillDetail,
+  type ResolveRemoteRegistryRefOptions,
+  type SearchRemoteRegistryOptions,
+} from "./http-client.js";
 export {
   buildRegistrySkillVersion,
   createRegistrySkillVersion,
@@ -19,7 +29,7 @@ export {
 } from "./links.js";
 export { publishSkillMarkdown, type PublishSkillMarkdownOptions, type PublishSkillMarkdownResult } from "./publish.js";
 export { parseRegistrySkillRef, resolveRegistrySkill, type RegistrySkillResolution } from "./resolve.js";
-export { searchRegistry, type RegistrySearchResult } from "./search.js";
+export { normalizeRegistrySearchResult, searchRegistry, type RegistrySearchResult } from "./search.js";
 export {
   FileRegistryStore,
   buildSkillId,

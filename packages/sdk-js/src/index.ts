@@ -3,13 +3,16 @@ export const sdkJsPackage = "@runx/sdk";
 export * from "./caller.js";
 export * from "./framework-adapters.js";
 
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
   loadLocalSkillPackage,
   resolvePathFromUserInput,
+  resolveRunxGlobalHomeDir,
   resolveRunxProjectDir,
-  resolveRunxRegistryPath,
+  resolveRunxRegistryTarget,
   resolveSkillInstallRoot,
 } from "../../config/src/index.js";
 import {
@@ -23,6 +26,7 @@ import {
   createFileRegistryStore,
   createLocalRegistryClient,
   publishSkillMarkdown,
+  searchRemoteRegistry,
   searchRegistry,
   type PublishSkillMarkdownOptions,
   type PublishSkillMarkdownResult,
@@ -179,12 +183,20 @@ export class RunxSdk {
     const results: SkillSearchResult[] = [];
 
     if (!normalizedSource || normalizedSource === "registry" || normalizedSource === "runx-registry") {
-      results.push(
-        ...(await searchRegistry(this.registryStore(), options.query, {
+      const registryTarget = this.registryTarget();
+      if (registryTarget.mode === "remote") {
+        results.push(...(await searchRemoteRegistry(options.query, {
+          baseUrl: registryTarget.registryUrl,
           limit: options.limit,
-          registryUrl: this.options.registryUrl ?? this.env().RUNX_REGISTRY_URL,
-        })),
-      );
+        })));
+      } else {
+        results.push(
+          ...(await searchRegistry(this.registryStore(), options.query, {
+            limit: options.limit,
+            registryUrl: registryTarget.registryUrl,
+          })),
+        );
+      }
     }
 
     const marketplaceAdapters = this.marketplaceAdapters(normalizedSource);
@@ -194,14 +206,19 @@ export class RunxSdk {
   }
 
   async addSkill(options: AddSkillOptions): Promise<InstallLocalSkillResult> {
+    const registryTarget = this.registryTarget(options.registryUrl);
+    const installState = registryTarget.mode === "remote"
+      ? await ensureRunxInstallState(resolveRunxGlobalHomeDir(this.env()))
+      : undefined;
     return await installLocalSkill({
       ref: options.ref,
-      registryStore: this.registryStore(options.registryUrl),
+      registryStore: registryTarget.mode === "local" ? this.registryStore(options.registryUrl) : undefined,
       marketplaceAdapters: this.marketplaceAdapters(),
       destinationRoot: resolveSkillInstallRoot(this.env(), options.to),
       version: options.version,
       expectedDigest: options.expectedDigest,
-      registryUrl: options.registryUrl ?? this.options.registryUrl,
+      registryUrl: registryTarget.mode === "remote" ? registryTarget.registryUrl : options.registryUrl ?? this.options.registryUrl,
+      installationId: installState?.state.installation_id,
     });
   }
 
@@ -255,8 +272,17 @@ export class RunxSdk {
   }
 
   private registryStore(registryUrl = this.options.registryUrl): RegistryStore {
-    return this.options.registryStore
-      ?? createFileRegistryStore(resolveRunxRegistryPath(this.env(), { registry: registryUrl, registryDir: this.options.registryDir }));
+    if (this.options.registryStore) {
+      return this.options.registryStore;
+    }
+    const target = this.registryTarget(registryUrl);
+    return createFileRegistryStore(
+      target.mode === "local" ? target.registryPath : path.join(resolveRunxGlobalHomeDir(this.env()), "registry"),
+    );
+  }
+
+  private registryTarget(registryUrl = this.options.registryUrl) {
+    return resolveRunxRegistryTarget(this.env(), { registry: registryUrl, registryDir: this.options.registryDir });
   }
 
   private marketplaceAdapters(source?: string): readonly MarketplaceAdapter[] {
@@ -298,6 +324,47 @@ export async function history(options: HistoryOptions & RunxSdkOptions = {}): Pr
 
 export async function search(options: SearchSkillsOptions & RunxSdkOptions): Promise<readonly SkillSearchResult[]> {
   return await createRunxSdk(options).searchSkills(options);
+}
+
+interface RunxInstallState {
+  readonly version: 1;
+  readonly installation_id: string;
+  readonly created_at: string;
+}
+
+async function ensureRunxInstallState(
+  globalHomeDir: string,
+  now: () => string = () => new Date().toISOString(),
+): Promise<{ readonly state: RunxInstallState; readonly created: boolean }> {
+  const existing = await readRunxInstallState(globalHomeDir);
+  if (existing) {
+    return {
+      state: existing,
+      created: false,
+    };
+  }
+  const state: RunxInstallState = {
+    version: 1,
+    installation_id: `inst_${randomUUID()}`,
+    created_at: now(),
+  };
+  await mkdir(globalHomeDir, { recursive: true });
+  await writeFile(path.join(globalHomeDir, "install.json"), `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
+  return {
+    state,
+    created: true,
+  };
+}
+
+async function readRunxInstallState(globalHomeDir: string): Promise<RunxInstallState | undefined> {
+  try {
+    return JSON.parse(await readFile(path.join(globalHomeDir, "install.json"), "utf8")) as RunxInstallState;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  }
 }
 
 export async function add(options: AddSkillOptions & RunxSdkOptions): Promise<InstallLocalSkillResult> {

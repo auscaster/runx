@@ -10,16 +10,22 @@ import {
   type SkillInstallOrigin,
 } from "../../parser/src/index.js";
 import { hashString } from "../../receipts/src/index.js";
-import { resolveRegistrySkill, type RegistryStore } from "../../registry/src/index.js";
+import {
+  acquireRegistrySkill,
+  resolveRegistrySkill,
+  resolveRemoteRegistryRef,
+  type RegistryStore,
+} from "../../registry/src/index.js";
 
 export interface InstallLocalSkillOptions {
   readonly ref: string;
-  readonly registryStore: RegistryStore;
+  readonly registryStore?: RegistryStore;
   readonly marketplaceAdapters?: readonly MarketplaceAdapter[];
   readonly destinationRoot: string;
   readonly version?: string;
   readonly expectedDigest?: string;
   readonly registryUrl?: string;
+  readonly installationId?: string;
 }
 
 export interface InstallLocalSkillResult {
@@ -133,6 +139,44 @@ async function fetchInstallCandidate(options: InstallLocalSkillOptions): Promise
     };
   }
 
+  if (isRemoteRegistryUrl(options.registryUrl)) {
+    if (!options.installationId) {
+      throw new Error("Remote registry installs require an installation id.");
+    }
+    const resolvedRef = await resolveRemoteRegistryRef(options.ref, {
+      baseUrl: options.registryUrl,
+      version: options.version,
+    });
+    if (!resolvedRef) {
+      throw new Error(`Registry skill not found: ${options.ref}`);
+    }
+    const acquired = await acquireRegistrySkill(resolvedRef.skill_id, {
+      baseUrl: options.registryUrl,
+      installationId: options.installationId,
+      version: resolvedRef.version,
+      channel: "cli",
+    });
+    return {
+      markdown: acquired.markdown,
+      xManifest: acquired.x_manifest,
+      origin: {
+        source: "runx-registry",
+        source_label: "runx registry",
+        ref: options.ref,
+        skill_id: acquired.skill_id,
+        version: acquired.version,
+        digest: acquired.digest,
+        x_digest: acquired.x_digest,
+        runner_names: acquired.runner_names,
+        trust_tier: "runx-derived",
+      },
+    };
+  }
+
+  if (!options.registryStore) {
+    throw new Error("A local registry store is required when no remote registry URL is configured.");
+  }
+
   const resolved = await resolveRegistrySkill(options.registryStore, options.ref, {
     version: options.version,
     registryUrl: options.registryUrl,
@@ -140,7 +184,6 @@ async function fetchInstallCandidate(options: InstallLocalSkillOptions): Promise
   if (!resolved) {
     throw new Error(`Registry skill not found: ${options.ref}`);
   }
-
   return {
     markdown: resolved.markdown,
     xManifest: resolved.x_manifest,
@@ -156,6 +199,10 @@ async function fetchInstallCandidate(options: InstallLocalSkillOptions): Promise
       trust_tier: "runx-derived",
     },
   };
+}
+
+function isRemoteRegistryUrl(value: string | undefined): value is string {
+  return typeof value === "string" && /^https?:\/\//i.test(value);
 }
 
 function buildInstallLock(result: InstallLocalSkillResult, origin: SkillInstallOrigin): Readonly<Record<string, unknown>> {

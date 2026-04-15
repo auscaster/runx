@@ -12,6 +12,7 @@ import { pathToFileURL } from "node:url";
 
 import { readJournalEntries } from "../../artifacts/src/index.js";
 import {
+  isRemoteRegistryUrl,
   loadLocalSkillPackage,
   loadRunxConfigFile,
   lookupRunxConfigValue,
@@ -23,6 +24,7 @@ import {
     resolveRunxOfficialSkillsDir,
     resolveRunxProjectDir,
     resolveRunxRegistryPath,
+    resolveRunxRegistryTarget,
     resolveRunxWorkspaceBase,
     resolveSkillInstallRoot,
     updateRunxConfigValue,
@@ -36,6 +38,7 @@ import {
   createFileRegistryStore,
   createLocalRegistryClient,
   publishSkillMarkdown,
+  searchRemoteRegistry,
   searchRegistry,
 } from "../../registry/src/index.js";
 import {
@@ -422,7 +425,7 @@ export async function runCli(
     }
 
     if ((parsed.command === "skill" || parsed.command === "search") && parsed.skillAction === "search" && parsed.searchQuery) {
-      const results = await runSkillSearch(parsed.searchQuery, parsed.sourceFilter, env);
+      const results = await runSkillSearch(parsed.searchQuery, parsed.sourceFilter, env, parsed.registryUrl);
       if (parsed.json) {
         io.stdout.write(
           `${JSON.stringify(
@@ -443,14 +446,21 @@ export async function runCli(
     }
 
     if ((parsed.command === "skill" || parsed.command === "add") && parsed.skillAction === "add" && parsed.skillRef) {
+      const registryTarget = resolveRunxRegistryTarget(env, { registry: parsed.registryUrl });
+      const installState = registryTarget.mode === "remote"
+        ? await ensureRunxInstallState(resolveRunxGlobalHomeDir(env))
+        : undefined;
       const result = await installLocalSkill({
         ref: parsed.skillRef,
-        registryStore: createFileRegistryStore(resolveRunxRegistryPath(env, { registry: parsed.registryUrl })),
+        registryStore: registryTarget.mode === "local"
+          ? createFileRegistryStore(registryTarget.registryPath)
+          : undefined,
         marketplaceAdapters: env.RUNX_ENABLE_FIXTURE_MARKETPLACE === "1" ? [createFixtureMarketplaceAdapter()] : [],
         destinationRoot: resolveSkillInstallRoot(env, parsed.installTo),
         version: parsed.installVersion,
         expectedDigest: parsed.expectedDigest,
-        registryUrl: parsed.registryUrl,
+        registryUrl: registryTarget.mode === "remote" ? registryTarget.registryUrl : parsed.registryUrl,
+        installationId: installState?.state.installation_id,
       });
       if (parsed.json) {
         io.stdout.write(`${JSON.stringify({ status: "success", install: result }, null, 2)}\n`);
@@ -461,6 +471,9 @@ export async function runCli(
     }
 
     if (parsed.command === "skill" && parsed.skillAction === "publish" && parsed.publishPath) {
+      if (isRemoteRegistryUrl(parsed.registryUrl)) {
+        throw new Error("Remote registry publish is not supported from the OSS CLI. Use a local registry store or the hosted admin surface.");
+      }
       const resolvedPublishPath = resolvePathFromUserInput(parsed.publishPath, env);
       const harness = await validatePublishHarness(resolvedPublishPath, {
         env,
@@ -849,7 +862,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   const installTo = isSkillAdd && typeof inputs.to === "string" ? inputs.to : undefined;
   const publishOwner = isSkillPublish && typeof inputs.owner === "string" ? inputs.owner : undefined;
   const publishVersion = isSkillPublish && typeof inputs.version === "string" ? inputs.version : undefined;
-  const registryUrl = (isSkillAdd || isSkillPublish) && typeof inputs.registry === "string" ? inputs.registry : undefined;
+  const registryUrl = (isSkillSearch || isSkillAdd || isSkillPublish) && typeof inputs.registry === "string" ? inputs.registry : undefined;
   const expectedDigest = isSkillAdd && typeof inputs.digest === "string" ? normalizeDigest(inputs.digest) : undefined;
   const connectScopes = isConnect ? normalizeScopes(inputs.scope) : [];
   const initAction = isInit && truthyFlag(inputs.global) ? "global" : isInit ? "project" : undefined;
@@ -857,7 +870,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     isInit
     && (inputs.prefetch === "official" || truthyFlag(inputs.prefetch) || truthyFlag(inputs.prefetchOfficial));
   const effectiveInputs = isSkillSearch
-    ? omitInput(inputs, "source")
+    ? omitInputs(inputs, ["source", "registry"])
     : isSkillAdd
       ? omitInputs(inputs, ["version", "to", "registry", "digest"])
       : isSkillPublish
@@ -1425,16 +1438,24 @@ async function runSkillSearch(
   query: string,
   sourceFilter: string | undefined,
   env: NodeJS.ProcessEnv,
+  registryOverride?: string,
 ): Promise<readonly SkillSearchResult[]> {
   const results: SkillSearchResult[] = [];
   const normalizedSource = sourceFilter?.trim().toLowerCase();
 
   if (!normalizedSource || normalizedSource === "registry" || normalizedSource === "runx-registry") {
-    results.push(
-        ...(await searchRegistry(createFileRegistryStore(resolveRunxRegistryPath(env)), query, {
-        registryUrl: env.RUNX_REGISTRY_URL,
-      })),
-    );
+    const registryTarget = resolveRunxRegistryTarget(env, { registry: registryOverride });
+    if (registryTarget.mode === "remote") {
+      results.push(...(await searchRemoteRegistry(query, {
+        baseUrl: registryTarget.registryUrl,
+      })));
+    } else {
+      results.push(
+          ...(await searchRegistry(createFileRegistryStore(registryTarget.registryPath), query, {
+          registryUrl: registryTarget.registryUrl,
+        })),
+      );
+    }
   }
 
   const marketplaceAdapters =

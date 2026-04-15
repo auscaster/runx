@@ -29,6 +29,17 @@ interface RegistryPathOptions extends PathResolutionOptions {
   readonly registryDir?: string;
 }
 
+export type RunxRegistryTarget =
+  | {
+      readonly mode: "remote";
+      readonly registryUrl: string;
+    }
+  | {
+      readonly mode: "local";
+      readonly registryPath: string;
+      readonly registryUrl?: string;
+    };
+
 export function findRunxWorkspaceRoot(start: string): string | undefined {
   let current = start;
   while (true) {
@@ -115,21 +126,56 @@ export function resolveSkillInstallRoot(env: NodeJS.ProcessEnv, to?: string, opt
 }
 
 export function resolveRunxRegistryPath(env: NodeJS.ProcessEnv, options: RegistryPathOptions = {}): string {
+  const target = resolveRunxRegistryTarget(env, options);
+  return target.mode === "local"
+    ? target.registryPath
+    : path.join(resolveRunxGlobalHomeDir(env, options), "registry");
+}
+
+export function resolveRunxRegistryTarget(env: NodeJS.ProcessEnv, options: RegistryPathOptions = {}): RunxRegistryTarget {
   const { registry, registryDir } = options;
-  if (registry && isRemoteRegistryUrl(registry) && !env.RUNX_REGISTRY_DIR && !registryDir) {
-    throw new Error("Remote registry transport is not implemented in CE; set RUNX_REGISTRY_DIR for local-backed registry tests.");
-  }
-  if (registry && !isRemoteRegistryUrl(registry)) {
-    return registry.startsWith("file://")
-      ? fileURLToPath(registry)
-      : resolvePathFromUserInput(registry, env, options);
+  const configuredRegistry = registry ?? env.RUNX_REGISTRY_URL;
+  if (typeof registry === "string") {
+    if (isRemoteRegistryUrl(registry)) {
+      return {
+        mode: "remote",
+        registryUrl: registry,
+      };
+    }
+    const localRegistry = registry as string;
+    return {
+      mode: "local",
+      registryPath: localRegistry.startsWith("file://")
+        ? fileURLToPath(localRegistry)
+        : resolvePathFromUserInput(localRegistry, env, options),
+      registryUrl: isRemoteRegistryUrl(env.RUNX_REGISTRY_URL) ? env.RUNX_REGISTRY_URL : undefined,
+    };
   }
   if (registryDir) {
-    return resolvePathFromUserInput(registryDir, env, options);
+    return {
+      mode: "local",
+      registryPath: resolvePathFromUserInput(registryDir, env, options),
+      registryUrl: isRemoteRegistryUrl(configuredRegistry) ? configuredRegistry : undefined,
+    };
   }
-  return env.RUNX_REGISTRY_DIR
-    ? resolvePathFromUserInput(env.RUNX_REGISTRY_DIR, env, options)
-    : path.join(resolveRunxGlobalHomeDir(env, options), "registry");
+  if (env.RUNX_REGISTRY_DIR) {
+    return {
+      mode: "local",
+      registryPath: resolvePathFromUserInput(env.RUNX_REGISTRY_DIR, env, options),
+      registryUrl: isRemoteRegistryUrl(configuredRegistry) ? configuredRegistry : undefined,
+    };
+  }
+  if (isRemoteRegistryUrl(configuredRegistry)) {
+    return {
+      mode: "remote",
+      registryUrl: configuredRegistry,
+    };
+  }
+  return {
+    mode: "local",
+    registryPath: path.join(resolveRunxGlobalHomeDir(env, options), "registry"),
+    registryUrl: configuredRegistry && !isRemoteRegistryUrl(configuredRegistry) ? configuredRegistry : undefined,
+  };
 }
 
 export function resolveRunxOfficialSkillsDir(env: NodeJS.ProcessEnv, options: PathResolutionOptions = {}): string {
@@ -260,8 +306,8 @@ export async function loadLocalAgentApiKey(configDir: string, ref: string): Prom
   }
 }
 
-function isRemoteRegistryUrl(value: string): boolean {
-  return /^https?:\/\//.test(value);
+export function isRemoteRegistryUrl(value: string | undefined): value is string {
+  return typeof value === "string" && /^https?:\/\//.test(value);
 }
 
 async function readOptionalFile(filePath: string): Promise<string | undefined> {

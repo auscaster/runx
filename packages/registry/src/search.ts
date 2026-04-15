@@ -23,17 +23,14 @@ export async function searchRegistry(
 
   return matches.map((version) => {
     const link = runxLinkForVersion(version, options.registryUrl);
-    return {
+    return normalizeRegistrySearchResult({
       skill_id: version.skill_id,
       name: version.name,
       summary: version.description,
       owner: version.owner,
       version: version.version,
       digest: version.digest,
-      source: "runx-registry",
-      source_label: "runx registry",
       source_type: version.source_type,
-      trust_tier: "runx-derived",
       required_scopes: version.required_scopes,
       tags: version.tags,
       runner_mode: version.x_manifest ? "x-manifest" : "standard-only",
@@ -43,8 +40,19 @@ export async function searchRegistry(
       trust_signals: deriveTrustSignals(version),
       add_command: link.install_command,
       run_command: link.run_command,
-    } satisfies RegistrySearchResult;
+    });
   });
+}
+
+export function normalizeRegistrySearchResult(
+  input: Omit<RegistrySearchResult, "source" | "source_label" | "trust_tier">,
+): RegistrySearchResult {
+  return {
+    ...input,
+    source: "runx-registry",
+    source_label: "runx registry",
+    trust_tier: "runx-derived",
+  };
 }
 
 function searchableText(version: RegistrySkillVersion): string {
