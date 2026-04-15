@@ -28,6 +28,7 @@ describe("merge-metadata", () => {
           runner: {
             provider: "openai",
             model: "gpt-test",
+            prompt_version: "prompt-v1",
           },
         },
       }),
@@ -57,6 +58,7 @@ describe("merge-metadata", () => {
           attestation: "agent-reported",
           provider: "openai",
           model: "gpt-test",
+          prompt_version: "prompt-v1",
         },
       });
     } finally {
@@ -82,6 +84,7 @@ describe("merge-metadata", () => {
             attestation: "provider-reported",
             provider: "openai",
             model: "gpt-test",
+            prompt_version: "prompt-v1",
           },
         },
       }),
@@ -111,6 +114,7 @@ describe("merge-metadata", () => {
           attestation: "provider-reported",
           provider: "openai",
           model: "gpt-test",
+          prompt_version: "prompt-v1",
         },
       });
     } finally {

@@ -64,6 +64,7 @@ export interface RunnerReceiptMetadata {
     readonly attestation?: string;
     readonly provider?: string;
     readonly model?: string;
+    readonly prompt_version?: string;
     readonly base_url?: string;
   };
 }

@@ -55,6 +55,7 @@ import { ensureOfficialSkillCached, type OfficialSkillLockEntry } from "../../ru
 import type { ApprovalGate, Question, ResolutionRequest, ResolutionResponse } from "../../executor/src/index.js";
 import { createHttpConnectService } from "./connect-http.js";
 import { ensureRunxInstallState, ensureRunxProjectState } from "./runx-state.js";
+import { streamTrainableReceipts } from "./trainable-receipts.js";
 
 export interface CliIo {
   readonly stdout: NodeJS.WriteStream;
@@ -288,6 +289,7 @@ interface CallerInputFile {
 export interface ParsedArgs {
   readonly command?: string;
   readonly subcommand?: string;
+  readonly exportAction?: "trainable";
   readonly skillAction?: "search" | "add" | "publish" | "inspect";
   readonly memoryAction?: "show";
   readonly searchQuery?: string;
@@ -322,6 +324,10 @@ export interface ParsedArgs {
   readonly configValue?: string;
   readonly initAction?: "project" | "global";
   readonly prefetchOfficial: boolean;
+  readonly exportSince?: string;
+  readonly exportUntil?: string;
+  readonly exportStatus?: string;
+  readonly exportSource?: string;
 }
 
 const builtinRootCommands = new Set([
@@ -337,6 +343,7 @@ const builtinRootCommands = new Set([
   "connect",
   "config",
   "init",
+  "export-receipts",
 ]);
 
 export async function runCli(
@@ -524,6 +531,23 @@ export async function runCli(
         io.stdout.write(`${JSON.stringify({ status: "success", query: parsed.historyQuery, ...history }, null, 2)}\n`);
       } else {
         io.stdout.write(renderHistory(history.receipts, env, parsed.historyQuery));
+      }
+      return 0;
+    }
+
+    if (parsed.command === "export-receipts" && parsed.exportAction === "trainable") {
+      const receiptDir = parsed.receiptDir
+        ? resolvePathFromUserInput(parsed.receiptDir, env)
+        : path.resolve(env.RUNX_RECEIPT_DIR ?? env.INIT_CWD ?? process.cwd(), ".runx", "receipts");
+      for await (const record of streamTrainableReceipts({
+        receiptDir,
+        runxHome: env.RUNX_HOME,
+        since: parsed.exportSince,
+        until: parsed.exportUntil,
+        status: parsed.exportStatus,
+        source: parsed.exportSource,
+      })) {
+        io.stdout.write(`${JSON.stringify(record)}\n`);
       }
       return 0;
     }
@@ -751,6 +775,7 @@ function writeUsage(stream: NodeJS.WritableStream, env: NodeJS.ProcessEnv = proc
       "  runx add <ref> [--version version] [--to skills-dir] [--registry url] [--digest sha256] [--json]",
       "  runx inspect <receipt-id> [--receipt-dir dir] [--json]",
       "  runx history [query] [--receipt-dir dir] [--json]",
+      "  runx export-receipts --trainable [--receipt-dir dir] [--since iso] [--until iso] [--status pending|complete|expired] [--source source-type]",
       "  runx memory show --project . [--json]",
       "  runx connect list|revoke <grant-id>|<provider> [--scope scope] [--json]",
       "  runx config set|get|list [agent.provider|agent.model|agent.api_key] [value] [--json]",
@@ -852,6 +877,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   const isConfig = command === "config";
   const isInit = command === "init";
   const isResume = command === "resume";
+  const isExportReceipts = command === "export-receipts";
   const isTopLevelSkillInvoke = Boolean(command) && !builtinRootCommands.has(command);
   const searchPositionals = positionals.slice(adminOffset);
   const addPositionals = positionals.slice(adminOffset);
@@ -881,11 +907,14 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
             ? {}
             : isInit
               ? omitInputs(inputs, ["global", "prefetch", "prefetchOfficial"])
-            : inputs;
+              : isExportReceipts
+                ? omitInputs(inputs, ["trainable", "since", "until", "status", "source"])
+              : inputs;
 
   return {
     command,
     subcommand: positionals[0],
+    exportAction: isExportReceipts && truthyFlag(inputs.trainable) ? "trainable" : undefined,
     skillAction: isSkillSearch ? "search" : isSkillAdd ? "add" : isSkillPublish ? "publish" : isSkillInspect ? "inspect" : undefined,
     memoryAction: isMemoryShow ? "show" : undefined,
     searchQuery: isSkillSearch ? searchPositionals.join(" ") || undefined : undefined,
@@ -925,6 +954,10 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     configValue: isConfig ? positionals.slice(2).join(" ") || undefined : undefined,
     initAction,
     prefetchOfficial,
+    exportSince: isExportReceipts && typeof inputs.since === "string" ? inputs.since : undefined,
+    exportUntil: isExportReceipts && typeof inputs.until === "string" ? inputs.until : undefined,
+    exportStatus: isExportReceipts && typeof inputs.status === "string" ? inputs.status : undefined,
+    exportSource: isExportReceipts && typeof inputs.source === "string" ? inputs.source : undefined,
   };
 }
 
@@ -978,6 +1011,9 @@ function isSupportedCommand(parsed: ParsedArgs): boolean {
     return true;
   }
   if (parsed.command === "init" && parsed.initAction) {
+    return true;
+  }
+  if (parsed.command === "export-receipts" && parsed.exportAction === "trainable") {
     return true;
   }
   return false;
