@@ -1,0 +1,239 @@
+spec_version: "1.1"
+task_id: "icey-cli-upstream-registry-binding"
+created: "2026-04-16T01:35:44Z"
+updated: "2026-04-16T01:35:44Z"
+status: "completed"
+
+task:
+  title: "Bind merged icey-cli SKILL.md into runx registry"
+  summary: >
+    nilstate/icey-cli accepted the upstream portable SKILL.md. Add the runx-owned
+    registry binding layer that pins the upstream source, supplies x.yaml runner
+    metadata and harness cases, and materializes a reproducible registry package
+    without treating a copied SKILL.md as source of truth.
+  size: "medium"
+  risk_level: "medium"
+  context:
+    packages:
+      - "packages/registry"
+      - "packages/harness"
+      - "bindings"
+      - "scripts"
+    files_impacted:
+      - path: "bindings/nilstate/icey-server-operator/registry-binding.json"
+        lines: "all"
+        reason: "Pinned upstream source, trust tier, harness state, and publication metadata"
+      - path: "bindings/nilstate/icey-server-operator/x.yaml"
+        lines: "all"
+        reason: "runx-owned runner metadata and harness cases for the upstream skill"
+      - path: "scripts/materialize-upstream-skill-binding.mjs"
+        lines: "all"
+        reason: "Materialize upstream SKILL.md plus local x.yaml into a registry package"
+      - path: "packages/registry/src/ingest.ts"
+        lines: "all"
+        reason: "Carry runner tags from x.yaml into registry rows"
+      - path: "tests/upstream-registry-binding.test.ts"
+        lines: "all"
+        reason: "Binding, harness, and materialization coverage"
+    invariants:
+      - "Upstream SKILL.md remains source of truth"
+      - "runx execution metadata stays outside upstream repos"
+      - "Registry artifacts are reproducible from pinned commit/blob"
+    related_docs:
+      - "bindings/README.md"
+      - "../docs/skill-learning-contribution-spec.md"
+  objectives:
+    - "Represent nilstate/icey-cli as an upstream-owned registry binding"
+    - "Add harnessed x.yaml metadata without modifying upstream"
+    - "Materialize and locally publish the binding from the pinned upstream blob"
+    - "Propagate x.yaml tags to registry search metadata"
+  scope:
+    in_scope:
+      - "runx/oss binding files, materializer script, registry metadata extraction, and tests"
+    out_of_scope:
+      - "Hosted registry remote publish without RUNX_HOSTED_REGISTRY_PUBLISH_TOKEN"
+      - "Changing nilstate/icey-cli after merge"
+      - "Implementing generic runx add github:owner/repo resolution"
+  dependencies:
+    - "nilstate/icey-cli PR #2 merged at ee9aa1cc05055c2490537e762c81c9f28451f578"
+  assumptions:
+    - "The upstream SKILL.md blob sha a1e1de7b5ea8b32c164d61fecc3c7ae4401b4c97 is immutable for the pinned commit"
+    - "Registry publish stores a pinned copy as an immutable artifact while preserving upstream provenance"
+  touchpoints:
+    - area: "bindings"
+      description: "New upstream-owned binding contract and x.yaml harness"
+    - area: "registry ingest"
+      description: "Runner-level runx.tags become registry search tags"
+    - area: "materialization"
+      description: "Script fetches or reads the upstream SKILL.md, verifies blob sha, writes a package, and optionally publishes locally"
+  risks:
+    - description: "A registry package could be mistaken as the source SKILL.md"
+      impact: "medium"
+      mitigation: "Binding JSON marks upstream.source_of_truth=true and materialized_package_is_registry_artifact=true"
+    - description: "Hosted publish cannot complete without registry publish token"
+      impact: "medium"
+      mitigation: "Local publish dogfood is complete; remote publication remains explicit pending state"
+  acceptance:
+    validation_profile: "standard"
+    definition_of_done:
+      - id: "dod1"
+        description: "Binding pins upstream repo/path/commit/blob and PR proof"
+        status: "done"
+        checked_at: "2026-04-16T01:35:44Z"
+      - id: "dod2"
+        description: "x.yaml declares a default runner and two passing harness cases"
+        status: "done"
+        checked_at: "2026-04-16T01:35:44Z"
+      - id: "dod3"
+        description: "Materializer verifies blob sha and writes SKILL.md, x.yaml, binding, and materialization report"
+        status: "done"
+        checked_at: "2026-04-16T01:35:44Z"
+      - id: "dod4"
+        description: "Local registry publish succeeds from the materialized package"
+        status: "done"
+        checked_at: "2026-04-16T01:35:44Z"
+    validation:
+      - id: "v1"
+        type: "test"
+        description: "Binding and registry tests pass"
+        command: "pnpm exec vitest run tests/upstream-registry-binding.test.ts packages/registry/src/index.test.ts"
+        expected: "2 files, 6 tests pass"
+      - id: "v2"
+        type: "integration"
+        description: "Materialize and publish binding to a temporary local registry"
+        command: "tmp=$(mktemp -d) && node scripts/materialize-upstream-skill-binding.mjs bindings/nilstate/icey-server-operator/registry-binding.json --output-dir dist/upstream-bindings/nilstate/icey-server-operator --registry-dir \"$tmp/registry\""
+        expected: "publish.status is published and harness.status is passed"
+      - id: "v3"
+        type: "boundary"
+        description: "No upstream SKILL.md copy is committed under bindings"
+        command: "! rg -n \"# icey-server Operator Workflow\" bindings"
+        expected: "No match under tracked binding files"
+  notes: >
+    The binding is ready for hosted publication once a registry publish token is
+    available. Until then, state is harness_verified with publication pending.
+
+planning_log:
+  - timestamp: "2026-04-16T01:18:46Z"
+    actor: "user"
+    summary: "nilstate/icey-cli PR #2 merged upstream."
+  - timestamp: "2026-04-16T01:29:28Z"
+    actor: "agent"
+    summary: "Automaton watcher produced accepted_upstream and registry_binding_request artifacts."
+  - timestamp: "2026-04-16T01:35:44Z"
+    actor: "agent"
+    summary: "Implemented runx upstream binding, harness, materializer, registry tag extraction, and tests."
+
+phases:
+  - id: "phase1"
+    name: "Declare upstream binding"
+    objective: "Pin the upstream icey-cli SKILL.md and add runx-owned x.yaml metadata."
+    changes:
+      - file: "bindings/nilstate/icey-server-operator/registry-binding.json"
+        action: "create"
+        lines: "all"
+        content_spec: "Upstream repo/path/commit/blob, trust tier, harness status, proof links, and publication pending state."
+      - file: "bindings/nilstate/icey-server-operator/x.yaml"
+        action: "create"
+        lines: "all"
+        content_spec: "Default operator-plan runner with two harness cases for web smoke and release pin preservation."
+      - file: "bindings/README.md"
+        action: "create"
+        lines: "all"
+        content_spec: "Explain upstream source-of-truth and generated registry artifact boundary."
+    acceptance_criteria:
+      - id: "ac1_1"
+        type: "test"
+        description: "Binding test validates source, runner, and harness shape"
+        command: "pnpm exec vitest run tests/upstream-registry-binding.test.ts"
+        expected: "3 tests pass"
+        result:
+          status: "pass"
+          timestamp: "2026-04-16T01:33:52Z"
+          output: "tests/upstream-registry-binding.test.ts passed"
+    status: "completed"
+
+  - id: "phase2"
+    name: "Materialize registry artifact"
+    objective: "Build a reproducible registry package from upstream SKILL.md and local x.yaml."
+    dependencies:
+      - "phase1"
+    changes:
+      - file: "scripts/materialize-upstream-skill-binding.mjs"
+        action: "create"
+        lines: "all"
+        content_spec: "Fetch or read upstream SKILL.md, verify git blob sha, write package files, and optionally publish locally."
+      - file: "schemas/registry-binding.schema.json"
+        action: "create"
+        lines: "all"
+        content_spec: "Machine-readable schema for runx upstream registry bindings."
+    acceptance_criteria:
+      - id: "ac2_1"
+        type: "integration"
+        description: "Materializer fetches pinned upstream skill and writes package"
+        command: "node scripts/materialize-upstream-skill-binding.mjs bindings/nilstate/icey-server-operator/registry-binding.json --output-dir dist/upstream-bindings/nilstate/icey-server-operator"
+        expected: "Materialized package reports upstream blob sha a1e1de7b5ea8b32c164d61fecc3c7ae4401b4c97"
+        result:
+          status: "pass"
+          timestamp: "2026-04-16T01:33:30Z"
+          output: "status materialized; skill_id nilstate/icey-server-operator"
+      - id: "ac2_2"
+        type: "integration"
+        description: "Materialized package publishes to local registry and harness passes"
+        command: "tmp=$(mktemp -d) && node scripts/materialize-upstream-skill-binding.mjs bindings/nilstate/icey-server-operator/registry-binding.json --output-dir dist/upstream-bindings/nilstate/icey-server-operator --registry-dir \"$tmp/registry\""
+        expected: "publish.status published; harness.status passed"
+        result:
+          status: "pass"
+          timestamp: "2026-04-16T01:35:03Z"
+          output: "published nilstate/icey-server-operator@upstream-ee9aa1c with 2 harness cases"
+    status: "completed"
+
+  - id: "phase3"
+    name: "Complete registry metadata"
+    objective: "Expose x.yaml tags in registry rows so upstream bindings are searchable without modifying upstream SKILL.md."
+    dependencies:
+      - "phase1"
+    changes:
+      - file: "packages/registry/src/ingest.ts"
+        action: "update"
+        lines: "all"
+        content_spec: "Merge runner runx.tags with portable SKILL.md runx tags when building registry records."
+      - file: "packages/registry/src/index.test.ts"
+        action: "update"
+        lines: "all"
+        content_spec: "Add coverage for runner-level tags flowing into registry versions."
+    acceptance_criteria:
+      - id: "ac3_1"
+        type: "test"
+        description: "Registry ingest extracts runner tags"
+        command: "pnpm exec vitest run packages/registry/src/index.test.ts"
+        expected: "registry package tests pass"
+        result:
+          status: "pass"
+          timestamp: "2026-04-16T01:35:00Z"
+          output: "packages/registry/src/index.test.ts passed"
+    status: "completed"
+
+rollback:
+  strategy: "per_phase"
+  commands:
+    phase1: "git checkout HEAD -- bindings/README.md bindings/nilstate/icey-server-operator/registry-binding.json bindings/nilstate/icey-server-operator/x.yaml"
+    phase2: "git checkout HEAD -- scripts/materialize-upstream-skill-binding.mjs schemas/registry-binding.schema.json"
+    phase3: "git checkout HEAD -- packages/registry/src/ingest.ts packages/registry/src/index.test.ts"
+
+self_eval:
+  completeness: 3
+  architecture_fidelity: 3
+  spec_alignment: 2
+  validation_depth: 2
+  total: 10
+  notes: "Binding source-of-truth boundary, harness verification, materialization, and local publish are covered."
+  second_pass_performed: true
+
+metadata:
+  estimated_effort_hours: 3
+  actual_effort_hours: 3
+  ai_model: "gpt-5"
+  tags:
+    - "registry-binding"
+    - "skill-contribution"
+    - "icey-cli"

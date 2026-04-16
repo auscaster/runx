@@ -87,6 +87,42 @@ describe("registry package", () => {
     }
   });
 
+  it("extracts registry tags from X runner metadata without requiring runx frontmatter", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-registry-x-tags-"));
+
+    try {
+      const store = createFileRegistryStore(tempDir);
+      const markdown = `---
+name: upstream-tagged
+description: Upstream portable skill.
+---
+
+Portable skill markdown without runx-specific frontmatter.
+`;
+      const xManifest = `skill: upstream-tagged
+runners:
+  default:
+    default: true
+    type: agent-step
+    agent: operator
+    task: upstream-tagged
+    runx:
+      tags:
+        - upstream-owned
+        - operator
+`;
+      const version = await ingestSkillMarkdown(store, markdown, {
+        owner: "nilstate",
+        version: "upstream-abc123",
+        xManifest,
+      });
+
+      expect(version.tags).toEqual(["upstream-owned", "operator"]);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("keeps standard-only registry skills compatible without X metadata", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-registry-standard-only-"));
 

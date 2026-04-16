@@ -77,7 +77,7 @@ export function buildRegistrySkillVersion(markdown: string, options: IngestSkill
     auth: skill.auth,
     risk: skill.risk ?? recordField(skill.runx, "risk"),
     runx: skill.runx,
-    tags: extractTags(skill),
+    tags: unique([...extractTags(skill), ...extractRunnerTags(xArtifact.manifest)]),
     publisher: {
       type: "placeholder",
       id: owner,
@@ -135,6 +135,13 @@ function extractRunnerRuntime(manifest: SkillRunnerManifest | undefined): unknow
     .filter((runner) => runner.runtime !== undefined)
     .map((runner) => runner.name);
   return runnersWithRuntime.length > 0 ? { runners: runnersWithRuntime } : undefined;
+}
+
+function extractRunnerTags(manifest: SkillRunnerManifest | undefined): readonly string[] {
+  if (!manifest) {
+    return [];
+  }
+  return unique(Object.values(manifest.runners).flatMap((runner) => recordArrayField(runner.raw.runx, "tags")));
 }
 
 function extractTags(skill: ValidatedSkill): readonly string[] {
