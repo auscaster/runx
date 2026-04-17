@@ -247,6 +247,32 @@ runners:
     expect(parsed.inputs).toEqual({});
   });
 
+  it("parses trainable export filters without leaking them into skill inputs", () => {
+    const parsed = parseArgs([
+      "export-receipts",
+      "--trainable",
+      "--receipt-dir",
+      "/tmp/runx-receipts",
+      "--since",
+      "2026-04-01T00:00:00Z",
+      "--until",
+      "2026-04-30T23:59:59Z",
+      "--status",
+      "complete",
+      "--source",
+      "cli-tool",
+    ]);
+
+    expect(parsed.command).toBe("export-receipts");
+    expect(parsed.exportAction).toBe("trainable");
+    expect(parsed.receiptDir).toBe("/tmp/runx-receipts");
+    expect(parsed.exportSince).toBe("2026-04-01T00:00:00Z");
+    expect(parsed.exportUntil).toBe("2026-04-30T23:59:59Z");
+    expect(parsed.exportStatus).toBe("complete");
+    expect(parsed.exportSource).toBe("cli-tool");
+    expect(parsed.inputs).toEqual({});
+  });
+
   it("returns a CLI error when an answers file cannot be read", async () => {
     const stdout = createMemoryStream();
     const stderr = createMemoryStream();
@@ -477,6 +503,7 @@ runners:
     expect(stdout.contents()).toContain("runx <skill> --project .");
     expect(stdout.contents()).toContain("runx evolve");
     expect(stdout.contents()).toContain("runx inspect <receipt-id>");
+    expect(stdout.contents()).toContain("runx export-receipts --trainable");
     expect(stdout.contents()).toContain("Manage Skills:");
     expect(stdout.contents()).toContain("runx skill publish");
   });

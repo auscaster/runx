@@ -100,6 +100,24 @@ runtime skill bodies for normal execution.
 
 Local receipts are append-only JSON files under `.runx/receipts` unless `RUNX_RECEIPT_DIR` is set. `runx inspect` and `runx history` verify receipt signatures and surface `verified`, `unverified`, or `invalid` status.
 
+## Trainable Exports
+
+The OSS CLI can project verified receipt lineage into newline-delimited training
+rows without mutating the original receipts:
+
+```bash
+runx export-receipts --trainable
+runx export-receipts --trainable --receipt-dir ./.runx/receipts --status complete --source cli-tool
+```
+
+Rows are emitted as JSONL and follow the public training contract published at:
+
+- `https://runx.ai/spec/training/trainable-receipt-row.schema.json`
+
+The export keeps receipt identity, verified outcome resolution, journal
+artifacts, and runner provenance together so downstream training and eval
+systems can consume governed lineage instead of raw prompt logs.
+
 ## Harness
 
 `runx harness` supports both existing standalone fixture YAML files and inline
