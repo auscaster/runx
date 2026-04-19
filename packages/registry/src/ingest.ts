@@ -8,13 +8,14 @@ import {
   type ValidatedSkill,
 } from "../../parser/src/index.js";
 
-import { buildSkillId, type RegistrySkillVersion, type RegistryStore } from "./store.js";
+import { buildSkillId, type RegistrySkillVersion, type RegistrySourceMetadata, type RegistryStore } from "./store.js";
 
 export interface IngestSkillOptions {
   readonly owner?: string;
   readonly version?: string;
   readonly createdAt?: string;
   readonly profileDocument?: string;
+  readonly sourceMetadata?: RegistrySourceMetadata;
   readonly upsert?: boolean;
 }
 
@@ -82,6 +83,7 @@ export function buildRegistrySkillVersion(markdown: string, options: IngestSkill
     profile_digest: bindingArtifact.digest,
     runner_names: bindingArtifact.runnerNames,
     source_type: skill.source.type,
+    source_metadata: options.sourceMetadata,
     required_scopes: unique([...extractScopes(skill), ...extractRunnerScopes(bindingArtifact.manifest)]),
     runtime: skill.runtime ?? recordField(skill.runx, "runtime") ?? extractRunnerRuntime(bindingArtifact.manifest),
     auth: skill.auth,

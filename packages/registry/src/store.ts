@@ -6,6 +6,23 @@ export interface RegistryPublisher {
   readonly id: string;
 }
 
+export interface RegistrySourceMetadata {
+  readonly provider: "github";
+  readonly repo: string;
+  readonly repo_url: string;
+  readonly skill_path: string;
+  readonly profile_path?: string;
+  readonly ref: string;
+  readonly sha: string;
+  readonly default_branch: string;
+  readonly event: "enrollment" | "push" | "tag" | "tombstone";
+  readonly immutable: boolean;
+  readonly live: boolean;
+  readonly tombstoned?: boolean;
+  readonly tag?: string;
+  readonly publisher_handle?: string;
+}
+
 export interface RegistrySkillVersion {
   readonly skill_id: string;
   readonly owner: string;
@@ -18,6 +35,7 @@ export interface RegistrySkillVersion {
   readonly profile_digest?: string;
   readonly runner_names: readonly string[];
   readonly source_type: string;
+  readonly source_metadata?: RegistrySourceMetadata;
   readonly required_scopes: readonly string[];
   readonly runtime?: unknown;
   readonly auth?: unknown;

@@ -13,6 +13,12 @@ export {
   type SearchRemoteRegistryOptions,
 } from "./http-client.js";
 export {
+  buildGitHubRegistrySkillVersion,
+  resolveGitHubSource,
+  type GitHubSourceSnapshot,
+  type ResolvedGitHubSource,
+} from "./github-source.js";
+export {
   buildRegistrySkillVersion,
   createRegistrySkillVersion,
   ingestSkillMarkdown,
@@ -37,6 +43,7 @@ export {
   slugify,
   splitSkillId,
   type RegistryPublisher,
+  type RegistrySourceMetadata,
   type RegistrySkill,
   type RegistrySkillVersion,
   type RegistryStore,
