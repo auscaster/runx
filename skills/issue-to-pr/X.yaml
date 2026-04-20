@@ -1,5 +1,5 @@
 skill: issue-to-pr
-version: "0.1.1"
+version: "0.1.2"
 
 harness:
   cases:
@@ -77,6 +77,126 @@ harness:
       # that point.
       expect:
         status: needs_resolution
+
+    - name: issue-to-pr-completes-chain
+      inputs:
+        task_id: issue-to-pr-full-chain
+        issue_title: Full-chain harness
+        issue_body: Canned answers for every agent-step hand-off so the chain reaches scafld-complete.
+        size: micro
+      caller:
+        answers:
+          agent_step.issue-to-pr-author-spec.output:
+            spec_draft:
+              path: .ai/specs/drafts/issue-to-pr-full-chain.yaml
+              task_id: issue-to-pr-full-chain
+            spec_contents: |
+              spec_version: "1.1"
+              task_id: "issue-to-pr-full-chain"
+              created: "2026-04-20T00:00:00Z"
+              updated: "2026-04-20T00:00:00Z"
+              status: "draft"
+              task:
+                title: "Full-chain harness stub"
+                summary: >
+                  Minimal stub spec emitted by the cycle-9 harness case.
+                size: "micro"
+                risk_level: "low"
+                context:
+                  packages: []
+                  invariants: []
+                  files_impacted: []
+                  cwd: "/tmp"
+                objectives:
+                  - "Stub objective"
+                touchpoints: []
+                acceptance:
+                  definition_of_done:
+                    - id: "dod1"
+                      description: "Stub"
+                      status: "pending"
+                  validation: []
+              planning_log:
+                - timestamp: "2026-04-20T00:00:00Z"
+                  actor: "agent"
+                  summary: "Stub from cycle-9 full-chain fixture."
+              phases:
+                - id: "phase1"
+                  name: "Stub"
+                  objective: "Stub"
+                  changes: []
+                  acceptance_criteria: []
+                  status: "pending"
+              rollback:
+                strategy: "per_phase"
+                commands:
+                  phase1: "true"
+          agent_step.issue-to-pr-apply-fix.output:
+            fix_bundle:
+              files: []
+              summary: Stub fix bundle with no file mutations.
+          agent_step.issue-to-pr-review.output:
+            review_decision:
+              review_file: .ai/reviews/issue-to-pr-full-chain.md
+              verdict: pass
+            review_contents: |
+              # Review: issue-to-pr-full-chain
+
+              ## Spec
+              Full-chain harness stub
+
+              ---
+
+              ## Review 1 — 2026-04-20T00:00:00Z
+
+              ### Metadata
+              ```json
+              {
+                "schema_version": 3,
+                "round_status": "completed",
+                "reviewer_mode": "executor",
+                "reviewer_session": "",
+                "reviewed_at": "2026-04-20T00:00:00Z",
+                "override_reason": null,
+                "pass_results": {
+                  "spec_compliance": "pass",
+                  "scope_drift": "pass",
+                  "regression_hunt": "pass",
+                  "convention_check": "pass",
+                  "dark_patterns": "pass"
+                }
+              }
+              ```
+
+              ### Pass Results
+              - spec_compliance: PASS
+              - scope_drift: PASS
+              - regression_hunt: PASS
+              - convention_check: PASS
+              - dark_patterns: PASS
+
+              ### Regression Hunt
+              Stub fixture; no code changes.
+
+              ### Convention Check
+              Stub fixture.
+
+              ### Dark Patterns
+              Stub fixture.
+
+              ### Blocking
+              None.
+
+              ### Non-blocking
+              None.
+
+              ### Verdict
+              pass
+      # With all three agent-step answers canned, the chain
+      # executes every step including scafld-complete and returns
+      # success. This fixture is the full-chain smoke test.
+      expect:
+        status: success
 
 runners:
   issue-to-pr:
