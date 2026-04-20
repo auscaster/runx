@@ -10,6 +10,12 @@ harness:
       expect:
         status: needs_resolution
 
+    - name: sourcey-needs-project-input
+      runner: sourcey
+      inputs: {}
+      expect:
+        status: needs_resolution
+
 runners:
   agent:
     type: agent

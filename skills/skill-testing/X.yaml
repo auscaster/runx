@@ -56,6 +56,11 @@ harness:
           kind: chain_execution
           status: success
 
+    - name: skill-testing-needs-required-inputs
+      inputs: {}
+      expect:
+        status: needs_resolution
+
 runners:
   skill-testing:
     default: true
