@@ -85,3 +85,13 @@ wall clock dependencies. They should run in seconds.
 - `research` (optional): output from `skill-recon`.
 - `review` (optional): output from `receipt-review` — write fixtures
   that specifically cover the diagnosed failure.
+
+## When review is pass
+
+If `review.verdict` is `pass` and `review.improvement_proposals` is
+empty, the upstream diagnosis found nothing to fix. Do not invent
+changes. Emit a minimal output: no `skill_spec` or `execution_plan`
+update, and a single happy-path regression fixture that locks in
+the current behaviour under the inputs that produced the pass
+verdict. Treat `acceptance_checks` as confirmation statements, not
+improvement assertions.

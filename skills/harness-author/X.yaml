@@ -84,6 +84,42 @@ harness:
             skill_name: harness-author
             source_type: agent-step
 
+    - name: harness-author-honors-pass-verdict
+      inputs:
+        objective: Confirm harness-author emits minimal regression output when review verdict is pass
+        review:
+          verdict: pass
+          failure_summary: No failure. Chain paused as designed; needs_resolution is a healthy agent-mediated suspension.
+          improvement_proposals: []
+      caller:
+        answers:
+          agent_step.harness-author.output:
+            skill_spec:
+              name: harness-author
+              note: No change. Upstream review.verdict was pass.
+            execution_plan:
+              runner: agent-step
+              note: No change.
+            harness_fixture:
+              - name: harness-author-pass-verdict-regression
+                kind: skill
+                target: ../harness-author
+                inputs:
+                  objective: regression fixture locked in by cycle 3
+                expect:
+                  status: success
+            acceptance_checks:
+              - harness-author returns minimal output on pass-verdict input
+              - harness-author does not fabricate skill_spec changes on empty improvement_proposals
+      expect:
+        status: success
+        receipt:
+          kind: skill_execution
+          status: success
+          subject:
+            skill_name: harness-author
+            source_type: agent-step
+
 runners:
   harness-author-agent:
     default: true
