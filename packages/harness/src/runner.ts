@@ -22,6 +22,7 @@ import {
   type RunLocalChainResult,
   type RunLocalSkillResult,
 } from "../../runner-local/src/index.js";
+import type { RegistryStore } from "../../registry/src/index.js";
 import type { ResolutionRequest, ResolutionResponse } from "../../executor/src/index.js";
 
 type HarnessKind = "skill" | "chain";
@@ -40,6 +41,8 @@ export interface HarnessFixture {
 export interface HarnessRunOptions {
   readonly env?: NodeJS.ProcessEnv;
   readonly keepFiles?: boolean;
+  readonly registryStore?: RegistryStore;
+  readonly skillCacheDir?: string;
 }
 
 export interface CallerTrace {
@@ -197,6 +200,11 @@ async function executeHarnessFixture(args: {
     ...args.fixture.env,
     RUNX_RECEIPT_DIR: receiptDir,
     RUNX_HOME: runxHome,
+    // Sandbox cli-tool skills to the harness tempdir so tools like
+    // scafld that persist state to cwd do not leak files into the
+    // runx repo when harness cases run against cli-tool skills.
+    RUNX_CWD: tempDir,
+    INIT_CWD: tempDir,
   };
 
   try {
@@ -210,6 +218,8 @@ async function executeHarnessFixture(args: {
             env,
             receiptDir,
             runxHome,
+            registryStore: args.options.registryStore,
+            skillCacheDir: args.options.skillCacheDir,
           })
         : await runLocalChain({
             chainPath: args.targetPath,

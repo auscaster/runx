@@ -9,14 +9,13 @@ harness:
         issue_title: Fixture smoke test
         issue_body: Minimal smoke test body for the harness.
         size: micro
-      # Shallow smoke baseline. The chain halts somewhere between
-      # scafld-new and author-spec; observed outer status is
-      # `failure` inside the runx-harness sandbox even though the
-      # same scafld new invocation succeeds from a plain shell.
-      # Investigation logged as a follow-up; fixture locks in
-      # observed behaviour so the harness is green.
+      # Shallow smoke baseline. Harness now sandboxes cli-tool cwd
+      # to the tempdir (runner.ts RUNX_CWD/INIT_CWD), so scafld-init
+      # and scafld-new land inside the sandbox. The chain reaches
+      # author-spec and yields `needs_resolution` because this
+      # fixture does not supply caller.answers.
       expect:
-        status: failure
+        status: needs_resolution
 
     - name: issue-to-pr-reaches-author-spec
       inputs:
@@ -72,14 +71,12 @@ harness:
                 strategy: "per_phase"
                 commands:
                   phase1: "true"
-      # The stub spec lets the chain progress past author-spec. Later
-      # steps (write-spec, scafld-validate, author-fix, etc.) will
-      # exercise more of the chain and may halt at their own
-      # cognitive-work hand-offs; we accept the resulting status
-      # (currently `failure` because author-fix has no canned
-      # answer) and lock that in.
+      # The stub spec lets the chain progress past author-spec.
+      # author-fix (the next agent-step hand-off) has no canned
+      # answer here, so the chain yields `needs_resolution` at
+      # that point.
       expect:
-        status: failure
+        status: needs_resolution
 
 runners:
   issue-to-pr:

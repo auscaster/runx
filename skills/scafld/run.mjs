@@ -4,7 +4,15 @@ import path from "node:path";
 
 const inputs = JSON.parse(process.env.RUNX_INPUTS_JSON || "{}");
 const scafld = String(inputs.scafld_bin || process.env.SCAFLD_BIN || "scafld");
-const cwd = path.resolve(String(inputs.fixture || inputs.cwd || process.cwd()));
+// Prefer explicit fixture/cwd inputs; otherwise honor RUNX_CWD so
+// harness-sandboxed and runx-agent-driven runs keep scafld state
+// inside the sandbox rather than leaking to the skill's own directory.
+const cwd = path.resolve(String(
+  inputs.fixture
+    || inputs.cwd
+    || process.env.RUNX_CWD
+    || process.cwd()
+));
 const taskId = String(inputs.task_id || inputs.taskId || "");
 const requested = String(inputs.command || inputs.mode || "");
 const command = ({ spec: "new", execute: "exec" })[requested] || requested;
