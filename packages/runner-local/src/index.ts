@@ -816,14 +816,32 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
 
   const inputResolution = await resolveInputs(skill, options);
   if (inputResolution.status === "needs_resolution") {
-    return {
+    const pendingResult = {
       status: "needs_resolution",
       skill,
       skillPath: resolvedSkill.skillPath,
       inputs: options.inputs ?? {},
       runId,
       requests: [inputResolution.request],
-    };
+    } satisfies Extract<RunLocalSkillResult, { readonly status: "needs_resolution" }>;
+    await appendPendingSkillJournalEntries({
+      receiptDir: options.receiptDir ?? defaultReceiptDir(options.env),
+      runId: pendingResult.runId,
+      skill,
+      startedAt: new Date().toISOString(),
+      kind: "resolution_requested",
+      detail: {
+        skill_path: resolvedSkill.requestedPath,
+        selected_runner: runnerSelection.selectedRunnerName,
+        request_ids: [inputResolution.request.id],
+        resolution_kinds: [inputResolution.request.kind],
+        step_ids: [],
+        step_labels: [],
+        inputs: pendingResult.inputs,
+      },
+      includeRunStarted: !options.resumeFromRunId,
+    });
+    return pendingResult;
   }
 
   await options.caller.report({
