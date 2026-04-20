@@ -15,6 +15,13 @@ harness:
       expect:
         status: needs_resolution
 
+    - name: scafld-agent-needs-required-inputs
+      runner: agent
+      inputs: {}
+      expect:
+        status: needs_resolution
+
+
 runners:
   agent:
     type: agent

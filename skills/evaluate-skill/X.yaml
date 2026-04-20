@@ -43,6 +43,12 @@ harness:
             skill_name: evaluate-skill
             source_type: agent-step
 
+    - name: evaluate-skill-needs-skill-ref
+      inputs: {}
+      expect:
+        status: needs_resolution
+
+
 runners:
   agent:
     type: agent

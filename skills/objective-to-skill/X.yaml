@@ -81,6 +81,12 @@ harness:
           kind: chain_execution
           status: success
 
+    - name: objective-to-skill-needs-objective
+      inputs: {}
+      expect:
+        status: needs_resolution
+
+
 runners:
   objective-to-skill:
     default: true

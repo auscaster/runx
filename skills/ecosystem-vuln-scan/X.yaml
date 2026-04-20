@@ -47,6 +47,12 @@ harness:
           kind: chain_execution
           status: success
 
+    - name: ecosystem-vuln-scan-needs-target
+      inputs: {}
+      expect:
+        status: needs_resolution
+
+
 runners:
   ecosystem-vuln-scan:
     default: true

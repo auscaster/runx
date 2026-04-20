@@ -55,6 +55,13 @@ harness:
           kind: chain_execution
           status: success
 
+    - name: market-intelligence-minimal-inputs
+      inputs:
+        objective: Minimal smoke-case for market-intelligence regression
+      expect:
+        status: needs_resolution
+
+
 runners:
   market-intelligence:
     default: true

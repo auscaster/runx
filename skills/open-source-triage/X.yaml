@@ -62,6 +62,12 @@ harness:
           kind: chain_execution
           status: success
 
+    - name: open-source-triage-minimal-inputs
+      inputs: {}
+      expect:
+        status: needs_resolution
+
+
 runners:
   open-source-triage:
     default: true

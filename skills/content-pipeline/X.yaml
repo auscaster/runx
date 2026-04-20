@@ -54,6 +54,12 @@ harness:
           kind: chain_execution
           status: success
 
+    - name: content-pipeline-needs-objective
+      inputs: {}
+      expect:
+        status: needs_resolution
+
+
 runners:
   content-pipeline:
     default: true

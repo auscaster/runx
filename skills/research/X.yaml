@@ -41,6 +41,12 @@ harness:
             skill_name: research
             source_type: agent-step
 
+    - name: research-needs-objective
+      inputs: {}
+      expect:
+        status: needs_resolution
+
+
 runners:
   agent:
     type: agent

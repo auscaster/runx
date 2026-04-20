@@ -47,6 +47,12 @@ harness:
           kind: chain_execution
           status: success
 
+    - name: moltbook-presence-minimal-inputs
+      inputs: {}
+      expect:
+        status: needs_resolution
+
+
 runners:
   moltbook-presence:
     default: true
