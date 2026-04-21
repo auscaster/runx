@@ -57,7 +57,9 @@ describe("issue-to-PR composite skill", () => {
       "write-review",
       "scafld-complete",
       "scafld-summary",
+      "scafld-checks",
       "scafld-pr-body",
+      "package-pull-request",
     ]);
     expect(chain.steps.find((step) => step.id === "write-spec")).toMatchObject({
       tool: "fs.write",
@@ -216,10 +218,24 @@ describe("issue-to-PR composite skill", () => {
         command: "summary",
       },
     });
+    expect(chain.steps.find((step) => step.id === "scafld-checks")).toMatchObject({
+      tool: "scafld.capture_checks",
+    });
     expect(chain.steps.find((step) => step.id === "scafld-pr-body")).toMatchObject({
       skill: "../scafld",
       inputs: {
         command: "pr-body",
+      },
+    });
+    expect(chain.steps.find((step) => step.id === "package-pull-request")).toMatchObject({
+      tool: "outbox.build_pull_request",
+      context: {
+        summary_projection: "scafld-summary.result",
+        checks_projection: "scafld-checks.result",
+        pr_body_projection: "scafld-pr-body.result",
+        completion_result: "scafld-complete.result",
+        completion_state: "scafld-complete.state",
+        status_snapshot: "scafld-status.result",
       },
     });
     expect(chain.policy?.transitions).toEqual([
@@ -281,13 +297,41 @@ describe("issue-to-PR composite skill", () => {
       }
       expect(result.receipt.subject.chain_name).toBe("issue-to-pr");
       expect(JSON.parse(result.execution.stdout)).toMatchObject({
-        command: "pr-body",
-        task_id: taskId,
-        state: {
-          status: "completed",
+        outbox_entry: {
+          kind: "pull_request",
+          status: "proposed",
+          entry_id: `pull_request:${taskId}`,
+          metadata: {
+            action: "create",
+            repo: "fixtures/repo",
+            branch: taskId,
+            base: "main",
+            review_verdict: "pass",
+            check_status: "failure",
+            push_ready: false,
+          },
         },
-        result: {
-          markdown: expect.stringContaining("# Fixture subject-driven change"),
+        draft_pull_request: {
+          schema_version: "runx.pull-request-draft.v1",
+          action: "create",
+          push_ready: false,
+          task_id: taskId,
+          target: {
+            repo: "fixtures/repo",
+            branch: taskId,
+            base: "main",
+          },
+          pull_request: {
+            title: "Fixture subject-driven change",
+            body_markdown: expect.stringContaining("# Fixture subject-driven change"),
+            is_draft: true,
+          },
+          governance: {
+            review_verdict: "pass",
+            blocking_count: 0,
+            non_blocking_count: 0,
+            sync_status: "drift",
+          },
         },
       });
       expect(result.receipt.steps.map((step) => [step.step_id, step.status])).toEqual([
@@ -313,13 +357,119 @@ describe("issue-to-PR composite skill", () => {
         ["write-review", "success"],
         ["scafld-complete", "success"],
         ["scafld-summary", "success"],
+        ["scafld-checks", "success"],
         ["scafld-pr-body", "success"],
+        ["package-pull-request", "success"],
       ]);
       expect(existsSync(path.join(tempDir, ".ai", "specs", "active", `${taskId}.yaml`))).toBe(false);
       expect(existsSync(path.join(tempDir, ".ai", "specs", "archive", "2026-04", `${taskId}.yaml`))).toBe(true);
       expect(runChecked("git", ["branch", "--show-current"], tempDir)).toBe(taskId);
       expect(await readFile(path.join(tempDir, "app.txt"), "utf8")).toBe("fixed\n");
       expect(await readFile(path.join(tempDir, "notes.md"), "utf8")).toBe("governed\n");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+      await rm(runtime.root, { recursive: true, force: true });
+    }
+  }, 90_000);
+
+  it.skipIf(!existsSync(scafldBin))("refreshes an existing pull_request outbox entry from subject_memory through the full issue-to-pr lane", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-issue-to-pr-refresh-"));
+    const runtime = await createExternalRuntimePaths("runx-issue-to-pr-runtime-");
+    const taskId = "issue-to-pr-refresh-fixture";
+    const caller: Caller = {
+      resolve: async (request) =>
+        request.kind === "cognitive_work"
+          ? {
+              actor: "agent",
+              payload: await answerForIssueToPrStep(tempDir, taskId, request),
+            }
+          : undefined,
+      report: () => undefined,
+    };
+
+    try {
+      await initScafldRepo(tempDir);
+      runChecked("git", ["checkout", "-b", taskId], tempDir);
+
+      const result = await runLocalSkill({
+        skillPath: path.resolve("skills/issue-to-pr"),
+        inputs: {
+          fixture: tempDir,
+          task_id: taskId,
+          subject_title: "Fixture subject-driven change",
+          subject_body: "Apply a bounded fixture docs update.",
+          subject_locator: "github://example/repo/issues/123",
+          target_repo: "fixtures/repo",
+          size: "micro",
+          risk: "low",
+          phase: "phase1",
+          draft_spec_path: `.ai/specs/drafts/${taskId}.yaml`,
+          scafld_bin: scafldBin,
+          subject_memory: {
+            kind: "runx.subject-memory.v1",
+            adapter: {
+              type: "github",
+            },
+            subject: {
+              subject_kind: "work_item",
+              subject_locator: "github://example/repo/issues/123",
+              canonical_uri: "https://github.com/example/repo/issues/123",
+            },
+            entries: [],
+            decisions: [],
+            subject_outbox: [
+              {
+                entry_id: "pr-77",
+                kind: "pull_request",
+                locator: "https://github.com/example/repo/pull/77",
+                status: "draft",
+                subject_locator: "github://example/repo/issues/123",
+              },
+            ],
+            source_refs: [],
+          },
+        },
+        caller,
+        env: process.env,
+        receiptDir: runtime.receiptDir,
+        runxHome: runtime.runxHome,
+      });
+
+      expect(result.status).toBe("success");
+      if (result.status !== "success") {
+        return;
+      }
+
+      expect(JSON.parse(result.execution.stdout)).toMatchObject({
+        outbox_entry: {
+          entry_id: "pr-77",
+          kind: "pull_request",
+          locator: "https://github.com/example/repo/pull/77",
+          status: "draft",
+          subject_locator: "github://example/repo/issues/123",
+          metadata: {
+            action: "refresh",
+            repo: "fixtures/repo",
+            branch: taskId,
+            base: "main",
+            check_status: "failure",
+            push_ready: false,
+          },
+        },
+        draft_pull_request: {
+          action: "refresh",
+          push_ready: false,
+          subject: {
+            subject_locator: "github://example/repo/issues/123",
+            canonical_uri: "https://github.com/example/repo/issues/123",
+          },
+          target: {
+            repo: "fixtures/repo",
+            branch: taskId,
+            base: "main",
+          },
+        },
+      });
     } finally {
       await rm(tempDir, { recursive: true, force: true });
       await rm(runtime.root, { recursive: true, force: true });

@@ -6,9 +6,22 @@ export interface HttpConnectGrant {
   readonly principal_id?: string;
   readonly provider: string;
   readonly scopes: readonly string[];
+  readonly scope_family?: string;
+  readonly authority_kind?: "read_only" | "constructive" | "destructive";
+  readonly target_repo?: string;
+  readonly target_locator?: string;
   readonly connection_id?: string;
   readonly status: "active" | "revoked";
   readonly created_at?: string;
+}
+
+export interface HttpConnectPreprovisionRequest {
+  readonly provider: string;
+  readonly scopes: readonly string[];
+  readonly scope_family?: string;
+  readonly authority_kind?: "read_only" | "constructive" | "destructive";
+  readonly target_repo?: string;
+  readonly target_locator?: string;
 }
 
 export interface HttpConnectListResponse {
@@ -63,10 +76,7 @@ export interface HttpConnectServiceOptions {
 
 export function createHttpConnectService(options: HttpConnectServiceOptions): {
   readonly list: () => Promise<HttpConnectListResponse>;
-  readonly preprovision: (
-    provider: string,
-    scopes: readonly string[],
-  ) => Promise<HttpConnectStartReadyResponse>;
+  readonly preprovision: (request: HttpConnectPreprovisionRequest) => Promise<HttpConnectStartReadyResponse>;
   readonly revoke: (grantId: string) => Promise<HttpConnectRevokeResponse>;
 } {
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -78,11 +88,11 @@ export function createHttpConnectService(options: HttpConnectServiceOptions): {
         method: "GET",
         headers: authHeaders(options.accessToken),
       }),
-    preprovision: async (provider, scopes) => {
+    preprovision: async (request) => {
       const started = await requestJson<HttpConnectStartResponse>(fetchImpl, `${baseUrl}/v1/connect/flows`, {
         method: "POST",
         headers: authHeaders(options.accessToken),
-        body: JSON.stringify({ provider, scopes }),
+        body: JSON.stringify(request),
       });
 
       if (started.status === "created" || started.status === "unchanged") {

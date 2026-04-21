@@ -241,3 +241,14 @@ export {
   type SandboxDeclaration,
   type SandboxProfile,
 } from "./sandbox.js";
+export {
+  DEFAULT_PUBLIC_WORK_POLICY,
+  evaluatePublicCommentOpportunity,
+  evaluatePublicPullRequestCandidate,
+  normalizePublicWorkPolicy,
+  type PublicCommentOpportunityRequest,
+  type PublicCommentPolicyDecision,
+  type PublicPullRequestCandidateRequest,
+  type PublicPolicyDecision,
+  type PublicWorkPolicy,
+} from "./public-work.js";

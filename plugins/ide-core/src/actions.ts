@@ -32,7 +32,14 @@ export interface IdeActionCore {
   readonly searchSkills: (options: SearchSkillsOptions) => Promise<IdeActionResult>;
   readonly addSkill: (options: AddSkillOptions) => Promise<IdeActionResult>;
   readonly connectList: () => Promise<IdeActionResult>;
-  readonly connectPreprovision: (provider: string, scopes: readonly string[]) => Promise<IdeActionResult>;
+  readonly connectPreprovision: (request: {
+    readonly provider: string;
+    readonly scopes?: readonly string[];
+    readonly scope_family?: string;
+    readonly authority_kind?: "read_only" | "constructive" | "destructive";
+    readonly target_repo?: string;
+    readonly target_locator?: string;
+  }) => Promise<IdeActionResult>;
   readonly connectRevoke: (grantId: string) => Promise<IdeActionResult>;
   readonly harnessRun: (fixturePath: string) => Promise<IdeActionResult<HarnessRunResult>>;
 }
@@ -47,8 +54,8 @@ export function createIdeActionCore(options: IdeActionCoreOptions = {}): IdeActi
     searchSkills: async (searchOptions) => wrapAction("runx.skill.search", async () => await sdk.searchSkills(searchOptions)),
     addSkill: async (addOptions) => wrapAction("runx.skill.add", async () => await sdk.addSkill(addOptions)),
     connectList: async () => wrapAction("runx.connect.list", async () => await sdk.connectList()),
-    connectPreprovision: async (provider, scopes) =>
-      wrapAction("runx.connect.preprovision", async () => await sdk.connectPreprovision(provider, scopes)),
+    connectPreprovision: async (request) =>
+      wrapAction("runx.connect.preprovision", async () => await sdk.connectPreprovision(request)),
     connectRevoke: async (grantId) => wrapAction("runx.connect.revoke", async () => await sdk.connectRevoke(grantId)),
     harnessRun: async (fixturePath) => wrapAction("runx.harness.run", async () => await runHarness(fixturePath, { env: options.env })),
   };
@@ -57,7 +64,7 @@ export function createIdeActionCore(options: IdeActionCoreOptions = {}): IdeActi
 export function createFixtureConnectService(): ConnectService {
   return {
     list: async () => ({ grants: [] }),
-    preprovision: async (provider, scopes) => ({ status: "created", grant: { provider, scopes } }),
+    preprovision: async (request) => ({ status: "created", grant: { provider: request.provider, scopes: request.scopes } }),
     revoke: async (grantId) => ({ status: "revoked", grant: { grant_id: grantId } }),
   };
 }

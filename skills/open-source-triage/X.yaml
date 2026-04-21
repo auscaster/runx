@@ -54,6 +54,21 @@ harness:
               - confirm issue title and path before posting
             handoff_notes:
               next_action: post after approval
+          agent_step.draft-content-handoff.output:
+            handoff_packet:
+              channel: github_issue_comment
+              body: The canonical output directory is `.sourcey/runx-docs`; the docs mismatch is being corrected.
+              boundary_kind: external_maintainer
+            boundary_state:
+              boundary_kind: external_maintainer
+              completion_state: handoff_ready
+              next_actor: upstream_maintainer
+              ack_expected: false
+            follow_up_contract:
+              retrigger_on:
+                - maintainer reply
+                - operator amendment
+              closure_rule: close when the issue is resolved or explicitly retired
         approvals:
           open-source-triage.response.approval: true
       expect:
@@ -144,6 +159,18 @@ runners:
             draft: draft-response.github_triage_packet.data.response_draft
           inputs:
             channel: github_issue_comment
+        - id: external-handoff
+          skill: ../draft-content
+          runner: handoff
+          scopes:
+            - runx:content:package
+          context:
+            packet: package-response.content_publish_packet.data.publish_packet
+            approval: approve-response.approval_decision.data
+            target: draft-response.github_triage_packet.data.issue_profile
+          inputs:
+            channel: github_issue_comment
+            boundary_kind: external_maintainer
       policy:
         transitions:
           - to: package-response

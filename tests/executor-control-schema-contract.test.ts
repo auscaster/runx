@@ -14,6 +14,12 @@ describe("executor control schema contracts", () => {
       provider: "github",
       connection_id: "conn_1",
       scopes: ["repo:read"],
+      grant_reference: {
+        grant_id: "grant_1",
+        scope_family: "github_repo",
+        authority_kind: "read_only",
+        target_repo: "nilstate/aster",
+      },
       material_ref: "nango:github:conn_1",
     })).toEqual({
       kind: "runx.credential-envelope.v1",
@@ -21,6 +27,13 @@ describe("executor control schema contracts", () => {
       provider: "github",
       connection_id: "conn_1",
       scopes: ["repo:read"],
+      grant_reference: {
+        grant_id: "grant_1",
+        scope_family: "github_repo",
+        authority_kind: "read_only",
+        target_repo: "nilstate/aster",
+        target_locator: undefined,
+      },
       material_ref: "nango:github:conn_1",
     });
   });

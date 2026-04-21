@@ -152,6 +152,13 @@ export interface CredentialEnvelope {
   readonly provider: string;
   readonly connection_id: string;
   readonly scopes: readonly string[];
+  readonly grant_reference?: {
+    readonly grant_id: string;
+    readonly scope_family: string;
+    readonly authority_kind: "read_only" | "constructive" | "destructive";
+    readonly target_repo?: string;
+    readonly target_locator?: string;
+  };
   readonly material_ref: string;
 }
 
@@ -459,7 +466,32 @@ export function validateCredentialEnvelope(
     provider: requireString(record.provider, `${label}.provider`),
     connection_id: requireString(record.connection_id, `${label}.connection_id`),
     scopes: requireStringArray(record.scopes, `${label}.scopes`, { allowEmptyValues: false }),
+    grant_reference: validateOptionalGrantReference(record.grant_reference, `${label}.grant_reference`),
     material_ref: requireString(record.material_ref, `${label}.material_ref`),
+  };
+}
+
+function validateOptionalGrantReference(
+  value: unknown,
+  label: string,
+): CredentialEnvelope["grant_reference"] | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  const record = asRecord(value);
+  if (!record) {
+    throw new Error(`${label} must be an object.`);
+  }
+  const authorityKind = requireString(record.authority_kind, `${label}.authority_kind`);
+  if (authorityKind !== "read_only" && authorityKind !== "constructive" && authorityKind !== "destructive") {
+    throw new Error(`${label}.authority_kind must be read_only, constructive, or destructive.`);
+  }
+  return {
+    grant_id: requireString(record.grant_id, `${label}.grant_id`),
+    scope_family: requireString(record.scope_family, `${label}.scope_family`),
+    authority_kind: authorityKind,
+    target_repo: optionalString(record.target_repo, `${label}.target_repo`),
+    target_locator: optionalString(record.target_locator, `${label}.target_locator`),
   };
 }
 

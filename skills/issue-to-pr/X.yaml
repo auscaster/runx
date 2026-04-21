@@ -10,11 +10,13 @@ harness:
         subject_body: Minimal subject body for the harness.
         subject_locator: local://fixtures/issue-to-pr-smoke
         size: micro
+        scafld_bin: ./fixtures/issue-to-pr-harness-scafld.mjs
       # Shallow smoke baseline. Harness now sandboxes cli-tool cwd
-      # to the tempdir (runner.ts RUNX_CWD/INIT_CWD), so scafld-init
-      # and scafld-new land inside the sandbox. The chain reaches
-      # author-spec and yields `needs_resolution` because this
-      # fixture does not supply caller.answers.
+      # to the tempdir (runner.ts RUNX_CWD/INIT_CWD). This case uses
+      # the native fake scafld fixture so the lane can stay inside the
+      # sandbox and still exercise the governed boundary contract.
+      # The chain reaches author-spec and yields `needs_resolution`
+      # because this fixture does not supply caller.answers.
       expect:
         status: needs_resolution
 
@@ -25,6 +27,7 @@ harness:
         subject_body: Deeper harness case with canned author-spec answers so the chain can progress past the first agent hand-off.
         subject_locator: local://fixtures/issue-to-pr-reach-author
         size: micro
+        scafld_bin: ./fixtures/issue-to-pr-harness-scafld.mjs
       caller:
         answers:
           agent_step.issue-to-pr-author-spec.output:
@@ -87,6 +90,7 @@ harness:
         subject_body: Canned answers for authored spec and fix so the chain reaches the explicit reviewer hand-off.
         subject_locator: local://fixtures/issue-to-pr-review-boundary
         size: micro
+        scafld_bin: ./fixtures/issue-to-pr-harness-scafld.mjs
       caller:
         answers:
           agent_step.issue-to-pr-author-spec.output:
@@ -577,6 +581,11 @@ runners:
             - scafld:projection:read
           inputs:
             command: summary
+        - id: scafld-checks
+          label: capture check surface
+          tool: scafld.capture_checks
+          scopes:
+            - scafld:projection:read
         - id: scafld-pr-body
           label: render PR body surface
           skill: ../scafld
@@ -584,6 +593,18 @@ runners:
             - scafld:projection:read
           inputs:
             command: pr-body
+        - id: package-pull-request
+          label: package the draft PR outbox entry
+          tool: outbox.build_pull_request
+          scopes:
+            - runx:repo:package
+          context:
+            summary_projection: scafld-summary.result
+            checks_projection: scafld-checks.result
+            pr_body_projection: scafld-pr-body.result
+            completion_result: scafld-complete.result
+            completion_state: scafld-complete.state
+            status_snapshot: scafld-status.result
       policy:
         transitions:
           - to: write-fix

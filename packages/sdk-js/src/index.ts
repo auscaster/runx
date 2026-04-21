@@ -47,7 +47,14 @@ import { createStructuredCaller, type StructuredCallerOptions } from "./caller.j
 
 export interface ConnectService {
   readonly list: () => Promise<unknown>;
-  readonly preprovision: (provider: string, scopes: readonly string[]) => Promise<unknown>;
+  readonly preprovision: (request: {
+    readonly provider: string;
+    readonly scopes: readonly string[];
+    readonly scope_family?: string;
+    readonly authority_kind?: "read_only" | "constructive" | "destructive";
+    readonly target_repo?: string;
+    readonly target_locator?: string;
+  }) => Promise<unknown>;
   readonly revoke: (grantId: string) => Promise<unknown>;
 }
 
@@ -248,8 +255,18 @@ export class RunxSdk {
     return await this.requireConnect().list();
   }
 
-  async connectPreprovision(provider: string, scopes: readonly string[] = []): Promise<unknown> {
-    return await this.requireConnect().preprovision(provider, scopes);
+  async connectPreprovision(request: {
+    readonly provider: string;
+    readonly scopes?: readonly string[];
+    readonly scope_family?: string;
+    readonly authority_kind?: "read_only" | "constructive" | "destructive";
+    readonly target_repo?: string;
+    readonly target_locator?: string;
+  }): Promise<unknown> {
+    return await this.requireConnect().preprovision({
+      ...request,
+      scopes: request.scopes ?? [],
+    });
   }
 
   async connectRevoke(grantId: string): Promise<unknown> {
@@ -380,9 +397,16 @@ export async function connectList(options: RunxSdkOptions): Promise<unknown> {
 }
 
 export async function connectPreprovision(
-  options: { readonly provider: string; readonly scopes?: readonly string[] } & RunxSdkOptions,
+  options: {
+    readonly provider: string;
+    readonly scopes?: readonly string[];
+    readonly scope_family?: string;
+    readonly authority_kind?: "read_only" | "constructive" | "destructive";
+    readonly target_repo?: string;
+    readonly target_locator?: string;
+  } & RunxSdkOptions,
 ): Promise<unknown> {
-  return await createRunxSdk(options).connectPreprovision(options.provider, options.scopes ?? []);
+  return await createRunxSdk(options).connectPreprovision(options);
 }
 
 export async function connectRevoke(options: { readonly grantId: string } & RunxSdkOptions): Promise<unknown> {

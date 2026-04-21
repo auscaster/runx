@@ -92,9 +92,9 @@ describe("TypeScript SDK", () => {
     const connectCalls: string[] = [];
     const connect: ConnectService = {
       list: async () => ({ grants: [] }),
-      preprovision: async (provider, scopes) => {
-        connectCalls.push(`${provider}:${scopes.join(",")}`);
-        return { status: "created", grant: { provider, scopes } };
+      preprovision: async (request) => {
+        connectCalls.push(`${request.provider}:${request.scopes.join(",")}`);
+        return { status: "created", grant: { provider: request.provider, scopes: request.scopes } };
       },
       revoke: async (grantId) => ({ status: "revoked", grant: { grant_id: grantId } }),
     };
@@ -125,7 +125,7 @@ describe("TypeScript SDK", () => {
       expect(install.destination).toBe(path.join(installDir, "acme", "sourcey", "SKILL.md"));
       expect(install.source).toBe("runx-registry");
 
-      const connectResult = await sdk.connectPreprovision("github", ["repo:read"]);
+      const connectResult = await sdk.connectPreprovision({ provider: "github", scopes: ["repo:read"] });
       expect(connectResult).toMatchObject({ status: "created" });
       await expect(connectPreprovision({ provider: "slack", scopes: ["chat:write"], connect })).resolves.toMatchObject({
         status: "created",
@@ -157,7 +157,7 @@ describe("TypeScript SDK", () => {
         skill_id: "acme/sourcey",
         harness: {
           status: "passed",
-          case_count: 1,
+          case_count: 2,
         },
       });
     } finally {

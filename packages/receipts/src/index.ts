@@ -37,6 +37,13 @@ export interface AuthReceiptMetadata {
     readonly provider: string;
     readonly connection_id: string;
     readonly scopes: readonly string[];
+    readonly grant_reference?: {
+      readonly grant_id: string;
+      readonly scope_family: string;
+      readonly authority_kind: "read_only" | "constructive" | "destructive";
+      readonly target_repo?: string;
+      readonly target_locator?: string;
+    };
   };
 }
 

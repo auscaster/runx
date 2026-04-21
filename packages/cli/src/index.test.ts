@@ -535,16 +535,28 @@ runners:
             grant_id: "grant_github_1",
             provider: "github",
             scopes: ["repo:read", "user:read"],
+            scope_family: "github_repo",
+            authority_kind: "read_only",
+            target_repo: "nilstate/aster",
             status: "active",
           },
         ],
       }),
-      preprovision: async (provider: string, scopes: readonly string[]) => ({
+      preprovision: async (request: {
+        readonly provider: string;
+        readonly scopes: readonly string[];
+        readonly scope_family?: string;
+        readonly authority_kind?: "read_only" | "constructive" | "destructive";
+        readonly target_repo?: string;
+      }) => ({
         status: "created" as const,
         grant: {
-          grant_id: `grant_${provider}_1`,
-          provider,
-          scopes,
+          grant_id: `grant_${request.provider}_1`,
+          provider: request.provider,
+          scopes: request.scopes,
+          scope_family: request.scope_family,
+          authority_kind: request.authority_kind,
+          target_repo: request.target_repo,
           status: "active",
         },
       }),
@@ -564,11 +576,12 @@ runners:
     expect(stdout.contents()).toContain("connections");
     expect(stdout.contents()).toContain("github");
     expect(stdout.contents()).toContain("repo:read, user:read");
+    expect(stdout.contents()).toContain("nilstate/aster");
     stdout.clear();
     stderr.clear();
 
     const preprovisionExit = await runCli(
-      ["connect", "github", "--scope", "repo:read"],
+      ["connect", "github", "--scope", "repo:read", "--scope-family", "github_repo", "--authority-kind", "read_only", "--target-repo", "nilstate/aster"],
       { stdin: process.stdin, stdout, stderr },
       process.env,
       { connect },
@@ -576,6 +589,8 @@ runners:
     expect(preprovisionExit).toBe(0);
     expect(stdout.contents()).toContain("connection ready");
     expect(stdout.contents()).toContain("grant_github_1");
+    expect(stdout.contents()).toContain("github_repo");
+    expect(stdout.contents()).toContain("nilstate/aster");
     expect(stdout.contents()).toContain("runx connect list");
     stdout.clear();
     stderr.clear();

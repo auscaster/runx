@@ -64,6 +64,42 @@ harness:
           subject:
             skill_name: draft-content
             source_type: agent-step
+    - name: draft-content-explicit-external-handoff
+      runner: handoff
+      inputs:
+        channel: github_issue_comment
+        boundary_kind: external_maintainer
+        packet:
+          channel: github_issue_comment
+          body: The canonical output directory is `.sourcey/runx-docs`.
+        target:
+          subject_locator: github.com/nilstate/runx/issues/241
+          repo: nilstate/runx
+      caller:
+        answers:
+          agent_step.draft-content-handoff.output:
+            handoff_packet:
+              channel: github_issue_comment
+              body: The canonical output directory is `.sourcey/runx-docs`.
+              boundary_kind: external_maintainer
+            boundary_state:
+              boundary_kind: external_maintainer
+              completion_state: handoff_ready
+              next_actor: upstream_maintainer
+              ack_expected: false
+            follow_up_contract:
+              retrigger_on:
+                - maintainer reply
+                - operator amendment
+              closure_rule: close when the subject thread is resolved or the operator retires the attempt
+      expect:
+        status: success
+        receipt:
+          kind: skill_execution
+          status: success
+          subject:
+            skill_name: draft-content
+            source_type: agent-step
 
 runners:
   agent:
@@ -126,3 +162,35 @@ runners:
         type: json
         required: false
         description: "Channel-specific notes from the draft runner."
+
+  handoff:
+    type: agent-step
+    agent: builder
+    task: draft-content-handoff
+    outputs:
+      handoff_packet: object
+      boundary_state: object
+      follow_up_contract: object
+    artifacts:
+      wrap_as: content_handoff_packet
+    inputs:
+      channel:
+        type: string
+        required: false
+        description: "Target outward channel or subject surface."
+      boundary_kind:
+        type: string
+        required: false
+        description: "Named boundary type such as external_maintainer."
+      packet:
+        type: json
+        required: true
+        description: "Already-packaged outward payload from the package runner."
+      target:
+        type: json
+        required: false
+        description: "Repo, thread, or subject summary for the outward handoff."
+      approval:
+        type: json
+        required: false
+        description: "Approval decision that cleared the outward move."

@@ -288,7 +288,14 @@ export interface CliServices {
 
 export interface ConnectService {
   readonly list: () => Promise<unknown>;
-  readonly preprovision: (provider: string, scopes: readonly string[]) => Promise<unknown>;
+  readonly preprovision: (request: {
+    readonly provider: string;
+    readonly scopes: readonly string[];
+    readonly scope_family?: string;
+    readonly authority_kind?: "read_only" | "constructive" | "destructive";
+    readonly target_repo?: string;
+    readonly target_locator?: string;
+  }) => Promise<unknown>;
   readonly revoke: (grantId: string) => Promise<unknown>;
 }
 
@@ -335,6 +342,10 @@ export interface ParsedArgs {
   readonly connectProvider?: string;
   readonly connectGrantId?: string;
   readonly connectScopes: readonly string[];
+  readonly connectScopeFamily?: string;
+  readonly connectAuthorityKind?: "read_only" | "constructive" | "destructive";
+  readonly connectTargetRepo?: string;
+  readonly connectTargetLocator?: string;
   readonly configAction?: "set" | "get" | "list";
   readonly configKey?: string;
   readonly configValue?: string;
@@ -416,7 +427,14 @@ export async function runCli(
           : parsed.connectAction === "revoke" && parsed.connectGrantId
             ? await connectService.revoke(parsed.connectGrantId)
             : parsed.connectAction === "preprovision" && parsed.connectProvider
-              ? await connectService.preprovision(parsed.connectProvider, parsed.connectScopes)
+              ? await connectService.preprovision({
+                provider: parsed.connectProvider,
+                scopes: parsed.connectScopes,
+                scope_family: parsed.connectScopeFamily,
+                authority_kind: parsed.connectAuthorityKind,
+                target_repo: parsed.connectTargetRepo,
+                target_locator: parsed.connectTargetLocator,
+              })
               : undefined;
 
       if (!result) {
@@ -834,7 +852,7 @@ function writeUsage(stream: NodeJS.WritableStream, env: NodeJS.ProcessEnv = proc
       "  runx history [query] [--skill s] [--status s] [--source s] [--since iso] [--until iso] [--receipt-dir dir] [--json]",
       "  runx export-receipts --trainable [--receipt-dir dir] [--since iso] [--until iso] [--status pending|complete|expired] [--source source-type]",
       "  runx journal show --project . [--json]",
-      "  runx connect list|revoke <grant-id>|<provider> [--scope scope] [--json]",
+      "  runx connect list|revoke <grant-id>|<provider> [--scope scope] [--scope-family family] [--authority-kind read_only|constructive|destructive] [--target-repo owner/repo] [--target-locator locator] [--json]",
       "  runx config set|get|list [agent.provider|agent.model|agent.api_key] [value] [--json]",
       "  runx init [-g|--global] [--prefetch official] [--json]",
       "  runx harness <fixture.yaml|skill-dir|SKILL.md> [--json]",
@@ -948,6 +966,22 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   const registryUrl = (isSkillSearch || isSkillAdd || isSkillPublish) && typeof inputs.registry === "string" ? inputs.registry : undefined;
   const expectedDigest = isSkillAdd && typeof inputs.digest === "string" ? normalizeDigest(inputs.digest) : undefined;
   const connectScopes = isConnect ? normalizeScopes(inputs.scope) : [];
+  const connectScopeFamily = isConnect && typeof inputs.scopeFamily === "string"
+    ? inputs.scopeFamily
+    : isConnect && typeof inputs.scope_family === "string"
+      ? inputs.scope_family
+      : undefined;
+  const connectAuthorityKind = isConnect ? normalizeAuthorityKind(inputs.authorityKind ?? inputs.authority_kind) : undefined;
+  const connectTargetRepo = isConnect && typeof inputs.targetRepo === "string"
+    ? inputs.targetRepo
+    : isConnect && typeof inputs.target_repo === "string"
+      ? inputs.target_repo
+      : undefined;
+  const connectTargetLocator = isConnect && typeof inputs.targetLocator === "string"
+    ? inputs.targetLocator
+    : isConnect && typeof inputs.target_locator === "string"
+      ? inputs.target_locator
+      : undefined;
   const initAction = isInit && truthyFlag(inputs.global) ? "global" : isInit ? "project" : undefined;
   const prefetchOfficial =
     isInit
@@ -959,7 +993,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       : isSkillPublish
         ? omitInputs(inputs, ["version", "owner", "registry"])
         : isConnect
-          ? omitInput(inputs, "scope")
+          ? omitInputs(inputs, ["scope", "scopeFamily", "scope_family", "authorityKind", "authority_kind", "targetRepo", "target_repo", "targetLocator", "target_locator"])
           : isConfig
             ? {}
             : isInit
@@ -1011,6 +1045,10 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     connectProvider: isConnect && positionals[0] !== "list" && positionals[0] !== "revoke" ? positionals[0] : undefined,
     connectGrantId: isConnect && positionals[0] === "revoke" ? positionals[1] : undefined,
     connectScopes,
+    connectScopeFamily,
+    connectAuthorityKind,
+    connectTargetRepo,
+    connectTargetLocator,
     configAction: isConfig ? configAction(positionals) : undefined,
     configKey: isConfig ? positionals[1] : undefined,
     configValue: isConfig ? positionals.slice(2).join(" ") || undefined : undefined,
@@ -1802,6 +1840,10 @@ function normalizeScopes(value: unknown): readonly string[] {
   return [];
 }
 
+function normalizeAuthorityKind(value: unknown): ParsedArgs["connectAuthorityKind"] {
+  return value === "read_only" || value === "constructive" || value === "destructive" ? value : undefined;
+}
+
 function splitScopes(value: string): readonly string[] {
   return value
     .split(",")
@@ -2151,9 +2193,17 @@ function renderConnectResult(
       const grantId = typeof grant.grant_id === "string" ? grant.grant_id : "unknown";
       const provider = typeof grant.provider === "string" ? grant.provider : "unknown";
       const scopes = Array.isArray(grant.scopes) ? grant.scopes.join(", ") : "";
+      const scopeFamily = typeof grant.scope_family === "string" ? grant.scope_family : "";
+      const authorityKind = typeof grant.authority_kind === "string" ? grant.authority_kind : "";
+      const targetRepo = typeof grant.target_repo === "string" ? grant.target_repo : "";
+      const targetLocator = typeof grant.target_locator === "string" ? grant.target_locator : "";
       const status = typeof grant.status === "string" ? grant.status : "active";
       lines.push(`  ${statusIcon(status === "revoked" ? "failure" : "success", t)}  ${t.bold}${provider}${t.reset}  ${t.dim}${grantId}${t.reset}`);
       if (scopes) lines.push(`  ${t.dim}scopes${t.reset}  ${scopes}`);
+      if (scopeFamily) lines.push(`  ${t.dim}family${t.reset}  ${scopeFamily}`);
+      if (authorityKind) lines.push(`  ${t.dim}authority${t.reset}  ${authorityKind}`);
+      if (targetRepo) lines.push(`  ${t.dim}repo${t.reset}  ${targetRepo}`);
+      if (targetLocator) lines.push(`  ${t.dim}locator${t.reset}  ${targetLocator}`);
       lines.push("");
     }
     return lines.join("\n");
@@ -2162,6 +2212,10 @@ function renderConnectResult(
   const provider = typeof grant?.provider === "string" ? grant.provider : undefined;
   const grantId = typeof grant?.grant_id === "string" ? grant.grant_id : undefined;
   const scopes = Array.isArray(grant?.scopes) ? grant.scopes.join(", ") : undefined;
+  const scopeFamily = typeof grant?.scope_family === "string" ? grant.scope_family : undefined;
+  const authorityKind = typeof grant?.authority_kind === "string" ? grant.authority_kind : undefined;
+  const targetRepo = typeof grant?.target_repo === "string" ? grant.target_repo : undefined;
+  const targetLocator = typeof grant?.target_locator === "string" ? grant.target_locator : undefined;
   const status = isRecord(result) && typeof result.status === "string" ? result.status : "success";
   return renderKeyValue(
     action === "revoke" ? "connection revoked" : "connection ready",
@@ -2170,6 +2224,10 @@ function renderConnectResult(
       ["provider", provider],
       ["grant", grantId],
       ["scopes", scopes],
+      ["family", scopeFamily],
+      ["authority", authorityKind],
+      ["repo", targetRepo],
+      ["locator", targetLocator],
       ["next", action === "revoke" ? "runx connect github" : "runx connect list"],
     ],
     t,

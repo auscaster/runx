@@ -74,7 +74,7 @@ describe("ide plugin actions", () => {
       expect(add.status).toBe("success");
 
       await expect(core.connectList()).resolves.toMatchObject({ status: "success" });
-      await expect(core.connectPreprovision("github", ["repo:read"])).resolves.toMatchObject({ status: "success" });
+      await expect(core.connectPreprovision({ provider: "github", scopes: ["repo:read"] })).resolves.toMatchObject({ status: "success" });
       await expect(core.connectRevoke("grant_1")).resolves.toMatchObject({ status: "success" });
 
       const harness = await core.harnessRun("fixtures/harness/echo-skill.yaml");

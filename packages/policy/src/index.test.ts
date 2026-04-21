@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { admitChainStepScopes, admitLocalSkill, admitRetryPolicy, admitSandbox, sandboxRequiresApproval } from "./index.js";
+import {
+  admitChainStepScopes,
+  admitLocalSkill,
+  admitRetryPolicy,
+  admitSandbox,
+  evaluatePublicCommentOpportunity,
+  evaluatePublicPullRequestCandidate,
+  sandboxRequiresApproval,
+} from "./index.js";
 
 describe("admitLocalSkill", () => {
   it("allows local cli-tool skills", () => {
@@ -193,5 +201,66 @@ describe("admitChainStepScopes", () => {
         grant: { scopes: ["*"] },
       }).requestedScopes,
     ).toEqual(["repo:read"]);
+  });
+});
+
+describe("public work policy", () => {
+  it("blocks dependency churn and bots by default", () => {
+    expect(
+      evaluatePublicPullRequestCandidate({
+        authorLogin: "dependabot[bot]",
+        title: "Bump react from 19.0.0 to 19.0.1",
+        labels: ["dependencies"],
+        headRefName: "dependabot/npm_and_yarn/react-19.0.1",
+      }),
+    ).toEqual({
+      blocked: true,
+      reasons: ["bot_authored_pull_request", "dependency_update_pull_request", "internal_or_build_only_pull_request"],
+    });
+  });
+
+  it("requires a welcome signal before issue-triage comments on cold external PRs", () => {
+    expect(
+      evaluatePublicCommentOpportunity({
+        source: "github_pull_request",
+        lane: "issue-triage",
+        authorLogin: "stranger",
+        authorAssociation: "NONE",
+        title: "Clarify docs wording",
+        labels: [],
+        headRefName: "docs/fix-wording",
+        commentsCount: 0,
+        reviewCommentsCount: 0,
+      }),
+    ).toMatchObject({
+      blocked: true,
+      reasons: ["comment_without_welcome_signal"],
+      welcome_signal: false,
+    });
+  });
+
+  it("respects operator-supplied trust recovery statuses", () => {
+    expect(
+      evaluatePublicCommentOpportunity(
+        {
+          source: "github_pull_request",
+          lane: "issue-triage",
+          authorLogin: "maintainer",
+          authorAssociation: "CONTRIBUTOR",
+          title: "Improve onboarding docs",
+          labels: [],
+          headRefName: "docs/onboarding",
+          commentsCount: 1,
+          reviewCommentsCount: 0,
+          recentOutcomes: [{ status: "cooldown" }],
+        },
+        {
+          trust_recovery_statuses: ["cooldown"],
+        },
+      ),
+    ).toMatchObject({
+      blocked: true,
+      reasons: ["comment_lane_in_trust_recovery"],
+    });
   });
 });

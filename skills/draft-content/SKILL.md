@@ -29,6 +29,14 @@ Package runner:
 - `qa_checklist`: final quality gates for handoff or publishing.
 - `handoff_notes`: operator notes, caveats, and next actions.
 
+Handoff runner:
+
+- `handoff_packet`: approved outward packet with the exact delivery surface.
+- `boundary_state`: explicit boundary semantics so external handoff does not
+  masquerade as internal review completion.
+- `follow_up_contract`: who acts next, whether acknowledgement is expected,
+  and what should retrigger the lane.
+
 ## Inputs
 
 - `objective` (optional): what the content should accomplish.
@@ -39,3 +47,8 @@ Package runner:
   another skill.
 - `voice_guide` (optional): tone or brand constraints.
 - `draft` (optional): existing draft text when packaging or revising.
+- `packet` (optional): already-packaged outward payload when moving through the
+  explicit handoff boundary.
+- `target` (optional): subject locator or repo/thread summary for the outward
+  move.
+- `boundary_kind` (optional): boundary type such as `external_maintainer`.

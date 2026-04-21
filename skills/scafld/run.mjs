@@ -1,8 +1,10 @@
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const inputs = JSON.parse(process.env.RUNX_INPUTS_JSON || "{}");
-const scafld = String(inputs.scafld_bin || process.env.SCAFLD_BIN || "scafld");
+const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const scafld = resolveBinary(String(inputs.scafld_bin || process.env.SCAFLD_BIN || "scafld"));
 const cwd = path.resolve(String(
   inputs.fixture
     || inputs.cwd
@@ -165,6 +167,16 @@ function truthy(value) {
     return false;
   }
   return ["1", "true", "yes", "on"].includes(String(value).toLowerCase());
+}
+
+function resolveBinary(candidate) {
+  if (!candidate || candidate === "scafld") {
+    return "scafld";
+  }
+  if (!candidate.includes(path.sep)) {
+    return candidate;
+  }
+  return path.isAbsolute(candidate) ? candidate : path.resolve(scriptDirectory, candidate);
 }
 
 function parseJsonPayload(commandName, rawStdout) {

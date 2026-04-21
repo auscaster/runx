@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -241,6 +241,65 @@ process.exit(1);
       expect(JSON.parse(await readFile(completeTracePath, "utf8"))).toEqual({
         argv: ["complete", "fixture-task", "--json"],
         leakedEnv: [],
+      });
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves relative scafld_bin paths from the scafld skill directory", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-scafld-relative-"));
+    const fixtureDir = path.join(tempDir, "fixtures");
+    const fakeScafld = path.join(fixtureDir, "fake-scafld.mjs");
+
+    try {
+      await mkdir(fixtureDir, { recursive: true });
+      await writeFile(
+        fakeScafld,
+        `#!/usr/bin/env node
+const argv = process.argv.slice(2);
+if ((argv[0] || "") === "validate") {
+  process.stdout.write(JSON.stringify({
+    ok: true,
+    command: "validate",
+    task_id: "fixture-task",
+    warnings: [],
+    state: { status: "draft" },
+    result: { valid: true, file: ".ai/specs/drafts/fixture-task.yaml", errors: [] },
+    error: null,
+  }) + "\\n");
+  process.exit(0);
+}
+process.stderr.write(\`unsupported command: \${argv[0] || ""}\\n\`);
+process.exit(1);
+`,
+        { mode: 0o755 },
+      );
+
+      const relativeFakeScafld = path.relative(path.resolve("skills/scafld"), fakeScafld);
+      const result = await runLocalSkill({
+        skillPath: path.resolve("skills/scafld"),
+        runner: "scafld-cli",
+        inputs: {
+          command: "validate",
+          task_id: "fixture-task",
+          fixture: tempDir,
+          scafld_bin: relativeFakeScafld,
+        },
+        caller,
+        receiptDir: path.join(tempDir, "receipts"),
+        runxHome: path.join(tempDir, "home"),
+        env: process.env,
+      });
+
+      expect(result.status).toBe("success");
+      if (result.status !== "success") {
+        return;
+      }
+      expect(JSON.parse(result.execution.stdout)).toMatchObject({
+        ok: true,
+        command: "validate",
+        task_id: "fixture-task",
       });
     } finally {
       await rm(tempDir, { recursive: true, force: true });
