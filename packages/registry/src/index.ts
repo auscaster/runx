@@ -48,4 +48,10 @@ export {
   type RegistrySkillVersion,
   type RegistryStore,
 } from "./store.js";
+export {
+  HttpCachedRegistryStore,
+  createHttpCachedRegistryStore,
+  createDefaultHttpCachedRegistryStore,
+  type HttpCachedRegistryStoreOptions,
+} from "./http-cached-store.js";
 export { deriveTrustSignals, type TrustSignal, type TrustSignalStatus } from "./trust.js";

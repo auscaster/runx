@@ -228,6 +228,8 @@ async function executeHarnessFixture(args: {
             env,
             receiptDir,
             runxHome,
+            registryStore: args.options.registryStore,
+            skillCacheDir: args.options.skillCacheDir,
           });
 
     const assertionErrors = assertHarnessResult(args.fixture, result);
