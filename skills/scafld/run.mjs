@@ -94,6 +94,11 @@ const structured = normalizeStructuredOutput({
   stderr,
   exitCode,
 });
+const finalExitCode = normalizeExitCode({
+  command,
+  exitCode,
+  structured,
+});
 
 if (structured !== undefined) {
   process.stdout.write(`${JSON.stringify(structured)}\n`);
@@ -105,7 +110,7 @@ if (stderr) {
   process.stderr.write(stderr);
 }
 
-process.exit(exitCode);
+process.exit(finalExitCode);
 
 function normalizeStructuredOutput(options) {
   switch (options.command) {
@@ -120,6 +125,21 @@ function normalizeStructuredOutput(options) {
     default:
       return undefined;
   }
+}
+
+function normalizeExitCode({ command, exitCode, structured }) {
+  if (
+    command === "complete" &&
+    exitCode !== 0 &&
+    structured &&
+    structured.completed_state === "completed" &&
+    structured.archive_path &&
+    (structured.verdict === "pass" || structured.verdict === "pass_with_issues") &&
+    structured.blocking_count === 0
+  ) {
+    return 0;
+  }
+  return exitCode;
 }
 
 function buildValidateReport({ cwd: repoRoot, taskId: id, stdout: out, stderr: err, exitCode }) {

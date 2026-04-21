@@ -220,4 +220,85 @@ process.exit(1);
       await rm(tempDir, { recursive: true, force: true });
     }
   });
+
+  it("treats archived pass_with_issues completion as success even when the installed scafld exits non-zero", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-scafld-pass-with-issues-"));
+    const fakeScafld = path.join(tempDir, "fake-scafld.mjs");
+
+    try {
+      await mkdir(path.join(tempDir, ".ai", "reviews"), { recursive: true });
+      await writeFile(
+        path.join(tempDir, ".ai", "reviews", "fixture-task.md"),
+        `# Review: fixture-task
+
+### Blocking
+
+None.
+
+### Non-blocking
+
+- **low** docs wording can be clearer.
+
+### Verdict
+
+pass_with_issues
+`,
+      );
+
+      await writeFile(
+        fakeScafld,
+        `#!/usr/bin/env node
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+const argv = process.argv.slice(2);
+const command = argv[0] || "";
+if (command === "complete") {
+  const archiveDir = join(process.cwd(), ".ai", "specs", "archive", "2026-04");
+  mkdirSync(archiveDir, { recursive: true });
+  writeFileSync(join(archiveDir, "fixture-task.yaml"), "status: completed\\n");
+  process.stdout.write("completed with non-blocking findings\\n");
+  process.stderr.write("pass_with_issues reported\\n");
+  process.exit(1);
+}
+process.stderr.write(\`unsupported command: \${command}\\n\`);
+process.exit(1);
+`,
+        { mode: 0o755 },
+      );
+
+      const completeResult = await runLocalSkill({
+        skillPath: path.resolve("skills/scafld"),
+        runner: "scafld-cli",
+        inputs: {
+          command: "complete",
+          task_id: "fixture-task",
+          fixture: tempDir,
+          scafld_bin: fakeScafld,
+        },
+        caller,
+        receiptDir: path.join(tempDir, "receipts-complete"),
+        runxHome: path.join(tempDir, "home-complete"),
+        env: process.env,
+      });
+
+      expect(completeResult.status).toBe("success");
+      if (completeResult.status !== "success") {
+        return;
+      }
+      expect(JSON.parse(completeResult.execution.stdout)).toEqual({
+        task_id: "fixture-task",
+        completed_state: "completed",
+        archive_path: ".ai/specs/archive/2026-04/fixture-task.yaml",
+        review_file: ".ai/reviews/fixture-task.md",
+        verdict: "pass_with_issues",
+        blocking_count: 0,
+        non_blocking_count: 1,
+      });
+      expect(completeResult.execution.stderr).toContain("pass_with_issues reported");
+      expect(completeResult.execution.exitCode).toBe(0);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
 });
