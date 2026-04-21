@@ -37,6 +37,7 @@ describe("issue-to-PR composite skill", () => {
       "scafld-validate",
       "scafld-approve",
       "scafld-start",
+      "delete-draft-spec",
       "read-declared-files",
       "author-fix",
       "write-fix",
@@ -73,6 +74,14 @@ describe("issue-to-PR composite skill", () => {
     expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("Never author acceptance criteria that depend on git history");
     expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("HEAD~1");
     expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("anchor on the exact expected text");
+    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("Do not list spec_draft.path");
+    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain(".ai/specs/active/<task_id>.yaml");
+    expect(chain.steps.find((step) => step.id === "delete-draft-spec")).toMatchObject({
+      tool: "fs.delete",
+      context: {
+        path: "author-spec.spec_draft.data.path",
+      },
+    });
     expect(chain.steps.find((step) => step.id === "read-declared-files")).toMatchObject({
       tool: "spec.read_declared_files",
       context: {
@@ -97,6 +106,7 @@ describe("issue-to-PR composite skill", () => {
     expect(chain.steps.find((step) => step.id === "author-fix")?.instructions).toContain("repo_snapshot_path");
     expect(chain.steps.find((step) => step.id === "author-fix")?.instructions).toContain("declared_file_context");
     expect(chain.steps.find((step) => step.id === "author-fix")?.instructions).toContain("fix_bundle.status: blocked");
+    expect(chain.steps.find((step) => step.id === "author-fix")?.instructions).toContain("must not recreate it");
     expect(chain.steps.find((step) => step.id === "reviewer-boundary")).toMatchObject({
       run: {
         type: "agent-step",
@@ -200,6 +210,7 @@ describe("issue-to-PR composite skill", () => {
         ["scafld-validate", "success"],
         ["scafld-approve", "success"],
         ["scafld-start", "success"],
+        ["delete-draft-spec", "success"],
         ["read-declared-files", "success"],
         ["author-fix", "success"],
         ["write-fix", "success"],
@@ -210,6 +221,7 @@ describe("issue-to-PR composite skill", () => {
         ["write-review", "success"],
         ["scafld-complete", "success"],
       ]);
+      expect(existsSync(path.join(tempDir, ".ai", "specs", "drafts", `${taskId}.yaml`))).toBe(false);
       expect(await readFile(path.join(tempDir, "app.txt"), "utf8")).toBe("fixed\n");
       expect(await readFile(path.join(tempDir, "notes.md"), "utf8")).toBe("governed\n");
     } finally {
@@ -513,10 +525,10 @@ phases:
     name: "Apply fixture fix"
     objective: "Write the bounded file change and validate it"
     changes:
-      - file: ".ai/specs/in_progress/${taskId}.yaml"
+      - file: ".ai/specs/active/${taskId}.yaml"
         action: "update"
         content_spec: |
-          The in-progress scafld spec is tracked and must stay in sync with the
+          The active scafld spec is tracked and must stay in sync with the
           declared scope throughout execution.
       - file: "app.txt"
         action: "update"
@@ -542,7 +554,7 @@ phases:
 rollback:
   strategy: "per_phase"
   commands:
-    phase1: "git checkout HEAD -- .ai/specs/in_progress/${taskId}.yaml app.txt notes.md"
+    phase1: "git checkout HEAD -- .ai/specs/active/${taskId}.yaml app.txt notes.md"
 `;
 }
 

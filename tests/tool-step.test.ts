@@ -205,6 +205,56 @@ steps:
     }
   });
 
+  it("deletes a file deterministically through fs.delete", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-delete-tool-"));
+    const receiptDir = path.join(tempDir, "receipts");
+    await writeFile(path.join(tempDir, "stale.txt"), "remove me\n");
+
+    const chain = validateChain(
+      parseChainYaml(`
+name: delete-file
+steps:
+  - id: delete_stale
+    tool: fs.delete
+    inputs:
+      path: stale.txt
+      repo_root: ${JSON.stringify(tempDir)}
+`),
+    );
+
+    const caller: Caller = {
+      resolve: async () => undefined,
+      report: () => undefined,
+    };
+
+    try {
+      const result = await runLocalChain({
+        chain,
+        chainDirectory: tempDir,
+        caller,
+        env: { ...process.env, RUNX_CWD: tempDir },
+        receiptDir,
+        runxHome: path.join(tempDir, "home"),
+      });
+
+      expect(result.status).toBe("success");
+      if (result.status !== "success") {
+        return;
+      }
+
+      expect(result.steps[0]?.skill).toBe("fs.delete");
+      expect(await readFile(path.join(tempDir, "stale.txt"), "utf8").catch(() => null)).toBeNull();
+      expect(JSON.parse(result.steps[0]?.stdout ?? "")).toMatchObject({
+        path: "stale.txt",
+        existed: true,
+        deleted: true,
+        kind: "file",
+      });
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("reads git branch and changed file names through deterministic git tools", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-git-tools-"));
     const receiptDir = path.join(tempDir, "receipts");

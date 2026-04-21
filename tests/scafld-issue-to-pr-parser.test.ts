@@ -28,6 +28,7 @@ describe("scafld issue-to-PR skill contract", () => {
       "scafld-validate",
       "scafld-approve",
       "scafld-start",
+      "delete-draft-spec",
       "read-declared-files",
       "author-fix",
       "write-fix",
@@ -50,6 +51,7 @@ describe("scafld issue-to-PR skill contract", () => {
       "",
       "",
       "",
+      "",
       "../scafld",
       "../scafld",
       "../scafld",
@@ -66,6 +68,7 @@ describe("scafld issue-to-PR skill contract", () => {
       "",
       "",
       "",
+      "fs.delete",
       "spec.read_declared_files",
       "",
       "fs.write_bundle",
@@ -98,6 +101,14 @@ describe("scafld issue-to-PR skill contract", () => {
     });
     expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("spec_version");
     expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("concrete repo-relative");
+    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("Do not list spec_draft.path");
+    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain(".ai/specs/active/<task_id>.yaml");
+    expect(chain.steps.find((step) => step.id === "delete-draft-spec")).toMatchObject({
+      tool: "fs.delete",
+      context: {
+        path: "author-spec.spec_draft.data.path",
+      },
+    });
     expect(chain.steps.find((step) => step.id === "author-fix")).toMatchObject({
       run: {
         type: "agent-step",
@@ -109,6 +120,7 @@ describe("scafld issue-to-PR skill contract", () => {
     });
     expect(chain.steps.find((step) => step.id === "author-fix")?.instructions).toContain("declared_file_context");
     expect(chain.steps.find((step) => step.id === "author-fix")?.instructions).toContain("fix_bundle.status: blocked");
+    expect(chain.steps.find((step) => step.id === "author-fix")?.instructions).toContain("must not recreate it");
     expect(chain.steps.find((step) => step.id === "reviewer-boundary")).toMatchObject({
       run: {
         type: "agent-step",

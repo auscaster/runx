@@ -1,5 +1,5 @@
 skill: issue-to-pr
-version: "0.1.3"
+version: "0.1.4"
 
 harness:
   cases:
@@ -350,8 +350,17 @@ runners:
             - at least one phases[] entry with id, name, objective, changes[],
               acceptance_criteria[], and status
             - rollback.strategy and rollback.commands
+            spec_draft.path is a temporary draft lifecycle path used only for
+            write-spec/read-spec before approval. Do not list spec_draft.path
+            or any .ai/specs/drafts/<task_id>.yaml path in
+            task.context.files_impacted, phases[].changes[].file, acceptance
+            validation commands, or rollback commands. After scafld-start, the
+            durable lifecycle-managed spec lives at .ai/specs/active/<task_id>.yaml.
+            If the spec must declare a live governance artifact after start,
+            use the active path only. Never declare both draft and active copies
+            for the same task_id.
             The spec must declare every tracked file that will be changed before
-            scafld audit runs, including the in-progress spec path if that file
+            scafld audit runs, including the active spec path if that file
             will appear in git diff. Use concrete repo-relative file paths only
             in task.context.files_impacted, phases[].changes[].file, and
             rollback commands. Never use prose placeholders such as "the relevant
@@ -420,6 +429,14 @@ runners:
           mutation: true
           inputs:
             command: start
+        - id: delete-draft-spec
+          label: remove temporary draft spec
+          tool: fs.delete
+          scopes:
+            - fs.write
+          mutation: true
+          context:
+            path: author-spec.spec_draft.data.path
         - id: read-declared-files
           label: read declared files
           tool: spec.read_declared_files
@@ -444,7 +461,11 @@ runners:
             surface for every path the approved spec already declared. Review
             declared_file_context.files before deciding what to edit, and
             prefer those grounded contents over generic assumptions. If the
-            inline snapshot is insufficient and repo_snapshot_path is present,
+            temporary draft spec path appears in the approved spec, treat it as
+            stale governance metadata only; the chain deletes that draft copy
+            immediately after scafld-start and you must not recreate it in the
+            fix bundle. If the inline snapshot is insufficient and
+            repo_snapshot_path is present,
             read it via fs.read before choosing files. Use fs.read only when
             you need additional grounded repo files beyond the declared set.
             fix_bundle.files must be an array of { path, contents } entries
