@@ -111,6 +111,9 @@ describe("issue-to-PR composite skill", () => {
       },
     });
     expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("fix_bundle.files");
+    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("schema_version: 3");
+    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("reviewed_at");
+    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("pass_with_issues");
     expect(chain.steps.find((step) => step.id === "write-review")).toMatchObject({
       tool: "fs.write",
       context: {

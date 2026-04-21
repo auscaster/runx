@@ -121,6 +121,9 @@ describe("scafld issue-to-PR skill contract", () => {
         written_files: "write-fix.file_bundle_write.data.files",
       },
     });
+    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("schema_version: 3");
+    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("reviewed_at");
+    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("pass_with_issues");
     expect(chain.steps.find((step) => step.id === "scafld-complete")).toMatchObject({
       context: {
         reviewer_result: "reviewer-boundary.review_decision.data",

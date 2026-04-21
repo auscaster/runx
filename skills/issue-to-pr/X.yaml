@@ -524,9 +524,17 @@ runners:
             review_contents as the full markdown review file to write. Keep the
             review grounded in the declared change set, the full
             fix_bundle.files array, and the persisted write_bundle result. The
-            review file must include the standard scafld sections: Metadata JSON,
-            Pass Results, Regression Hunt, Convention Check, Dark Patterns,
-            Blocking, Non-blocking, and Verdict.
+            review file must be a valid scafld Review Artifact v3 round. Its
+            Metadata JSON block must include schema_version: 3, round_status:
+            completed, reviewer_mode, reviewer_session, reviewed_at,
+            override_reason, and pass_results for spec_compliance,
+            scope_drift, regression_hunt, convention_check, and dark_patterns.
+            The review file must include the standard scafld sections: Metadata
+            JSON, Pass Results, Regression Hunt, Convention Check, Dark
+            Patterns, Blocking, Non-blocking, and Verdict. Use verdict
+            pass_with_issues when there are non-blocking findings, and use pass
+            only when the blocking section is empty and the pass_results block
+            reflects a clean review.
           artifacts:
             named_emits:
               review_decision: review_decision
