@@ -149,6 +149,8 @@ describe("scafld issue-to-PR skill contract", () => {
     expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("review_file_contents");
     expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("## Review N — <timestamp>");
     expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("Do not rename");
+    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("write the literal `None.`");
+    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("Do not write placeholder bullets");
     expect(chain.steps.find((step) => step.id === "scafld-complete")).toMatchObject({
       context: {
         reviewer_result: "reviewer-boundary.review_decision.data",

@@ -570,7 +570,11 @@ runners:
             convention_check, and dark_patterns. Use verdict pass_with_issues
             when there are non-blocking findings, and use pass only when the
             blocking section is empty and the pass_results block reflects a
-            clean review.
+            clean review. When `### Blocking` or `### Non-blocking` has no
+            findings, write the literal `None.` on the next line with no bullet
+            marker and no extra prose. Do not write placeholder bullets such as
+            `- No blocking findings.` or `- None.` because scafld counts
+            bullet lines in those sections as real findings.
           artifacts:
             named_emits:
               review_decision: review_decision
