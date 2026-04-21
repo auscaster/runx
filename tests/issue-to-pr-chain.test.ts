@@ -44,6 +44,7 @@ describe("issue-to-PR composite skill", () => {
       "scafld-exec",
       "scafld-audit",
       "scafld-review-open",
+      "read-review-template",
       "reviewer-boundary",
       "write-review",
       "scafld-complete",
@@ -107,6 +108,12 @@ describe("issue-to-PR composite skill", () => {
     expect(chain.steps.find((step) => step.id === "author-fix")?.instructions).toContain("declared_file_context");
     expect(chain.steps.find((step) => step.id === "author-fix")?.instructions).toContain("fix_bundle.status: blocked");
     expect(chain.steps.find((step) => step.id === "author-fix")?.instructions).toContain("must not recreate it");
+    expect(chain.steps.find((step) => step.id === "read-review-template")).toMatchObject({
+      tool: "fs.read",
+      context: {
+        path: "scafld-review-open.review_file",
+      },
+    });
     expect(chain.steps.find((step) => step.id === "reviewer-boundary")).toMatchObject({
       run: {
         type: "agent-step",
@@ -115,6 +122,7 @@ describe("issue-to-PR composite skill", () => {
       context: {
         review_file: "scafld-review-open.review_file",
         review_prompt: "scafld-review-open.review_prompt",
+        review_file_contents: "read-review-template.file_read.data.contents",
         fix_bundle: "author-fix.fix_bundle.data",
         written_files: "write-fix.file_bundle_write.data.files",
         spec_contents: "read-spec.file_read.data.contents",
@@ -124,6 +132,9 @@ describe("issue-to-PR composite skill", () => {
     expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("schema_version: 3");
     expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("reviewed_at");
     expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("pass_with_issues");
+    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("review_file_contents");
+    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("## Review N — <timestamp>");
+    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("Do not rename");
     expect(chain.steps.find((step) => step.id === "write-review")).toMatchObject({
       tool: "fs.write",
       context: {
@@ -217,6 +228,7 @@ describe("issue-to-PR composite skill", () => {
         ["scafld-exec", "success"],
         ["scafld-audit", "success"],
         ["scafld-review-open", "success"],
+        ["read-review-template", "success"],
         ["reviewer-boundary", "success"],
         ["write-review", "success"],
         ["scafld-complete", "success"],
