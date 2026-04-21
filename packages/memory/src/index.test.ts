@@ -7,8 +7,8 @@ import { describe, expect, it } from "vitest";
 import { writeLocalReceipt } from "../../receipts/src/index.js";
 
 import {
-  createFileMemoryStore,
-  findPublicationTarget,
+  createFileJournalStore,
+  findSubjectOutput,
   latestDecisionForGate,
   subjectMemoryAllowsGate,
   summarizeSubjectMemory,
@@ -52,7 +52,7 @@ describe("subject memory contract", () => {
           reason: "same subject approved one rolling draft PR",
         },
       ],
-      publication_targets: [
+      subject_outputs: [
         {
           target_id: "pr-111",
           target_kind: "pull_request",
@@ -73,7 +73,7 @@ describe("subject memory contract", () => {
     expect(memory.subject.subject_locator).toBe("nilstate/aster#issue/110");
     expect(memory.adapter.type).toBe("github");
     expect(subjectMemoryAllowsGate(memory, "skill-lab.publish")).toBe(true);
-    expect(findPublicationTarget(memory, "pull_request")?.status).toBe("draft");
+    expect(findSubjectOutput(memory, "pull_request")?.status).toBe("draft");
   });
 
   it("returns the newest matching decision for a gate", () => {
@@ -101,7 +101,7 @@ describe("subject memory contract", () => {
           recorded_at: "2026-04-21T08:05:00Z",
         },
       ],
-      publication_targets: [],
+      subject_outputs: [],
       source_refs: [],
     });
 
@@ -134,7 +134,7 @@ describe("subject memory contract", () => {
         },
       ],
       decisions: [],
-      publication_targets: [
+      subject_outputs: [
         {
           target_id: "draft-1",
           target_kind: "draft_change",
@@ -145,7 +145,7 @@ describe("subject memory contract", () => {
     });
 
     expect(summarizeSubjectMemory(memory)).toBe(
-      "work_item:linear://issue/ENG-42 via ticketing | entries=2 decisions=0 publication_targets=draft_change",
+      "work_item:linear://issue/ENG-42 via ticketing | entries=2 decisions=0 subject_outputs=draft_change",
     );
   });
 
@@ -163,27 +163,26 @@ describe("subject memory contract", () => {
           },
           entries: [],
           decisions: [],
-          publication_targets: [],
+          subject_outputs: [],
           source_refs: [],
         }),
     ).toThrow(/subject_locator/);
   });
 });
 
-describe("file local memory store", () => {
+describe("file local journal store", () => {
   it("initializes an idempotent filesystem index and stores project-scoped facts", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-memory-"));
-    const memoryDir = path.join(tempDir, "memory");
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-journal-"));
+    const journalDir = path.join(tempDir, "journal");
 
     try {
-      const store = createFileMemoryStore(memoryDir);
+      const store = createFileJournalStore(journalDir);
       await expect(store.init()).resolves.toMatchObject({
-        schema_version: "runx.memory.v1",
-        receipts: [],
-        facts: [],
+        schema_version: "runx.journal.v1",
+        entries: [],
       });
       await expect(store.init()).resolves.toMatchObject({
-        schema_version: "runx.memory.v1",
+        schema_version: "runx.journal.v1",
       });
 
       const receipt = await writeLocalReceipt({
@@ -244,17 +243,17 @@ describe("file local memory store", () => {
   });
 
   it("preserves concurrent fact writes through the filesystem index", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-memory-concurrent-"));
-    const memoryDir = path.join(tempDir, "memory");
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-journal-concurrent-"));
+    const journalDir = path.join(tempDir, "journal");
     const project = path.join(tempDir, "project");
 
     try {
-      const store = createFileMemoryStore(memoryDir);
+      const store = createFileJournalStore(journalDir);
       await store.init();
 
       await Promise.all(
         Array.from({ length: 20 }, async (_, index) =>
-          createFileMemoryStore(memoryDir).addFact({
+          createFileJournalStore(journalDir).addFact({
             project,
             scope: "project",
             key: `fact_${index}`,
@@ -278,18 +277,20 @@ describe("file local memory store", () => {
   });
 
   it("skips malformed stored index entries instead of throwing", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-memory-malformed-"));
-    const memoryDir = path.join(tempDir, "memory");
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-journal-malformed-"));
+    const journalDir = path.join(tempDir, "journal");
     const project = path.join(tempDir, "project");
 
     try {
-      await mkdir(memoryDir, { recursive: true });
+      await mkdir(journalDir, { recursive: true });
       await writeFile(
-        path.join(memoryDir, "index.json"),
+        path.join(journalDir, "index.json"),
         `${JSON.stringify({
-          schema_version: "runx.memory.v1",
-          receipts: [
+          schema_version: "runx.journal.v1",
+          entries: [
             {
+              entry_id: "receipt_rx_valid",
+              entry_kind: "receipt",
               receipt_id: "rx_valid",
               kind: "skill_execution",
               status: "success",
@@ -298,10 +299,9 @@ describe("file local memory store", () => {
               project,
             },
             { receipt_id: 123, indexed_at: 1 },
-          ],
-          facts: [
             {
-              id: "fact_valid",
+              entry_id: "fact_valid",
+              entry_kind: "fact",
               project,
               scope: "project",
               key: "homepage_url",
@@ -323,17 +323,17 @@ describe("file local memory store", () => {
       };
 
       try {
-        const store = createFileMemoryStore(memoryDir);
-        const index = await store.read();
-        expect(index.receipts).toEqual([
+        const store = createFileJournalStore(journalDir);
+        const journal = await store.read();
+        expect(journal.entries.filter((entry) => entry.entry_kind === "receipt")).toEqual([
           expect.objectContaining({
             receipt_id: "rx_valid",
             subject: "echo",
           }),
         ]);
-        expect(index.facts).toEqual([
+        expect(journal.entries.filter((entry) => entry.entry_kind === "fact")).toEqual([
           expect.objectContaining({
-            id: "fact_valid",
+            entry_id: "fact_valid",
             key: "homepage_url",
           }),
         ]);
@@ -342,8 +342,8 @@ describe("file local memory store", () => {
       }
 
       expect(warnings).toHaveLength(2);
-      expect(warnings[0]).toContain("malformed local memory receipts entry");
-      expect(warnings[1]).toContain("malformed local memory facts entry");
+      expect(warnings[0]).toContain("malformed local journal entry");
+      expect(warnings[1]).toContain("malformed local journal entry");
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

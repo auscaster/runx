@@ -124,10 +124,10 @@ export function resolveRunxHomeDir(env: NodeJS.ProcessEnv, options: PathResoluti
   return resolveRunxGlobalHomeDir(env, options);
 }
 
-export function resolveRunxMemoryDir(env: NodeJS.ProcessEnv, options: PathResolutionOptions = {}): string {
-  return env.RUNX_MEMORY_DIR
-    ? resolvePathFromUserInput(env.RUNX_MEMORY_DIR, env, options)
-    : path.join(resolveRunxProjectDir(env, options), "memory");
+export function resolveRunxJournalDir(env: NodeJS.ProcessEnv, options: PathResolutionOptions = {}): string {
+  return env.RUNX_JOURNAL_DIR
+    ? resolvePathFromUserInput(env.RUNX_JOURNAL_DIR, env, options)
+    : path.join(resolveRunxProjectDir(env, options), "journal");
 }
 
 export function resolveSkillInstallRoot(env: NodeJS.ProcessEnv, to?: string, options: PathResolutionOptions = {}): string {

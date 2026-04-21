@@ -8,7 +8,7 @@ harness:
         subject_title: README should point users to issue-to-pr
         subject_body: The public docs should present issue-to-pr as the canonical command.
         subject_locator: github://example/repo/issues/101
-        publication_target:
+        subject_output:
           target_id: github_issue_101
           target_kind: message
           locator: https://github.com/example/repo/issues/101
@@ -36,7 +36,7 @@ harness:
                 subject_title: README should point users to issue-to-pr
                 subject_body: The public docs should present issue-to-pr as the canonical command.
                 subject_locator: github://example/repo/issues/101
-                publication_target:
+                subject_output:
                   target_id: github_issue_101
                   target_kind: message
                   locator: https://github.com/example/repo/issues/101
@@ -53,7 +53,7 @@ harness:
               recommended_lane: issue-to-pr
               commence_decision: approve
               action_decision: proceed_to_build
-              publication_target:
+              subject_output:
                 target_id: github_issue_101
                 target_kind: message
                 locator: https://github.com/example/repo/issues/101
@@ -210,7 +210,7 @@ harness:
         subject_title: Clarify the affected repo before we start
         subject_body: The report mentions API failures and docs drift, but it is not yet clear whether this is one bounded fix or cross-repo work.
         subject_locator: github://example/repo/issues/984
-        publication_target:
+        subject_output:
           target_id: github_issue_984
           target_kind: message
           locator: https://github.com/example/repo/issues/984
@@ -243,7 +243,7 @@ harness:
               recommended_lane: manual-triage
               commence_decision: approve
               action_decision: request_review
-              publication_target:
+              subject_output:
                 target_id: github_issue_984
                 target_kind: message
                 locator: https://github.com/example/repo/issues/984
@@ -295,7 +295,7 @@ runners:
         type: json
         required: false
         description: "Portable subject memory when the caller already has it."
-      publication_target:
+      subject_output:
         type: json
         required: false
         description: "Current publication surface for replies, status, or refreshes."

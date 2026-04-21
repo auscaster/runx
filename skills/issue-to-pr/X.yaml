@@ -179,7 +179,7 @@ runners:
         type: json
         required: false
         description: "Portable subject memory for the current subject thread."
-      publication_target:
+      subject_output:
         type: json
         required: false
         description: "Current publication surface when the lane is refreshing an adapter-owned target."
@@ -280,7 +280,7 @@ runners:
             Replace the scafld draft TODOs with a valid bounded spec for this
             issue-to-PR lane. Use the subject metadata in inputs, especially
             subject_title, subject_body, subject_locator, subject_memory,
-            publication_target, target_repo, repo_snapshot, repo_snapshot_path,
+            subject_output, target_repo, repo_snapshot, repo_snapshot_path,
             repo_context, and draft_spec_path to keep the spec grounded in the
             real codebase. Prefer repo_context and the inline repo_snapshot
             first. If you need more grounding and repo_snapshot_path is

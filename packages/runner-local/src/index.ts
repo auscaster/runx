@@ -35,7 +35,7 @@ import {
   type SkillAdapter,
   validateOutputContract,
 } from "../../executor/src/index.js";
-import { createFileMemoryStore } from "../../memory/src/index.js";
+import { createFileJournalStore } from "../../memory/src/index.js";
 import { resolveLocalSkillProfile } from "../../config/src/index.js";
 import {
   parseChainYaml,
@@ -146,7 +146,7 @@ export interface RunLocalSkillOptions {
   readonly adapters?: readonly SkillAdapter[];
   readonly allowedSourceTypes?: readonly string[];
   readonly runner?: string;
-  readonly memoryDir?: string;
+  readonly journalDir?: string;
   readonly authResolver?: AuthResolver;
   readonly receiptMetadata?: Readonly<Record<string, unknown>>;
   readonly resumeFromRunId?: string;
@@ -1217,7 +1217,7 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
   } catch (error) {
     await options.caller.report({
       type: "warning",
-      message: "Local memory indexing failed after receipt write; continuing with the persisted receipt.",
+      message: "Local journal indexing failed after receipt write; continuing with the persisted receipt.",
       data: {
         receiptId: receipt.id,
         error: error instanceof Error ? error.message : String(error),
@@ -2970,15 +2970,15 @@ async function indexReceiptIfEnabled(
   receipt: LocalSkillReceipt,
   receiptDir: string,
   options: {
-    readonly memoryDir?: string;
+    readonly journalDir?: string;
     readonly env?: NodeJS.ProcessEnv;
   },
 ): Promise<void> {
-  const memoryDir = options.memoryDir ?? options.env?.RUNX_MEMORY_DIR;
-  if (!memoryDir) {
+  const journalDir = options.journalDir ?? options.env?.RUNX_JOURNAL_DIR;
+  if (!journalDir) {
     return;
   }
-  await createFileMemoryStore(memoryDir).indexReceipt({
+  await createFileJournalStore(journalDir).indexReceipt({
     receipt,
     receiptPath: path.join(receiptDir, `${receipt.id}.json`),
     project: options.env?.RUNX_PROJECT ?? options.env?.RUNX_CWD ?? options.env?.INIT_CWD ?? process.cwd(),

@@ -16,24 +16,24 @@ import {
   loadLocalSkillPackage,
   loadRunxConfigFile,
   lookupRunxConfigValue,
-    maskRunxConfigFile,
-    resolvePathFromUserInput,
-    resolveRunxGlobalHomeDir,
-    resolveRunxHomeDir,
-    resolveRunxMemoryDir,
-    resolveRunxOfficialSkillsDir,
-    resolveRunxProjectDir,
-    resolveRunxRegistryPath,
-    resolveRunxRegistryTarget,
-    resolveRunxWorkspaceBase,
-    resolveSkillInstallRoot,
-    updateRunxConfigValue,
-    writeRunxConfigFile,
+  maskRunxConfigFile,
+  resolvePathFromUserInput,
+  resolveRunxGlobalHomeDir,
+  resolveRunxHomeDir,
+  resolveRunxJournalDir,
+  resolveRunxOfficialSkillsDir,
+  resolveRunxProjectDir,
+  resolveRunxRegistryPath,
+  resolveRunxRegistryTarget,
+  resolveRunxWorkspaceBase,
+  resolveSkillInstallRoot,
+  updateRunxConfigValue,
+  writeRunxConfigFile,
   type RunxConfigFile,
 } from "../../config/src/index.js";
 import { runHarness, runHarnessTarget, validatePublishHarness } from "../../harness/src/index.js";
 import { createFixtureMarketplaceAdapter, searchMarketplaceAdapters, type SkillSearchResult } from "../../marketplaces/src/index.js";
-import { createFileMemoryStore } from "../../memory/src/index.js";
+import { createFileJournalStore } from "../../memory/src/index.js";
 import {
   createDefaultHttpCachedRegistryStore,
   createFileRegistryStore,
@@ -302,7 +302,7 @@ export interface ParsedArgs {
   readonly subcommand?: string;
   readonly exportAction?: "trainable";
   readonly skillAction?: "search" | "add" | "publish" | "inspect";
-  readonly memoryAction?: "show";
+  readonly journalAction?: "show";
   readonly searchQuery?: string;
   readonly skillRef?: string;
   readonly publishPath?: string;
@@ -323,7 +323,7 @@ export interface ParsedArgs {
   readonly answersPath?: string;
   readonly receiptDir?: string;
   readonly runner?: string;
-  readonly memoryProject?: string;
+  readonly journalProject?: string;
   readonly sourceFilter?: string;
   readonly installVersion?: string;
   readonly installTo?: string;
@@ -354,7 +354,7 @@ const builtinRootCommands = new Set([
   "add",
   "inspect",
   "history",
-  "memory",
+  "journal",
   "harness",
   "connect",
   "config",
@@ -579,9 +579,9 @@ export async function runCli(
       return 0;
     }
 
-    if (parsed.command === "memory" && parsed.memoryAction === "show") {
-      const project = resolvePathFromUserInput(parsed.memoryProject ?? ".", env);
-      const facts = await createFileMemoryStore(resolveMemoryDir(env)).listFacts({ project });
+    if (parsed.command === "journal" && parsed.journalAction === "show") {
+      const project = resolvePathFromUserInput(parsed.journalProject ?? ".", env);
+      const facts = await createFileJournalStore(resolveJournalDir(env)).listFacts({ project });
       const report = {
         status: "success",
         project,
@@ -590,7 +590,7 @@ export async function runCli(
       if (parsed.json) {
         io.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
       } else {
-        io.stdout.write(renderMemoryFacts(project, facts, env));
+        io.stdout.write(renderJournalFacts(project, facts, env));
       }
       return 0;
     }
@@ -833,7 +833,7 @@ function writeUsage(stream: NodeJS.WritableStream, env: NodeJS.ProcessEnv = proc
       "  runx inspect <receipt-id> [--receipt-dir dir] [--json]",
       "  runx history [query] [--skill s] [--status s] [--source s] [--since iso] [--until iso] [--receipt-dir dir] [--json]",
       "  runx export-receipts --trainable [--receipt-dir dir] [--since iso] [--until iso] [--status pending|complete|expired] [--source source-type]",
-      "  runx memory show --project . [--json]",
+      "  runx journal show --project . [--json]",
       "  runx connect list|revoke <grant-id>|<provider> [--scope scope] [--json]",
       "  runx config set|get|list [agent.provider|agent.model|agent.api_key] [value] [--json]",
       "  runx init [-g|--global] [--prefetch official] [--json]",
@@ -929,7 +929,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   const isSkillAdd = (command === "skill" && positionals[0] === "add") || command === "add";
   const isSkillPublish = command === "skill" && positionals[0] === "publish";
   const isSkillInspect = (command === "skill" && positionals[0] === "inspect") || command === "inspect";
-  const isMemoryShow = command === "memory" && positionals[0] === "show";
+  const isJournalShow = command === "journal" && positionals[0] === "show";
   const isConnect = command === "connect";
   const isConfig = command === "config";
   const isInit = command === "init";
@@ -939,7 +939,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   const searchPositionals = positionals.slice(adminOffset);
   const addPositionals = positionals.slice(adminOffset);
   const inspectPositionals = positionals.slice(adminOffset);
-  const memoryProject = isMemoryShow && typeof inputs.project === "string" ? inputs.project : undefined;
+  const journalProject = isJournalShow && typeof inputs.project === "string" ? inputs.project : undefined;
   const sourceFilter = isSkillSearch && typeof inputs.source === "string" ? inputs.source : undefined;
   const installVersion = isSkillAdd && typeof inputs.version === "string" ? inputs.version : undefined;
   const installTo = isSkillAdd && typeof inputs.to === "string" ? inputs.to : undefined;
@@ -973,7 +973,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     subcommand: positionals[0],
     exportAction: isExportReceipts && truthyFlag(inputs.trainable) ? "trainable" : undefined,
     skillAction: isSkillSearch ? "search" : isSkillAdd ? "add" : isSkillPublish ? "publish" : isSkillInspect ? "inspect" : undefined,
-    memoryAction: isMemoryShow ? "show" : undefined,
+    journalAction: isJournalShow ? "show" : undefined,
     searchQuery: isSkillSearch ? searchPositionals.join(" ") || undefined : undefined,
     skillRef: isSkillAdd ? addPositionals.join(" ") || undefined : undefined,
     publishPath: isSkillPublish ? positionals[1] : undefined,
@@ -999,7 +999,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     receiptDir,
     resumeReceiptId: isResume ? positionals[0] ?? resumeReceiptId : resumeReceiptId,
     runner,
-    memoryProject,
+    journalProject,
     sourceFilter,
     installVersion,
     installTo,
@@ -1048,7 +1048,7 @@ function isSupportedCommand(parsed: ParsedArgs): boolean {
   if (parsed.command === "history") {
     return true;
   }
-  if (parsed.command === "memory" && parsed.memoryAction === "show") {
+  if (parsed.command === "journal" && parsed.journalAction === "show") {
     return true;
   }
   if (parsed.command === "harness" && parsed.harnessPath) {
@@ -2029,7 +2029,7 @@ function renderVerificationBadge(verification: LocalReceiptSummary["verification
   return `  ${color}${verification.status}${t.reset}${reason}`;
 }
 
-function renderMemoryFacts(
+function renderJournalFacts(
   project: string,
   facts: readonly {
     readonly key: string;
@@ -2044,7 +2044,7 @@ function renderMemoryFacts(
 ): string {
   const t = theme(undefined, env);
   if (facts.length === 0) {
-    return `\n  ${t.dim}No memory facts for ${project}.${t.reset}\n\n`;
+    return `\n  ${t.dim}No journal facts for ${project}.${t.reset}\n\n`;
   }
   const keyWidth = Math.min(32, Math.max(...facts.map((f) => f.key.length)));
   const lines: string[] = [""];
@@ -2176,8 +2176,8 @@ function renderConnectResult(
   );
 }
 
-function resolveMemoryDir(env: NodeJS.ProcessEnv): string {
-  return resolveRunxMemoryDir(env);
+function resolveJournalDir(env: NodeJS.ProcessEnv): string {
+  return resolveRunxJournalDir(env);
 }
 
 function resolveRunxDir(env: NodeJS.ProcessEnv): string {

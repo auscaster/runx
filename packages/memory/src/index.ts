@@ -6,16 +6,17 @@ import path from "node:path";
 
 import type { LocalReceipt } from "../../receipts/src/index.js";
 
-export const MEMORY_SCHEMA_REFS = {
+export const RUNX_SCHEMA_REFS = {
   subject_memory: "https://runx.ai/spec/subject-memory.schema.json",
-  publication_target: "https://runx.ai/spec/publication-target.schema.json",
-  decision: "https://runx.ai/spec/subject-memory-decision.schema.json",
+  subject_output: "https://runx.ai/spec/subject-output.schema.json",
+  subject_memory_decision: "https://runx.ai/spec/subject-memory-decision.schema.json",
+  journal_entry: "https://runx.ai/spec/journal-entry.schema.json",
 } as const;
 
 export type SubjectMemoryEntryKind = "message" | "decision" | "status" | "artifact_ref" | "note";
 export type SubjectMemoryDecisionValue = "allow" | "deny";
-export type PublicationTargetKind = "pull_request" | "draft_change" | "patch_bundle" | "message" | "artifact";
-export type PublicationTargetStatus = "proposed" | "draft" | "published" | "superseded" | "closed";
+export type SubjectOutputKind = "pull_request" | "draft_change" | "patch_bundle" | "message" | "artifact";
+export type SubjectOutputStatus = "proposed" | "draft" | "published" | "superseded" | "closed";
 
 export interface MemoryEvidenceRef {
   readonly type: string;
@@ -62,12 +63,12 @@ export interface SubjectMemoryDecision {
   readonly source_ref?: MemoryEvidenceRef;
 }
 
-export interface PublicationTarget {
+export interface SubjectOutput {
   readonly target_id: string;
-  readonly target_kind: PublicationTargetKind;
+  readonly target_kind: SubjectOutputKind;
   readonly locator?: string;
   readonly title?: string;
-  readonly status?: PublicationTargetStatus;
+  readonly status?: SubjectOutputStatus;
   readonly subject_locator?: string;
   readonly metadata?: Readonly<Record<string, unknown>>;
 }
@@ -85,7 +86,7 @@ export interface SubjectMemory {
   readonly subject: SubjectDescriptor;
   readonly entries: readonly SubjectMemoryEntry[];
   readonly decisions: readonly SubjectMemoryDecision[];
-  readonly publication_targets: readonly PublicationTarget[];
+  readonly subject_outputs: readonly SubjectOutput[];
   readonly source_refs: readonly MemoryEvidenceRef[];
   readonly generated_at?: string;
   readonly watermark?: string;
@@ -95,28 +96,26 @@ export interface SubjectMemoryFetchRequest {
   readonly subject_kind: string;
   readonly subject_locator: string;
   readonly cursor?: string;
-  readonly include_publication_targets?: boolean;
+  readonly include_subject_outputs?: boolean;
 }
 
-export interface RefreshPublicationTargetRequest {
+export interface PushOutputRequest {
   readonly memory: SubjectMemory;
-  readonly target: PublicationTarget;
+  readonly output: SubjectOutput;
   readonly artifacts?: readonly MemoryEvidenceRef[];
-  readonly next_status?: PublicationTargetStatus;
+  readonly next_status?: SubjectOutputStatus;
 }
 
 export interface SubjectMemoryAdapter {
   readonly type: string;
   readonly fetchSubjectMemory: (request: SubjectMemoryFetchRequest) => Promise<SubjectMemory>;
-  readonly refreshPublicationTarget?: (
-    request: RefreshPublicationTargetRequest,
-  ) => Promise<PublicationTarget>;
+  readonly pushOutput?: (request: PushOutputRequest) => Promise<SubjectOutput>;
 }
 
 export function validateSubjectMemory(value: unknown, label = "subject_memory"): SubjectMemory {
   const record = requireRecord(value, label);
   if (record.kind !== "runx.subject-memory.v1") {
-    throw new Error(`${label}.kind must be "runx.subject-memory.v1" (${MEMORY_SCHEMA_REFS.subject_memory}).`);
+    throw new Error(`${label}.kind must be "runx.subject-memory.v1" (${RUNX_SCHEMA_REFS.subject_memory}).`);
   }
   return {
     kind: "runx.subject-memory.v1",
@@ -128,8 +127,8 @@ export function validateSubjectMemory(value: unknown, label = "subject_memory"):
     decisions: requireArray(record.decisions, `${label}.decisions`).map((decision, index) =>
       validateSubjectMemoryDecision(decision, `${label}.decisions[${index}]`),
     ),
-    publication_targets: requireArray(record.publication_targets, `${label}.publication_targets`).map((target, index) =>
-      validatePublicationTarget(target, `${label}.publication_targets[${index}]`),
+    subject_outputs: requireArray(record.subject_outputs, `${label}.subject_outputs`).map((output, index) =>
+      validateSubjectOutput(output, `${label}.subject_outputs[${index}]`),
     ),
     source_refs: requireArray(record.source_refs, `${label}.source_refs`).map((ref, index) =>
       validateMemoryEvidenceRef(ref, `${label}.source_refs[${index}]`),
@@ -139,7 +138,7 @@ export function validateSubjectMemory(value: unknown, label = "subject_memory"):
   };
 }
 
-export function validatePublicationTarget(value: unknown, label = "publication_target"): PublicationTarget {
+export function validateSubjectOutput(value: unknown, label = "subject_output"): SubjectOutput {
   const record = requireRecord(value, label);
   return {
     target_id: requireString(record.target_id, `${label}.target_id`),
@@ -203,30 +202,26 @@ export function subjectMemoryAllowsGate(memory: SubjectMemory, gateId: string): 
   return latestDecisionForGate(memory, gateId)?.decision === "allow";
 }
 
-export function findPublicationTarget(
+export function findSubjectOutput(
   memory: SubjectMemory,
-  targetKind: PublicationTargetKind,
-): PublicationTarget | undefined {
-  return memory.publication_targets.find((target) => target.target_kind === targetKind);
+  targetKind: SubjectOutputKind,
+): SubjectOutput | undefined {
+  return memory.subject_outputs.find((output) => output.target_kind === targetKind);
 }
 
 export function summarizeSubjectMemory(memory: SubjectMemory): string {
   const subject = `${memory.subject.subject_kind}:${memory.subject.subject_locator}`;
   const entryCount = memory.entries.length;
   const decisionCount = memory.decisions.length;
-  const targetKinds = memory.publication_targets.map((target) => target.target_kind).join(", ") || "none";
-  return `${subject} via ${memory.adapter.type} | entries=${entryCount} decisions=${decisionCount} publication_targets=${targetKinds}`;
+  const outputKinds = memory.subject_outputs.map((output) => output.target_kind).join(", ") || "none";
+  return `${subject} via ${memory.adapter.type} | entries=${entryCount} decisions=${decisionCount} subject_outputs=${outputKinds}`;
 }
 
-export interface LocalMemoryIndex {
-  readonly schema_version: "runx.memory.v1";
-  readonly receipts: readonly MemoryReceiptRecord[];
-  readonly facts: readonly MemoryFactRecord[];
-  readonly answers: readonly MemoryAnswerRecord[];
-  readonly artifacts: readonly MemoryArtifactRecord[];
-}
+export type LocalJournalEntryKind = "receipt" | "fact" | "answer" | "artifact";
 
-export interface MemoryReceiptRecord {
+export interface LocalJournalReceiptEntry {
+  readonly entry_id: string;
+  readonly entry_kind: "receipt";
   readonly receipt_id: string;
   readonly kind: LocalReceipt["kind"];
   readonly status: LocalReceipt["status"];
@@ -239,8 +234,9 @@ export interface MemoryReceiptRecord {
   readonly indexed_at: string;
 }
 
-export interface MemoryFactRecord {
-  readonly id: string;
+export interface LocalJournalFactEntry {
+  readonly entry_id: string;
+  readonly entry_kind: "fact";
   readonly project: string;
   readonly scope: string;
   readonly key: string;
@@ -252,8 +248,9 @@ export interface MemoryFactRecord {
   readonly created_at: string;
 }
 
-export interface MemoryAnswerRecord {
-  readonly id: string;
+export interface LocalJournalAnswerEntry {
+  readonly entry_id: string;
+  readonly entry_kind: "answer";
   readonly project: string;
   readonly question_id: string;
   readonly answer_hash: string;
@@ -261,12 +258,24 @@ export interface MemoryAnswerRecord {
   readonly created_at: string;
 }
 
-export interface MemoryArtifactRecord {
-  readonly id: string;
+export interface LocalJournalArtifactEntry {
+  readonly entry_id: string;
+  readonly entry_kind: "artifact";
   readonly project: string;
   readonly path: string;
   readonly receipt_id?: string;
   readonly created_at: string;
+}
+
+export type LocalJournalEntry =
+  | LocalJournalReceiptEntry
+  | LocalJournalFactEntry
+  | LocalJournalAnswerEntry
+  | LocalJournalArtifactEntry;
+
+export interface LocalJournal {
+  readonly schema_version: "runx.journal.v1";
+  readonly entries: readonly LocalJournalEntry[];
 }
 
 export interface IndexReceiptOptions {
@@ -288,74 +297,83 @@ export interface AddFactOptions {
   readonly createdAt?: string;
 }
 
-export interface LocalMemoryStore {
-  readonly init: () => Promise<LocalMemoryIndex>;
-  readonly read: () => Promise<LocalMemoryIndex>;
-  readonly indexReceipt: (options: IndexReceiptOptions) => Promise<MemoryReceiptRecord>;
-  readonly addFact: (options: AddFactOptions) => Promise<MemoryFactRecord>;
-  readonly listFacts: (filter?: { readonly project?: string }) => Promise<readonly MemoryFactRecord[]>;
-  readonly listReceipts: (filter?: { readonly project?: string }) => Promise<readonly MemoryReceiptRecord[]>;
+export interface LocalJournalStore {
+  readonly init: () => Promise<LocalJournal>;
+  readonly read: () => Promise<LocalJournal>;
+  readonly indexReceipt: (options: IndexReceiptOptions) => Promise<LocalJournalReceiptEntry>;
+  readonly addFact: (options: AddFactOptions) => Promise<LocalJournalFactEntry>;
+  readonly listFacts: (filter?: { readonly project?: string }) => Promise<readonly LocalJournalFactEntry[]>;
+  readonly listReceipts: (filter?: { readonly project?: string }) => Promise<readonly LocalJournalReceiptEntry[]>;
 }
 
-export function createFileMemoryStore(memoryDir: string): LocalMemoryStore {
-  const indexPath = path.join(memoryDir, "index.json");
-  const lockPath = path.join(memoryDir, "index.lock");
+export function createFileJournalStore(journalDir: string): LocalJournalStore {
+  const indexPath = path.join(journalDir, "index.json");
+  const lockPath = path.join(journalDir, "index.lock");
 
-  async function read(): Promise<LocalMemoryIndex> {
+  async function read(): Promise<LocalJournal> {
     try {
-      return normalizeIndex(JSON.parse(await readFile(indexPath, "utf8")) as unknown);
+      return normalizeJournal(JSON.parse(await readFile(indexPath, "utf8")) as unknown);
     } catch (error) {
       if (isNotFound(error)) {
-        return emptyIndex();
+        return emptyJournal();
       }
       throw error;
     }
   }
 
-  async function writeUnlocked(index: LocalMemoryIndex): Promise<void> {
-    await mkdir(memoryDir, { recursive: true });
-    const tempPath = path.join(memoryDir, `.index.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`);
-    await writeFile(tempPath, `${JSON.stringify(index, null, 2)}\n`, { mode: 0o600 });
+  async function writeUnlocked(journal: LocalJournal): Promise<void> {
+    await mkdir(journalDir, { recursive: true });
+    const tempPath = path.join(
+      journalDir,
+      `.index.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`,
+    );
+    await writeFile(tempPath, `${JSON.stringify(journal, null, 2)}\n`, { mode: 0o600 });
     await rename(tempPath, indexPath);
   }
 
-  async function updateIndex<T>(updater: (index: LocalMemoryIndex) => Promise<{ readonly index: LocalMemoryIndex; readonly result: T }>): Promise<T> {
-    return await withIndexLock(memoryDir, lockPath, async () => {
+  async function updateJournal<T>(
+    updater: (journal: LocalJournal) => Promise<{ readonly journal: LocalJournal; readonly result: T }>,
+  ): Promise<T> {
+    return await withJournalLock(journalDir, lockPath, async () => {
       const current = await read();
-      const { index, result } = await updater(current);
-      await writeUnlocked(index);
+      const { journal, result } = await updater(current);
+      await writeUnlocked(journal);
       return result;
     });
   }
 
   return {
     init: async () => {
-      return await updateIndex(async (index) => ({ index, result: index }));
+      return await updateJournal(async (journal) => ({ journal, result: journal }));
     },
     read,
     indexReceipt: async (options) => {
-      return await updateIndex(async (index) => {
-        const record = receiptRecord(options);
+      return await updateJournal(async (journal) => {
+        const entry = receiptEntry(options);
         return {
-          result: record,
-          index: {
-            ...index,
-            receipts: [...index.receipts.filter((candidate) => candidate.receipt_id !== record.receipt_id), record],
+          result: entry,
+          journal: {
+            ...journal,
+            entries: [
+              ...journal.entries.filter((candidate) => !(candidate.entry_kind === "receipt" && candidate.receipt_id === entry.receipt_id)),
+              entry,
+            ],
           },
         };
       });
     },
     addFact: async (options) => {
-      return await updateIndex(async (index) => {
+      return await updateJournal(async (journal) => {
         const createdAt = options.createdAt ?? new Date().toISOString();
-        const record: MemoryFactRecord = {
-          id: `fact_${hashStable({
+        const entry: LocalJournalFactEntry = {
+          entry_id: `fact_${hashStable({
             project: options.project,
             scope: options.scope,
             key: options.key,
             receipt_id: options.receiptId,
             created_at: createdAt,
           }).slice(0, 24)}`,
+          entry_kind: "fact",
           project: options.project,
           scope: options.scope,
           key: options.key,
@@ -367,31 +385,33 @@ export function createFileMemoryStore(memoryDir: string): LocalMemoryStore {
           created_at: createdAt,
         };
         return {
-          result: record,
-          index: {
-            ...index,
-            facts: [...index.facts.filter((candidate) => candidate.id !== record.id), record],
+          result: entry,
+          journal: {
+            ...journal,
+            entries: [...journal.entries.filter((candidate) => candidate.entry_id !== entry.entry_id), entry],
           },
         };
       });
     },
     listFacts: async (filter) => {
-      const index = await read();
+      const journal = await read();
+      const facts = journal.entries.filter(isLocalJournalFactEntry);
       const project = filter?.project;
-      return project ? index.facts.filter((fact) => sameProject(fact.project, project)) : index.facts;
+      return project ? facts.filter((fact) => sameProject(fact.project, project)) : facts;
     },
     listReceipts: async (filter) => {
-      const index = await read();
+      const journal = await read();
+      const receipts = journal.entries.filter(isLocalJournalReceiptEntry);
       const project = filter?.project;
       return project
-        ? index.receipts.filter((receipt) => typeof receipt.project === "string" && sameProject(receipt.project, project))
-        : index.receipts;
+        ? receipts.filter((receipt) => typeof receipt.project === "string" && sameProject(receipt.project, project))
+        : receipts;
     },
   };
 }
 
-async function withIndexLock<T>(memoryDir: string, lockPath: string, fn: () => Promise<T>): Promise<T> {
-  await mkdir(memoryDir, { recursive: true });
+async function withJournalLock<T>(journalDir: string, lockPath: string, fn: () => Promise<T>): Promise<T> {
+  await mkdir(journalDir, { recursive: true });
   const startedAt = Date.now();
   while (true) {
     try {
@@ -403,7 +423,7 @@ async function withIndexLock<T>(memoryDir: string, lockPath: string, fn: () => P
       }
       await removeStaleLock(lockPath);
       if (Date.now() - startedAt > 10_000) {
-        throw new Error(`Timed out waiting for local memory lock at ${lockPath}.`);
+        throw new Error(`Timed out waiting for local journal lock at ${lockPath}.`);
       }
       await delay(10 + Math.floor(Math.random() * 50));
     }
@@ -433,9 +453,11 @@ async function delay(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function receiptRecord(options: IndexReceiptOptions): MemoryReceiptRecord {
+function receiptEntry(options: IndexReceiptOptions): LocalJournalReceiptEntry {
   const receipt = options.receipt;
   return {
+    entry_id: `receipt_${receipt.id}`,
+    entry_kind: "receipt",
     receipt_id: receipt.id,
     kind: receipt.kind,
     status: receipt.status,
@@ -449,50 +471,59 @@ function receiptRecord(options: IndexReceiptOptions): MemoryReceiptRecord {
   };
 }
 
-function emptyIndex(): LocalMemoryIndex {
+function emptyJournal(): LocalJournal {
   return {
-    schema_version: "runx.memory.v1",
-    receipts: [],
-    facts: [],
-    answers: [],
-    artifacts: [],
+    schema_version: "runx.journal.v1",
+    entries: [],
   };
 }
 
-function normalizeIndex(value: unknown): LocalMemoryIndex {
-  if (!isRecord(value) || value.schema_version !== "runx.memory.v1") {
-    return emptyIndex();
+function normalizeJournal(value: unknown): LocalJournal {
+  if (!isRecord(value) || value.schema_version !== "runx.journal.v1") {
+    return emptyJournal();
   }
   return {
-    schema_version: "runx.memory.v1",
-    receipts: normalizeArray(value.receipts, isMemoryReceiptRecord, "receipts"),
-    facts: normalizeArray(value.facts, isMemoryFactRecord, "facts"),
-    answers: normalizeArray(value.answers, isMemoryAnswerRecord, "answers"),
-    artifacts: normalizeArray(value.artifacts, isMemoryArtifactRecord, "artifacts"),
+    schema_version: "runx.journal.v1",
+    entries: normalizeJournalEntries(value.entries),
   };
 }
 
-function normalizeArray<T>(
-  value: unknown,
-  predicate: (entry: unknown) => entry is T,
-  label: string,
-): readonly T[] {
+function normalizeJournalEntries(value: unknown): readonly LocalJournalEntry[] {
   if (!Array.isArray(value)) {
     return [];
   }
-  const normalized: T[] = [];
+  const entries: LocalJournalEntry[] = [];
   for (const entry of value) {
-    if (predicate(entry)) {
-      normalized.push(entry);
+    const normalized = normalizeJournalEntry(entry);
+    if (normalized) {
+      entries.push(normalized);
       continue;
     }
-    console.warn(`warning: skipping malformed local memory ${label} entry`);
+    console.warn("warning: skipping malformed local journal entry");
   }
-  return normalized;
+  return entries;
 }
 
-function isMemoryReceiptRecord(value: unknown): value is MemoryReceiptRecord {
+function normalizeJournalEntry(value: unknown): LocalJournalEntry | undefined {
+  if (isLocalJournalReceiptEntry(value)) {
+    return value;
+  }
+  if (isLocalJournalFactEntry(value)) {
+    return value;
+  }
+  if (isLocalJournalAnswerEntry(value)) {
+    return value;
+  }
+  if (isLocalJournalArtifactEntry(value)) {
+    return value;
+  }
+  return undefined;
+}
+
+function isLocalJournalReceiptEntry(value: unknown): value is LocalJournalReceiptEntry {
   return isRecord(value)
+    && value.entry_kind === "receipt"
+    && typeof value.entry_id === "string"
     && typeof value.receipt_id === "string"
     && typeof value.kind === "string"
     && typeof value.status === "string"
@@ -500,9 +531,10 @@ function isMemoryReceiptRecord(value: unknown): value is MemoryReceiptRecord {
     && typeof value.indexed_at === "string";
 }
 
-function isMemoryFactRecord(value: unknown): value is MemoryFactRecord {
+function isLocalJournalFactEntry(value: unknown): value is LocalJournalFactEntry {
   return isRecord(value)
-    && typeof value.id === "string"
+    && value.entry_kind === "fact"
+    && typeof value.entry_id === "string"
     && typeof value.project === "string"
     && typeof value.scope === "string"
     && typeof value.key === "string"
@@ -512,18 +544,20 @@ function isMemoryFactRecord(value: unknown): value is MemoryFactRecord {
     && typeof value.created_at === "string";
 }
 
-function isMemoryAnswerRecord(value: unknown): value is MemoryAnswerRecord {
+function isLocalJournalAnswerEntry(value: unknown): value is LocalJournalAnswerEntry {
   return isRecord(value)
-    && typeof value.id === "string"
+    && value.entry_kind === "answer"
+    && typeof value.entry_id === "string"
     && typeof value.project === "string"
     && typeof value.question_id === "string"
     && typeof value.answer_hash === "string"
     && typeof value.created_at === "string";
 }
 
-function isMemoryArtifactRecord(value: unknown): value is MemoryArtifactRecord {
+function isLocalJournalArtifactEntry(value: unknown): value is LocalJournalArtifactEntry {
   return isRecord(value)
-    && typeof value.id === "string"
+    && value.entry_kind === "artifact"
+    && typeof value.entry_id === "string"
     && typeof value.project === "string"
     && typeof value.path === "string"
     && typeof value.created_at === "string";

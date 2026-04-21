@@ -5,13 +5,13 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { runCli } from "../packages/cli/src/index.js";
-import { createFileMemoryStore } from "../packages/memory/src/index.js";
+import { createFileJournalStore } from "../packages/memory/src/index.js";
 
-describe("history, inspect, and memory CLI", () => {
-  it("uses receipt files for history/inspect and memory index for project facts", async () => {
+describe("history, inspect, and journal CLI", () => {
+  it("uses receipt files for history/inspect and journal index for project facts", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-history-inspect-"));
     const receiptDir = path.join(tempDir, "receipts");
-    const memoryDir = path.join(tempDir, "memory");
+    const journalDir = path.join(tempDir, "journal");
     const project = path.join(tempDir, "project");
 
     try {
@@ -78,7 +78,7 @@ describe("history, inspect, and memory CLI", () => {
         },
       });
 
-      await createFileMemoryStore(memoryDir).addFact({
+      await createFileJournalStore(journalDir).addFact({
         project,
         scope: "project",
         key: "homepage_url",
@@ -90,18 +90,18 @@ describe("history, inspect, and memory CLI", () => {
         createdAt: "2026-04-10T00:00:00Z",
       });
 
-      const memoryStdout = createMemoryStream();
-      const memoryExit = await runCli(
-        ["memory", "show", "--project", project, "--json"],
-        { stdin: process.stdin, stdout: memoryStdout, stderr: createMemoryStream() },
+      const journalStdout = createMemoryStream();
+      const journalExit = await runCli(
+        ["journal", "show", "--project", project, "--json"],
+        { stdin: process.stdin, stdout: journalStdout, stderr: createMemoryStream() },
         {
           ...process.env,
-          RUNX_MEMORY_DIR: memoryDir,
+          RUNX_JOURNAL_DIR: journalDir,
           RUNX_CWD: process.cwd(),
         },
       );
-      expect(memoryExit).toBe(0);
-      expect(JSON.parse(memoryStdout.contents())).toMatchObject({
+      expect(journalExit).toBe(0);
+      expect(JSON.parse(journalStdout.contents())).toMatchObject({
         status: "success",
         project,
         facts: [

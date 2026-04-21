@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { createFileMemoryStore } from "../packages/memory/src/index.js";
+import { createFileJournalStore } from "../packages/memory/src/index.js";
 import { runLocalSkill, type Caller, type ExecutionEvent } from "../packages/runner-local/src/index.js";
 
 const nonInteractiveCaller: Caller = {
@@ -12,11 +12,11 @@ const nonInteractiveCaller: Caller = {
   report: () => undefined,
 };
 
-describe("local memory index integration", () => {
+describe("local journal index integration", () => {
   it("indexes local skill receipts without changing the receipt file source of truth", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-local-memory-index-"));
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-local-journal-index-"));
     const receiptDir = path.join(tempDir, "receipts");
-    const memoryDir = path.join(tempDir, "memory");
+    const journalDir = path.join(tempDir, "journal");
     const project = path.join(tempDir, "project");
 
     try {
@@ -28,7 +28,7 @@ describe("local memory index integration", () => {
         runxHome: path.join(tempDir, "home"),
         env: {
           ...process.env,
-          RUNX_MEMORY_DIR: memoryDir,
+          RUNX_JOURNAL_DIR: journalDir,
           RUNX_PROJECT: project,
         },
       });
@@ -41,7 +41,7 @@ describe("local memory index integration", () => {
       await expect(readdir(receiptDir)).resolves.toSatisfy((entries: string[]) => {
         return entries.includes("journals") && entries.filter((entry) => entry.endsWith(".json")).includes(`${result.receipt.id}.json`);
       });
-      await expect(createFileMemoryStore(memoryDir).listReceipts({ project })).resolves.toEqual([
+      await expect(createFileJournalStore(journalDir).listReceipts({ project })).resolves.toEqual([
         expect.objectContaining({
           receipt_id: result.receipt.id,
           kind: "skill_execution",
@@ -55,9 +55,9 @@ describe("local memory index integration", () => {
   });
 
   it("keeps a successful run alive when post-receipt memory indexing fails", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-local-memory-index-failure-"));
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-local-journal-index-failure-"));
     const receiptDir = path.join(tempDir, "receipts");
-    const badMemoryPath = path.join(tempDir, "memory-file");
+    const badJournalPath = path.join(tempDir, "journal-file");
     const events: ExecutionEvent[] = [];
 
     const reportingCaller: Caller = {
@@ -68,7 +68,7 @@ describe("local memory index integration", () => {
     };
 
     try {
-      await writeFile(badMemoryPath, "not-a-directory\n");
+      await writeFile(badJournalPath, "not-a-directory\n");
 
       const result = await runLocalSkill({
         skillPath: path.resolve("fixtures/skills/echo"),
@@ -78,7 +78,7 @@ describe("local memory index integration", () => {
         runxHome: path.join(tempDir, "home"),
         env: {
           ...process.env,
-          RUNX_MEMORY_DIR: badMemoryPath,
+          RUNX_JOURNAL_DIR: badJournalPath,
         },
       });
 
@@ -91,7 +91,7 @@ describe("local memory index integration", () => {
       expect(events).toContainEqual(
         expect.objectContaining({
           type: "warning",
-          message: "Local memory indexing failed after receipt write; continuing with the persisted receipt.",
+          message: "Local journal indexing failed after receipt write; continuing with the persisted receipt.",
           data: expect.objectContaining({
             receiptId: result.receipt.id,
           }),
