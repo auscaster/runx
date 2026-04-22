@@ -10,18 +10,18 @@ inputs:
     type: string
     required: true
     description: scafld task id that produced the completed engineering state.
-  subject_title:
+  thread_title:
     type: string
     required: false
-    description: Canonical subject title when the caller already has one.
-  subject_locator:
+    description: Canonical thread title when the caller already has one.
+  thread_locator:
     type: string
     required: false
-    description: Canonical subject locator for the bounded work item.
-  subject_memory:
+    description: Canonical thread locator for the bounded work item.
+  thread:
     type: json
     required: false
-    description: Optional hydrated subject memory that may already carry a pull_request outbox entry.
+    description: Optional hydrated thread that may already carry a pull_request outbox entry.
   outbox_entry:
     type: json
     required: false

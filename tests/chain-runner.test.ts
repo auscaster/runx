@@ -4,8 +4,8 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { readJournalEntries } from "../packages/artifacts/src/index.js";
-import { createFileJournalStore } from "../packages/memory/src/index.js";
+import { readLedgerEntries } from "../packages/artifacts/src/index.js";
+import { createFileKnowledgeStore } from "../packages/knowledge/src/index.js";
 import { runCli } from "../packages/cli/src/index.js";
 import { inspectLocalGraph, runLocalGraph, runLocalSkill, type Caller } from "../packages/runner-local/src/index.js";
 
@@ -49,7 +49,7 @@ describe("local governed graph runner", () => {
       expect(result.receipt.steps.map((step) => step.receipt_id)).toEqual(result.steps.map((step) => step.receiptId));
 
       const files = await readdir(receiptDir);
-      expect(files).toContain("journals");
+      expect(files).toContain("ledgers");
       expect(files.filter((file) => file.endsWith(".json"))).toHaveLength(3);
       expect(files).toContain(`${result.receipt.id}.json`);
 
@@ -192,7 +192,7 @@ steps:
         return;
       }
 
-      const stepEvents = (await readJournalEntries(receiptDir, result.runId))
+      const stepEvents = (await readLedgerEntries(receiptDir, result.runId))
         .filter((entry) => entry.type === "run_event" && entry.data.step_id === "review")
         .map((entry) => entry.data.kind);
 
@@ -202,12 +202,12 @@ steps:
     }
   });
 
-  it("projects reflect facts only for opted-in post-run policies", async () => {
+  it("projects reflect projections only for opted-in post-run policies", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-post-run-reflect-"));
     const receiptDir = path.join(tempDir, "receipts");
     const runxHome = path.join(tempDir, "home");
     const skillDir = path.join(tempDir, "reflectable");
-    const journalDir = path.join(tempDir, "journal");
+    const knowledgeDir = path.join(tempDir, "knowledge");
     const project = path.join(tempDir, "project");
     const caller: Caller = {
       resolve: async (request) => {
@@ -216,7 +216,7 @@ steps:
         }
         if (request.id === "agent_step.reflectable-auto.output") {
           return {
-            actor: "reviewer",
+            actor: "agent",
             payload: {
               verdict: "auto",
             },
@@ -224,7 +224,7 @@ steps:
         }
         if (request.id === "agent_step.reflectable-never.output") {
           return {
-            actor: "reviewer",
+            actor: "agent",
             payload: {
               verdict: "never",
             },
@@ -242,7 +242,7 @@ steps:
         RUNX_CWD: tempDir,
         INIT_CWD: tempDir,
         RUNX_PROJECT: project,
-        RUNX_JOURNAL_DIR: "journal",
+        RUNX_KNOWLEDGE_DIR: "knowledge",
       };
 
       const autoResult = await runLocalSkill({
@@ -258,7 +258,7 @@ steps:
         return;
       }
 
-      await expect(createFileJournalStore(journalDir).listFacts({ project })).resolves.toEqual([
+      await expect(createFileKnowledgeStore(knowledgeDir).listProjections({ project })).resolves.toEqual([
         expect.objectContaining({
           scope: "reflect",
           key: `receipt:${autoResult.receipt.id}`,
@@ -273,7 +273,7 @@ steps:
         }),
       ]);
       expect(
-        (await readJournalEntries(receiptDir, autoResult.receipt.id)).some(
+        (await readLedgerEntries(receiptDir, autoResult.receipt.id)).some(
           (entry) => entry.type === "run_event" && entry.data.kind === "reflect_projected",
         ),
       ).toBe(true);
@@ -291,7 +291,7 @@ steps:
         return;
       }
 
-      await expect(createFileJournalStore(journalDir).listFacts({ project })).resolves.toEqual(
+      await expect(createFileKnowledgeStore(knowledgeDir).listProjections({ project })).resolves.toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             key: `receipt:${autoResult.receipt.id}`,
@@ -308,7 +308,7 @@ steps:
         ]),
       );
       expect(
-        (await readJournalEntries(receiptDir, alwaysResult.receipt.id)).some(
+        (await readLedgerEntries(receiptDir, alwaysResult.receipt.id)).some(
           (entry) => entry.type === "run_event" && entry.data.kind === "reflect_projected",
         ),
       ).toBe(true);
@@ -326,11 +326,11 @@ steps:
         return;
       }
 
-      const facts = await createFileJournalStore(journalDir).listFacts({ project });
-      expect(facts).toHaveLength(2);
-      expect(facts.some((fact) => fact.key === `receipt:${neverResult.receipt.id}`)).toBe(false);
+      const projections = await createFileKnowledgeStore(knowledgeDir).listProjections({ project });
+      expect(projections).toHaveLength(2);
+      expect(projections.some((projection) => projection.key === `receipt:${neverResult.receipt.id}`)).toBe(false);
       expect(
-        (await readJournalEntries(receiptDir, neverResult.receipt.id)).some(
+        (await readLedgerEntries(receiptDir, neverResult.receipt.id)).some(
           (entry) => entry.type === "run_event" && entry.data.kind === "reflect_projected",
         ),
       ).toBe(false);

@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { createFileJournalStore } from "../packages/memory/src/index.js";
+import { createFileKnowledgeStore } from "../packages/knowledge/src/index.js";
 import { runLocalGraph, runLocalSkill, type Caller, type ExecutionEvent } from "../packages/runner-local/src/index.js";
 
 const nonInteractiveCaller: Caller = {
@@ -12,11 +12,11 @@ const nonInteractiveCaller: Caller = {
   report: () => undefined,
 };
 
-describe("local journal index integration", () => {
+describe("local knowledge index integration", () => {
   it("indexes local skill receipts without changing the receipt file source of truth", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-local-journal-index-"));
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-local-knowledge-index-"));
     const receiptDir = path.join(tempDir, "receipts");
-    const journalDir = path.join(tempDir, "journal");
+    const knowledgeDir = path.join(tempDir, "knowledge");
     const project = path.join(tempDir, "project");
 
     try {
@@ -28,7 +28,7 @@ describe("local journal index integration", () => {
         runxHome: path.join(tempDir, "home"),
         env: {
           ...process.env,
-          RUNX_JOURNAL_DIR: journalDir,
+          RUNX_KNOWLEDGE_DIR: knowledgeDir,
           RUNX_PROJECT: project,
         },
       });
@@ -39,13 +39,13 @@ describe("local journal index integration", () => {
       }
 
       await expect(readdir(receiptDir)).resolves.toSatisfy((entries: string[]) => {
-        return entries.includes("journals") && entries.filter((entry) => entry.endsWith(".json")).includes(`${result.receipt.id}.json`);
+        return entries.includes("ledgers") && entries.filter((entry) => entry.endsWith(".json")).includes(`${result.receipt.id}.json`);
       });
-      await expect(createFileJournalStore(journalDir).listReceipts({ project })).resolves.toEqual([
+      await expect(createFileKnowledgeStore(knowledgeDir).listReceipts({ project })).resolves.toEqual([
         expect.objectContaining({
           receipt_id: result.receipt.id,
           kind: "skill_execution",
-          subject: "echo",
+          execution_ref: "echo",
           source_type: "cli-tool",
         }),
       ]);
@@ -54,10 +54,10 @@ describe("local journal index integration", () => {
     }
   });
 
-  it("keeps a successful run alive when post-receipt memory indexing fails", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-local-journal-index-failure-"));
+  it("keeps a successful run alive when post-receipt knowledge indexing fails", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-local-knowledge-index-failure-"));
     const receiptDir = path.join(tempDir, "receipts");
-    const badJournalPath = path.join(tempDir, "journal-file");
+    const badKnowledgePath = path.join(tempDir, "knowledge-file");
     const events: ExecutionEvent[] = [];
 
     const reportingCaller: Caller = {
@@ -68,7 +68,7 @@ describe("local journal index integration", () => {
     };
 
     try {
-      await writeFile(badJournalPath, "not-a-directory\n");
+      await writeFile(badKnowledgePath, "not-a-directory\n");
 
       const result = await runLocalSkill({
         skillPath: path.resolve("fixtures/skills/echo"),
@@ -78,7 +78,7 @@ describe("local journal index integration", () => {
         runxHome: path.join(tempDir, "home"),
         env: {
           ...process.env,
-          RUNX_JOURNAL_DIR: badJournalPath,
+          RUNX_KNOWLEDGE_DIR: badKnowledgePath,
         },
       });
 
@@ -91,7 +91,7 @@ describe("local journal index integration", () => {
       expect(events).toContainEqual(
         expect.objectContaining({
           type: "warning",
-          message: "Local journal indexing failed after receipt write; continuing with the persisted receipt.",
+          message: "Local knowledge indexing failed after receipt write; continuing with the persisted receipt.",
           data: expect.objectContaining({
             receiptId: result.receipt.id,
           }),
@@ -102,10 +102,10 @@ describe("local journal index integration", () => {
     }
   });
 
-  it("indexes graph receipts when local journal indexing is enabled", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-local-journal-graph-index-"));
+  it("indexes graph receipts when local knowledge indexing is enabled", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-local-knowledge-graph-index-"));
     const receiptDir = path.join(tempDir, "receipts");
-    const journalDir = path.join(tempDir, "journal");
+    const knowledgeDir = path.join(tempDir, "knowledge");
     const project = path.join(tempDir, "project");
 
     try {
@@ -116,7 +116,7 @@ describe("local journal index integration", () => {
         runxHome: path.join(tempDir, "home"),
         env: {
           ...process.env,
-          RUNX_JOURNAL_DIR: journalDir,
+          RUNX_KNOWLEDGE_DIR: knowledgeDir,
           RUNX_PROJECT: project,
           RUNX_CWD: tempDir,
           INIT_CWD: tempDir,
@@ -128,12 +128,12 @@ describe("local journal index integration", () => {
         return;
       }
 
-      await expect(createFileJournalStore(journalDir).listReceipts({ project })).resolves.toEqual(
+      await expect(createFileKnowledgeStore(knowledgeDir).listReceipts({ project })).resolves.toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             receipt_id: result.receipt.id,
             kind: "graph_execution",
-            subject: "sequential-echo",
+            execution_ref: "sequential-echo",
           }),
         ]),
       );

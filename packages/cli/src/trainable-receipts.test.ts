@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { createArtifactEnvelope, appendJournalEntries } from "../../artifacts/src/index.js";
+import { createArtifactEnvelope, appendLedgerEntries } from "../../artifacts/src/index.js";
 import { runCli } from "./index.js";
 import { writeLocalReceipt, writeReceiptOutcomeResolution } from "../../receipts/src/index.js";
 import { runLocalSkill, type Caller } from "../../runner-local/src/index.js";
@@ -21,7 +21,7 @@ describe("trainable receipts export", () => {
     expect(TRAINING_SCHEMA_REFS.trainable_receipt_row).toBe("https://runx.ai/spec/training/trainable-receipt-row.schema.json");
   });
 
-  it("streams filtered JSONL records with outcome resolution, journal entries, and prompt provenance without mutating receipts", async () => {
+  it("streams filtered JSONL records with outcome resolution, ledger entries, and prompt provenance without mutating receipts", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-trainable-receipts-"));
     const receiptDir = path.join(tempDir, "receipts");
     const runxHome = path.join(tempDir, "home");
@@ -68,7 +68,7 @@ describe("trainable receipts export", () => {
         },
       });
 
-      await appendJournalEntries({
+      await appendLedgerEntries({
         receiptDir,
         runId: completeReceipt.id,
         entries: [
@@ -161,7 +161,7 @@ describe("trainable receipts export", () => {
             outcome_state: "complete",
           },
         },
-        journal_entries: [
+        ledger_entries: [
           {
             type: "run_event",
           },

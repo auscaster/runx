@@ -11,15 +11,15 @@ harness:
   cases:
     - name: bounded-docs-fix
       inputs:
-        subject_title: README should point users to issue-to-pr
-        subject_body: The public docs should present issue-to-pr as the canonical command.
-        subject_locator: github://example/repo/issues/101
+        thread_title: README should point users to issue-to-pr
+        thread_body: The public docs should present issue-to-pr as the canonical command.
+        thread_locator: github://example/repo/issues/101
         outbox_entry:
           entry_id: github_issue_101
           kind: message
           locator: https://github.com/example/repo/issues/101
           status: published
-          subject_locator: github://example/repo/issues/101
+          thread_locator: github://example/repo/issues/101
         product_context: OSS runx documentation
         operator_context: Prefer the canonical issue-to-pr name in user-facing replies.
       caller:
@@ -37,22 +37,22 @@ harness:
               action_decision: proceed_to_build
               review_target: none
               operator_notes: []
-              subject_change_request:
+              thread_change_request:
                 task_id: docs_issue_to_pr_command
-                subject_title: README should point users to issue-to-pr
-                subject_body: The public docs should present issue-to-pr as the canonical command.
-                subject_locator: github://example/repo/issues/101
+                thread_title: README should point users to issue-to-pr
+                thread_body: The public docs should present issue-to-pr as the canonical command.
+                thread_locator: github://example/repo/issues/101
                 outbox_entry:
                   entry_id: github_issue_101
                   kind: message
                   locator: https://github.com/example/repo/issues/101
                   status: published
-                  subject_locator: github://example/repo/issues/101
+                  thread_locator: github://example/repo/issues/101
                 size: micro
                 risk: low
             change_set:
               change_set_id: change_set_docs_work_101
-              subject_locator: github://example/repo/issues/101
+              thread_locator: github://example/repo/issues/101
               summary: Update the public docs to point at issue-to-pr as the canonical skill name.
               category: docs
               severity: low
@@ -64,7 +64,7 @@ harness:
                 kind: message
                 locator: https://github.com/example/repo/issues/101
                 status: published
-                subject_locator: github://example/repo/issues/101
+                thread_locator: github://example/repo/issues/101
               target_surfaces:
                 - surface: oss-docs
                   kind: docs
@@ -85,9 +85,9 @@ harness:
             source_type: agent-step
     - name: feature-needs-decomposition
       inputs:
-        subject_title: Add abandoned cart recovery across email and SMS
-        subject_body: We need a generated workflow, copy, timing rules, and reporting for abandoned cart recovery.
-        subject_locator: support://request/982
+        thread_title: Add abandoned cart recovery across email and SMS
+        thread_body: We need a generated workflow, copy, timing rules, and reporting for abandoned cart recovery.
+        thread_locator: support://request/982
         product_context: Multi-channel marketing automation product
       caller:
         answers:
@@ -109,7 +109,7 @@ harness:
                 change_set_id: change_set_abandoned_cart_982
                 objective: Add abandoned cart recovery across email and SMS
                 project_context: Multi-channel marketing automation product
-                subject_locator: support://request/982
+                thread_locator: support://request/982
                 target_surfaces:
                   - surface: api
                     kind: repo
@@ -131,7 +131,7 @@ harness:
                   - Repo-scoped workers receive explicit shared invariants.
             change_set:
               change_set_id: change_set_abandoned_cart_982
-              subject_locator: support://request/982
+              thread_locator: support://request/982
               summary: Add abandoned cart recovery across email and SMS with coordinated backend, UI, and MCP work.
               category: feature_request
               severity: medium
@@ -167,9 +167,9 @@ harness:
             source_type: agent-step
     - name: reply-only-question
       inputs:
-        subject_title: How do I rotate my API key?
-        subject_body: I only need the operator instructions for rotating an API key safely.
-        subject_locator: support://request/983
+        thread_title: How do I rotate my API key?
+        thread_body: I only need the operator instructions for rotating an API key safely.
+        thread_locator: support://request/983
       caller:
         answers:
           agent_step.request-triage.output:
@@ -187,7 +187,7 @@ harness:
               operator_notes: []
             change_set:
               change_set_id: change_set_support_983
-              subject_locator: support://request/983
+              thread_locator: support://request/983
               summary: Respond with operator guidance for rotating an API key safely.
               category: question
               severity: low
@@ -213,15 +213,15 @@ harness:
             source_type: agent-step
     - name: request-review-before-mutation
       inputs:
-        subject_title: Clarify the affected repo before we start
-        subject_body: The report mentions API failures and docs drift, but it is not yet clear whether this is one bounded fix or cross-repo work.
-        subject_locator: github://example/repo/issues/984
+        thread_title: Clarify the affected repo before we start
+        thread_body: The report mentions API failures and docs drift, but it is not yet clear whether this is one bounded fix or cross-repo work.
+        thread_locator: github://example/repo/issues/984
         outbox_entry:
           entry_id: github_issue_984
           kind: message
           locator: https://github.com/example/repo/issues/984
           status: published
-          subject_locator: github://example/repo/issues/984
+          thread_locator: github://example/repo/issues/984
         product_context: Workspace repo with multiple bounded mutation surfaces
       caller:
         answers:
@@ -236,13 +236,13 @@ harness:
               needs_human: false
               commence_decision: approve
               action_decision: request_review
-              review_target: subject
+              review_target: thread
               review_comment: Please confirm whether the failing path belongs to the API repo, the docs repo, or both. runx is holding mutation until the target surface is explicit.
               operator_notes:
                 - Do not open issue-to-pr until the target repo is explicit.
             change_set:
               change_set_id: change_set_support_984
-              subject_locator: github://example/repo/issues/984
+              thread_locator: github://example/repo/issues/984
               summary: Clarify the affected repo before opening a governed worker or plan.
               category: other
               severity: medium
@@ -254,7 +254,7 @@ harness:
                 kind: message
                 locator: https://github.com/example/repo/issues/984
                 status: published
-                subject_locator: github://example/repo/issues/984
+                thread_locator: github://example/repo/issues/984
               target_surfaces:
                 - surface: workspace
                   kind: other
@@ -285,22 +285,22 @@ runners:
     artifacts:
       wrap_as: request_triage_packet
     inputs:
-      subject_title:
+      thread_title:
         type: string
         required: false
-        description: "Canonical subject title."
-      subject_body:
+        description: "Canonical thread title."
+      thread_body:
         type: string
         required: false
-        description: "Canonical subject body or request text."
-      subject_locator:
+        description: "Canonical thread body or request text."
+      thread_locator:
         type: string
         required: false
-        description: "Canonical locator for the bounded subject."
-      subject_memory:
+        description: "Canonical locator for the bounded thread."
+      thread:
         type: json
         required: false
-        description: "Portable subject memory when the caller already has it."
+        description: "Portable thread when the caller already has it."
       outbox_entry:
         type: json
         required: false

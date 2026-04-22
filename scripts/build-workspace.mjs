@@ -16,6 +16,7 @@ const mode = process.argv.includes("--pack") ? "pack" : "dev";
 await runTscBuild(["-b", "tsconfig.runtime.json"]);
 
 const packageDirs = (await Promise.all(packageSearchRoots.map(findPackageDirs))).flat();
+let forcedRuntimeRebuild = false;
 for (const directory of packageDirs) {
   await finalizePackage(directory);
 }
@@ -58,6 +59,13 @@ async function finalizePackage(directory) {
   const packageJson = JSON.parse(await readFile(path.join(directory, "package.json"), "utf8"));
   const workspaceRelativePath = toPosix(path.relative(workspaceRoot, directory));
   const runtimeEntry = path.join(runtimeOutDir, workspaceRelativePath, "src", "index.js");
+
+  if (!(await exists(runtimeEntry))) {
+    if (!forcedRuntimeRebuild) {
+      forcedRuntimeRebuild = true;
+      await runTscBuild(["-b", "--force", "tsconfig.runtime.json"]);
+    }
+  }
 
   if (!(await exists(runtimeEntry))) {
     throw new Error(`No compiled runtime entry found for ${directory}`);

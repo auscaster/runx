@@ -10,11 +10,11 @@ import { fileURLToPath } from "node:url";
 
 import { createA2aAdapter, createFixtureA2aTransport } from "../../adapters/a2a/src/index.js";
 import {
-  appendJournalEntries,
+  appendLedgerEntries,
   createReceiptLinkEntry,
   createRunEventEntry,
   materializeArtifacts,
-  readJournalEntries,
+  readLedgerEntries,
   SYSTEM_ARTIFACT_TYPES,
   type ArtifactContract,
   type ArtifactEnvelope,
@@ -23,22 +23,27 @@ import { runFanout } from "./fanout.js";
 import { createCliToolAdapter } from "../../adapters/cli-tool/src/index.js";
 import { createMcpAdapter } from "../../adapters/mcp/src/index.js";
 import {
+  type Context,
+  type ContextDocument,
   executeSkill,
   type AgentContextProvenance,
   type AdapterInvokeResult,
   type AgentWorkRequest,
   type ApprovalGate,
   type CredentialEnvelope,
-  type ProjectConventions,
-  type ProjectMemory,
   type Question,
   type ResolutionRequest,
   type ResolutionResponse,
   type SkillAdapter,
   validateOutputContract,
 } from "../../executor/src/index.js";
-import { createFileJournalStore } from "../../memory/src/index.js";
-import { resolveLocalSkillProfile, resolveRunxJournalDir } from "../../config/src/index.js";
+import { createFileKnowledgeStore } from "../../knowledge/src/index.js";
+import {
+  loadRunxWorkspacePolicy,
+  resolveLocalSkillProfile,
+  resolveRunxKnowledgeDir,
+  type RunxWorkspacePolicy,
+} from "../../config/src/index.js";
 import {
   parseGraphYaml,
   parseRunnerManifestYaml,
@@ -151,15 +156,15 @@ export interface RunLocalSkillOptions {
   readonly adapters?: readonly SkillAdapter[];
   readonly allowedSourceTypes?: readonly string[];
   readonly runner?: string;
-  readonly journalDir?: string;
+  readonly knowledgeDir?: string;
   readonly authResolver?: AuthResolver;
   readonly receiptMetadata?: Readonly<Record<string, unknown>>;
   readonly resumeFromRunId?: string;
   readonly executionSemantics?: ExecutionSemantics;
   readonly registryStore?: RegistryStore;
   readonly skillCacheDir?: string;
-  readonly projectMemory?: ProjectMemory;
-  readonly projectConventions?: ProjectConventions;
+  readonly context?: Context;
+  readonly workspacePolicy?: RunxWorkspacePolicy;
 }
 
 interface ResolvedRunnerSelection {
@@ -182,7 +187,7 @@ interface RunResolvedSkillOptions {
   readonly env?: NodeJS.ProcessEnv;
   readonly receiptDir?: string;
   readonly runxHome?: string;
-  readonly journalDir?: string;
+  readonly knowledgeDir?: string;
   readonly parentReceipt?: string;
   readonly contextFrom?: readonly string[];
   readonly adapters?: readonly SkillAdapter[];
@@ -197,9 +202,9 @@ interface RunResolvedSkillOptions {
   readonly executionSemantics?: ExecutionSemantics;
   readonly registryStore?: RegistryStore;
   readonly skillCacheDir?: string;
-  readonly projectMemory?: ProjectMemory;
-  readonly projectConventions?: ProjectConventions;
+  readonly context?: Context;
   readonly selectedRunnerName?: string;
+  readonly workspacePolicy?: RunxWorkspacePolicy;
 }
 
 export interface AuthResolver {
@@ -360,11 +365,11 @@ export interface RunLocalGraphOptions {
   readonly registryStore?: RegistryStore;
   readonly skillCacheDir?: string;
   readonly receiptMetadata?: Readonly<Record<string, unknown>>;
-  readonly projectMemory?: ProjectMemory;
-  readonly projectConventions?: ProjectConventions;
-  readonly journalDir?: string;
+  readonly context?: Context;
+  readonly knowledgeDir?: string;
   readonly selectedRunnerName?: string;
   readonly postRunReflectPolicy?: PostRunReflectPolicy;
+  readonly workspacePolicy?: RunxWorkspacePolicy;
 }
 
 export interface GraphStepRun {
@@ -828,6 +833,7 @@ export function createCallerApprovalAdapter(caller: Caller): SkillAdapter {
 
 export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunLocalSkillResult> {
   const runId = options.resumeFromRunId ?? uniqueReceiptId("rx");
+  const workspacePolicy = options.workspacePolicy ?? await loadRunxWorkspacePolicy(options.env ?? process.env);
   const resolvedSkill = await resolveSkillReference(options.skillPath);
   const rawMarkdown = await readFile(resolvedSkill.skillPath, "utf8");
   const rawSkill = parseSkillMarkdown(rawMarkdown);
@@ -858,7 +864,7 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
       runId,
       requests: [inputResolution.request],
     } satisfies Extract<RunLocalSkillResult, { readonly status: "needs_resolution" }>;
-    await appendPendingSkillJournalEntries({
+    await appendPendingSkillLedgerEntries({
       receiptDir: options.receiptDir ?? defaultReceiptDir(options.env),
       runId: pendingResult.runId,
       skill,
@@ -891,7 +897,7 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
     env: options.env,
     receiptDir: options.receiptDir,
     runxHome: options.runxHome,
-    journalDir: options.journalDir,
+    knowledgeDir: options.knowledgeDir,
     parentReceipt: options.parentReceipt,
     contextFrom: options.contextFrom,
     adapters: options.adapters,
@@ -903,9 +909,9 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
     executionSemantics: options.executionSemantics,
     registryStore: options.registryStore,
     skillCacheDir: options.skillCacheDir,
-    projectMemory: options.projectMemory,
-    projectConventions: options.projectConventions,
+    context: options.context,
     selectedRunnerName: runnerSelection.selectedRunnerName,
+    workspacePolicy,
   });
 
   if (result.status === "needs_resolution") {
@@ -913,7 +919,7 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
       ...result,
       inputs: inputResolution.inputs,
     } satisfies Extract<RunLocalSkillResult, { readonly status: "needs_resolution" }>;
-    await appendPendingSkillJournalEntries({
+    await appendPendingSkillLedgerEntries({
       receiptDir: options.receiptDir ?? defaultReceiptDir(options.env),
       runId: pendingResult.runId,
       skill,
@@ -940,23 +946,16 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
   const { skill } = options;
   const runId = options.resumeFromRunId ?? uniqueReceiptId("rx");
   const contextEnvelopeRunId = options.orchestrationRunId ?? runId;
-  const projectMemory =
-    options.projectMemory
-    ?? (await loadProjectMemory({
-      inputs: options.inputs,
-      env: options.env,
-      fallbackStart: options.skillDirectory,
-    }));
-  const projectConventions =
-    options.projectConventions
-    ?? (await loadProjectConventions({
+  const workspacePolicy = options.workspacePolicy ?? await loadRunxWorkspacePolicy(options.env ?? process.env);
+  const contextSnapshot =
+    options.context
+    ?? (await loadContext({
       inputs: options.inputs,
       env: options.env,
       fallbackStart: options.skillDirectory,
     }));
   const inheritedReceiptMetadata = mergeMetadata(
-    projectMemoryReceiptMetadata(projectMemory),
-    projectConventionsReceiptMetadata(projectConventions),
+    contextReceiptMetadata(contextSnapshot),
     options.receiptMetadata,
   );
   const executionSemantics = normalizeExecutionSemantics(
@@ -968,6 +967,7 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
     allowedSourceTypes: options.allowedSourceTypes,
     skipConnectedAuth: true,
     skipSandboxEscalation: true,
+    executionPolicy: workspacePolicy,
   });
   if (structuralAdmission.status === "deny") {
     return {
@@ -995,6 +995,7 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
     allowedSourceTypes: options.allowedSourceTypes,
     connectedGrants: grantResolution?.grants,
     approvedSandboxEscalation,
+    executionPolicy: workspacePolicy,
   });
   if (admission.status === "deny") {
     const receipt =
@@ -1037,7 +1038,7 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
       env: options.env,
       receiptDir: options.receiptDir,
       runxHome: options.runxHome,
-      journalDir: options.journalDir,
+      knowledgeDir: options.knowledgeDir,
       adapters: options.adapters,
       allowedSourceTypes: options.allowedSourceTypes,
       authResolver: options.authResolver,
@@ -1051,8 +1052,8 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
       registryStore: options.registryStore,
       skillCacheDir: options.skillCacheDir,
       receiptMetadata: inheritedReceiptMetadata,
-      projectMemory,
-      projectConventions,
+      context: contextSnapshot,
+      workspacePolicy,
       selectedRunnerName: options.selectedRunnerName,
       postRunReflectPolicy: resolvePostRunReflectPolicy(skill.runx),
     });
@@ -1138,8 +1139,7 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
     stepId: options.orchestrationStepId,
     currentContext: options.currentContext,
     skillDirectory: options.skillDirectory,
-    projectMemory,
-    projectConventions,
+    context: contextSnapshot,
   });
 
   const credentialResolution = await options.authResolver?.resolveCredential({
@@ -1176,8 +1176,7 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
     currentContext: preparedAgentContext.currentContext,
     historicalContext: preparedAgentContext.historicalContext,
     contextProvenance: preparedAgentContext.provenance,
-    projectMemory: preparedAgentContext.projectMemory,
-    projectConventions: preparedAgentContext.projectConventions,
+    context: preparedAgentContext.context,
   });
 
   if (execution.status === "needs_resolution") {
@@ -1253,7 +1252,7 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
     surfaceRefs: executionSemantics.surfaceRefs,
     evidenceRefs: executionSemantics.evidenceRefs,
   });
-  await appendSkillJournalEntries({
+  await appendSkillLedgerEntries({
     receiptDir: options.receiptDir ?? defaultReceiptDir(options.env),
     runId,
     skill,
@@ -1269,7 +1268,7 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
   } catch (error) {
     await options.caller.report({
       type: "warning",
-      message: "Local journal indexing failed after receipt write; continuing with the persisted receipt.",
+      message: "Local knowledge indexing failed after receipt write; continuing with the persisted receipt.",
       data: {
         receiptId: receipt.id,
         error: error instanceof Error ? error.message : String(error),
@@ -1282,7 +1281,7 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
     receiptDir: options.receiptDir ?? defaultReceiptDir(options.env),
     runId,
     skillName: skill.name,
-    journalDir: options.journalDir,
+    knowledgeDir: options.knowledgeDir,
     env: options.env,
     selectedRunnerName: options.selectedRunnerName,
     postRunReflectPolicy: resolvePostRunReflectPolicy(skill.runx),
@@ -1657,7 +1656,7 @@ async function resolveGraphExecution(options: RunLocalGraphOptions): Promise<{
   };
 }
 
-async function appendSkillJournalEntries(options: {
+async function appendSkillLedgerEntries(options: {
   readonly receiptDir: string;
   readonly runId: string;
   readonly skill: ValidatedSkill;
@@ -1672,7 +1671,7 @@ async function appendSkillJournalEntries(options: {
     skill: options.skill.name,
     runner: options.skill.source.type,
   };
-  await appendJournalEntries({
+  await appendLedgerEntries({
     receiptDir: options.receiptDir,
     runId: options.runId,
     entries: [
@@ -1711,7 +1710,7 @@ async function appendSkillJournalEntries(options: {
   });
 }
 
-async function appendPendingSkillJournalEntries(options: {
+async function appendPendingSkillLedgerEntries(options: {
   readonly receiptDir: string;
   readonly runId: string;
   readonly skill: ValidatedSkill;
@@ -1724,7 +1723,7 @@ async function appendPendingSkillJournalEntries(options: {
     skill: options.skill.name,
     runner: options.skill.source.type,
   };
-  await appendJournalEntries({
+  await appendLedgerEntries({
     receiptDir: options.receiptDir,
     runId: options.runId,
     entries: [
@@ -1751,7 +1750,7 @@ async function appendPendingSkillJournalEntries(options: {
   });
 }
 
-async function appendGraphJournalEntries(options: {
+async function appendGraphLedgerEntries(options: {
   readonly receiptDir: string;
   readonly runId: string;
   readonly topLevelSkillName: string;
@@ -1767,7 +1766,7 @@ async function appendGraphJournalEntries(options: {
     skill: options.topLevelSkillName,
     runner: "graph",
   };
-  await appendJournalEntries({
+  await appendLedgerEntries({
     receiptDir: options.receiptDir,
     runId: options.runId,
     entries: [
@@ -1799,7 +1798,7 @@ async function appendGraphJournalEntries(options: {
   });
 }
 
-async function appendPendingGraphJournalEntry(options: {
+async function appendPendingGraphLedgerEntry(options: {
   readonly receiptDir: string;
   readonly runId: string;
   readonly topLevelSkillName: string;
@@ -1808,7 +1807,7 @@ async function appendPendingGraphJournalEntry(options: {
   readonly detail: Readonly<Record<string, unknown>>;
   readonly createdAt: string;
 }): Promise<void> {
-  await appendJournalEntries({
+  await appendLedgerEntries({
     receiptDir: options.receiptDir,
     runId: options.runId,
     entries: [
@@ -1828,7 +1827,7 @@ async function appendPendingGraphJournalEntry(options: {
   });
 }
 
-async function appendGraphStepStartedJournalEntry(options: {
+async function appendGraphStepStartedLedgerEntry(options: {
   readonly receiptDir: string;
   readonly runId: string;
   readonly topLevelSkillName: string;
@@ -1836,7 +1835,7 @@ async function appendGraphStepStartedJournalEntry(options: {
   readonly reference: string;
   readonly createdAt: string;
 }): Promise<void> {
-  await appendJournalEntries({
+  await appendLedgerEntries({
     receiptDir: options.receiptDir,
     runId: options.runId,
     entries: [
@@ -1908,7 +1907,7 @@ function resolveTransitionGateValue(
   return resolveOutputPath(output, outputPath);
 }
 
-function hydrateGraphFromJournal(options: {
+function hydrateGraphFromLedger(options: {
   readonly entries: readonly ArtifactEnvelope[];
   readonly graph: ExecutionGraph;
   readonly graphStepCache: ReadonlyMap<string, ValidatedSkill>;
@@ -2121,29 +2120,22 @@ function isDeepEqual(left: unknown, right: unknown): boolean {
 
 export async function runLocalGraph(options: RunLocalGraphOptions): Promise<RunLocalGraphResult> {
   const graphResolution = await resolveGraphExecution(options);
+  const workspacePolicy = options.workspacePolicy ?? await loadRunxWorkspacePolicy(options.env ?? process.env);
   const receiptDir = options.receiptDir ?? defaultReceiptDir(options.env);
   const startedAt = new Date().toISOString();
   const startedAtMs = Date.now();
   const executionSemantics = normalizeExecutionSemantics(options.executionSemantics, options.inputs ?? {});
   const graph = graphResolution.graph;
   const graphDirectory = graphResolution.graphDirectory;
-  const projectMemory =
-    options.projectMemory
-    ?? (await loadProjectMemory({
-      inputs: options.inputs ?? {},
-      env: options.env,
-      fallbackStart: graphDirectory,
-    }));
-  const projectConventions =
-    options.projectConventions
-    ?? (await loadProjectConventions({
+  const contextSnapshot =
+    options.context
+    ?? (await loadContext({
       inputs: options.inputs ?? {},
       env: options.env,
       fallbackStart: graphDirectory,
     }));
   const inheritedReceiptMetadata = mergeMetadata(
-    projectMemoryReceiptMetadata(projectMemory),
-    projectConventionsReceiptMetadata(projectConventions),
+    contextReceiptMetadata(contextSnapshot),
     options.receiptMetadata,
   );
   const graphId = options.runId ?? options.resumeFromRunId ?? uniqueReceiptId("gx");
@@ -2164,8 +2156,8 @@ export async function runLocalGraph(options: RunLocalGraphOptions): Promise<RunL
   let finalError: string | undefined;
   let involvedAgentMediatedWork = false;
   if (options.resumeFromRunId) {
-    hydrateGraphFromJournal({
-      entries: await readJournalEntries(receiptDir, options.resumeFromRunId),
+    hydrateGraphFromLedger({
+      entries: await readLedgerEntries(receiptDir, options.resumeFromRunId),
       graph,
       graphStepCache,
       skillEnvironment: options.skillEnvironment,
@@ -2332,7 +2324,7 @@ export async function runLocalGraph(options: RunLocalGraphOptions): Promise<RunL
           at: stepStartedAt,
         });
         await reportGraphStepStarted(options.caller, prep.step, prep.stepReference);
-        await appendGraphStepStartedJournalEntry({
+        await appendGraphStepStartedLedgerEntry({
           receiptDir,
           runId: graphId,
           topLevelSkillName: graphProducerSkillName(options, graph),
@@ -2354,7 +2346,7 @@ export async function runLocalGraph(options: RunLocalGraphOptions): Promise<RunL
             env: options.env,
             receiptDir,
             runxHome: options.runxHome,
-            journalDir: options.journalDir,
+            knowledgeDir: options.knowledgeDir,
             parentReceipt: fanoutParentReceipt,
             contextFrom: prep.contextFromReceiptIds,
             adapters: options.adapters,
@@ -2370,8 +2362,8 @@ export async function runLocalGraph(options: RunLocalGraphOptions): Promise<RunL
             currentContext: prep.context,
             registryStore: options.registryStore,
             skillCacheDir: options.skillCacheDir,
-            projectMemory,
-            projectConventions,
+            context: contextSnapshot,
+            workspacePolicy,
           });
         },
       }));
@@ -2407,7 +2399,7 @@ export async function runLocalGraph(options: RunLocalGraphOptions): Promise<RunL
             prep.stepReference,
             stepResult.requests,
           );
-          await appendPendingGraphJournalEntry({
+          await appendPendingGraphLedgerEntry({
             receiptDir,
             runId: graphId,
             topLevelSkillName: graphProducerSkillName(options, graph),
@@ -2435,7 +2427,7 @@ export async function runLocalGraph(options: RunLocalGraphOptions): Promise<RunL
               reason: `policy denied: ${stepResult.reasons.join("; ")}`,
             },
           );
-          await appendJournalEntries({
+          await appendLedgerEntries({
             receiptDir,
             runId: graphId,
             entries: [
@@ -2511,7 +2503,7 @@ export async function runLocalGraph(options: RunLocalGraphOptions): Promise<RunL
           artifacts: artifactResult.envelopes,
         });
         finalOutput = stepResult.execution.stdout;
-        await appendGraphJournalEntries({
+        await appendGraphLedgerEntries({
           receiptDir,
           runId: graphId,
           topLevelSkillName: graphProducerSkillName(options, graph),
@@ -2713,7 +2705,7 @@ export async function runLocalGraph(options: RunLocalGraphOptions): Promise<RunL
       at: stepStartedAt,
     });
     await reportGraphStepStarted(options.caller, step, resolvedStep.reference);
-    await appendGraphStepStartedJournalEntry({
+    await appendGraphStepStartedLedgerEntry({
       receiptDir,
       runId: graphId,
       topLevelSkillName: graphProducerSkillName(options, graph),
@@ -2730,7 +2722,7 @@ export async function runLocalGraph(options: RunLocalGraphOptions): Promise<RunL
       env: options.env,
       receiptDir,
       runxHome: options.runxHome,
-      journalDir: options.journalDir,
+      knowledgeDir: options.knowledgeDir,
       parentReceipt: lastReceiptId,
       contextFrom: contextFromReceiptIds,
       adapters: options.adapters,
@@ -2746,8 +2738,8 @@ export async function runLocalGraph(options: RunLocalGraphOptions): Promise<RunL
       currentContext: context,
       registryStore: options.registryStore,
       skillCacheDir: options.skillCacheDir,
-      projectMemory,
-      projectConventions,
+      context: contextSnapshot,
+      workspacePolicy,
     });
 
     if (stepResult.status === "needs_resolution") {
@@ -2757,7 +2749,7 @@ export async function runLocalGraph(options: RunLocalGraphOptions): Promise<RunL
         resolvedStep.reference,
         stepResult.requests,
       );
-      await appendPendingGraphJournalEntry({
+      await appendPendingGraphLedgerEntry({
         receiptDir,
         runId: graphId,
         topLevelSkillName: graphProducerSkillName(options, graph),
@@ -2788,7 +2780,7 @@ export async function runLocalGraph(options: RunLocalGraphOptions): Promise<RunL
       await reportGraphStepCompleted(options.caller, step, resolvedStep.reference, "failure", {
         reason: `policy denied: ${stepResult.reasons.join("; ")}`,
       });
-      await appendJournalEntries({
+      await appendLedgerEntries({
         receiptDir,
         runId: graphId,
         entries: [
@@ -2873,7 +2865,7 @@ export async function runLocalGraph(options: RunLocalGraphOptions): Promise<RunL
     });
     lastReceiptId = stepResult.receipt.id;
     finalOutput = stepResult.execution.stdout;
-    await appendGraphJournalEntries({
+    await appendGraphLedgerEntries({
       receiptDir,
       runId: graphId,
       topLevelSkillName: graphProducerSkillName(options, graph),
@@ -2932,7 +2924,7 @@ export async function runLocalGraph(options: RunLocalGraphOptions): Promise<RunL
     evidenceRefs: executionSemantics.evidenceRefs,
     metadata: inheritedReceiptMetadata,
   });
-  await appendJournalEntries({
+  await appendLedgerEntries({
     receiptDir,
     runId: graphId,
     entries: [
@@ -2957,7 +2949,7 @@ export async function runLocalGraph(options: RunLocalGraphOptions): Promise<RunL
   } catch (error) {
     await options.caller.report({
       type: "warning",
-      message: "Local journal indexing failed after receipt write; continuing with the persisted receipt.",
+      message: "Local knowledge indexing failed after receipt write; continuing with the persisted receipt.",
       data: {
         receiptId: receipt.id,
         error: error instanceof Error ? error.message : String(error),
@@ -2970,7 +2962,7 @@ export async function runLocalGraph(options: RunLocalGraphOptions): Promise<RunL
     receiptDir,
     runId: graphId,
     skillName: graphProducerSkillName(options, graph),
-    journalDir: options.journalDir,
+    knowledgeDir: options.knowledgeDir,
     env: options.env,
     selectedRunnerName: options.selectedRunnerName,
     postRunReflectPolicy: options.postRunReflectPolicy,
@@ -3107,18 +3099,18 @@ async function indexReceiptIfEnabled(
   receipt: LocalReceipt,
   receiptDir: string,
   options: {
-    readonly journalDir?: string;
+    readonly knowledgeDir?: string;
     readonly env?: NodeJS.ProcessEnv;
   },
 ): Promise<void> {
-  const journalDir = resolveOptionalJournalDir(options);
-  if (!journalDir) {
+  const knowledgeDir = resolveOptionalKnowledgeDir(options);
+  if (!knowledgeDir) {
     return;
   }
-  await createFileJournalStore(journalDir).indexReceipt({
+  await createFileKnowledgeStore(knowledgeDir).indexReceipt({
     receipt,
     receiptPath: path.join(receiptDir, `${receipt.id}.json`),
-    project: resolveJournalProject(options.env),
+    project: resolveKnowledgeProject(options.env),
   });
 }
 
@@ -3128,7 +3120,7 @@ interface ReflectProjectionOptions {
   readonly receiptDir: string;
   readonly runId: string;
   readonly skillName: string;
-  readonly journalDir?: string;
+  readonly knowledgeDir?: string;
   readonly env?: NodeJS.ProcessEnv;
   readonly selectedRunnerName?: string;
   readonly postRunReflectPolicy?: PostRunReflectPolicy;
@@ -3147,7 +3139,7 @@ interface LocalReflectProjection {
   readonly mediation: "agentic" | "deterministic";
   readonly summary: string;
   readonly signals: readonly string[];
-  readonly journal: {
+  readonly ledger: {
     readonly event_kinds: readonly string[];
     readonly artifact_count: number;
     readonly artifact_types: readonly string[];
@@ -3167,37 +3159,37 @@ async function projectReflectIfEnabled(options: ReflectProjectionOptions): Promi
     return;
   }
 
-  const journalDir = resolveOptionalJournalDir(options);
-  if (!journalDir) {
+  const knowledgeDir = resolveOptionalKnowledgeDir(options);
+  if (!knowledgeDir) {
     return;
   }
 
   const projectedAt = options.receipt.completed_at ?? new Date().toISOString();
 
   try {
-    const journalEntries = await readJournalEntries(options.receiptDir, options.runId);
-    const reflectFact = buildReflectProjection({
+    const ledgerEntries = await readLedgerEntries(options.receiptDir, options.runId);
+    const reflectProjection = buildReflectProjection({
       receipt: options.receipt,
       runId: options.runId,
       skillName: options.skillName,
       selectedRunnerName: options.selectedRunnerName,
       policy,
       involvedAgentMediatedWork: options.involvedAgentMediatedWork,
-      journalEntries,
+      ledgerEntries,
       projectedAt,
     });
-    const factEntry = await createFileJournalStore(journalDir).addFact({
-      project: resolveJournalProject(options.env),
+    const projectionEntry = await createFileKnowledgeStore(knowledgeDir).addProjection({
+      project: resolveKnowledgeProject(options.env),
       scope: "reflect",
       key: `receipt:${options.receipt.id}`,
-      value: reflectFact,
+      value: reflectProjection,
       source: "post_run.reflect",
       confidence: 1,
       freshness: "derived",
       receiptId: options.receipt.id,
       createdAt: projectedAt,
     });
-    await appendJournalEntries({
+    await appendLedgerEntries({
       receiptDir: options.receiptDir,
       runId: options.runId,
       entries: [
@@ -3210,10 +3202,10 @@ async function projectReflectIfEnabled(options: ReflectProjectionOptions): Promi
           kind: "reflect_projected",
           status: "success",
           detail: {
-            fact_entry_id: factEntry.entry_id,
+            projection_entry_id: projectionEntry.entry_id,
             receipt_id: options.receipt.id,
             policy,
-            mediation: reflectFact.mediation,
+            mediation: reflectProjection.mediation,
           },
           createdAt: projectedAt,
         }),
@@ -3238,15 +3230,15 @@ function buildReflectProjection(options: {
   readonly selectedRunnerName?: string;
   readonly policy: PostRunReflectPolicy;
   readonly involvedAgentMediatedWork: boolean;
-  readonly journalEntries: readonly ArtifactEnvelope[];
+  readonly ledgerEntries: readonly ArtifactEnvelope[];
   readonly projectedAt: string;
 }): LocalReflectProjection {
   const eventKinds = uniqueStrings(
-    options.journalEntries
+    options.ledgerEntries
       .filter((entry) => entry.type === "run_event")
       .map((entry) => String(entry.data.kind)),
   );
-  const artifactEntries = options.journalEntries.filter((entry) => entry.type === null || !SYSTEM_ARTIFACT_TYPES.has(entry.type));
+  const artifactEntries = options.ledgerEntries.filter((entry) => entry.type === null || !SYSTEM_ARTIFACT_TYPES.has(entry.type));
   const artifactTypes = uniqueStrings(
     artifactEntries
       .map((entry) => entry.type)
@@ -3285,7 +3277,7 @@ function buildReflectProjection(options: {
         ? `${options.skillName} ${options.receipt.status} with ${options.receipt.steps.length} step(s)`
         : `${options.skillName} ${options.receipt.status} via ${options.receipt.subject.source_type}`,
     signals,
-    journal: {
+    ledger: {
       event_kinds: eventKinds,
       artifact_count: artifactEntries.length,
       artifact_types: artifactTypes,
@@ -3305,20 +3297,20 @@ function shouldProjectReflect(policy: PostRunReflectPolicy, involvedAgentMediate
   return false;
 }
 
-function resolveOptionalJournalDir(options: {
-  readonly journalDir?: string;
+function resolveOptionalKnowledgeDir(options: {
+  readonly knowledgeDir?: string;
   readonly env?: NodeJS.ProcessEnv;
 }): string | undefined {
-  if (options.journalDir) {
-    return options.journalDir;
+  if (options.knowledgeDir) {
+    return options.knowledgeDir;
   }
-  if (!options.env?.RUNX_JOURNAL_DIR) {
+  if (!options.env?.RUNX_KNOWLEDGE_DIR) {
     return undefined;
   }
-  return resolveRunxJournalDir(options.env);
+  return resolveRunxKnowledgeDir(options.env);
 }
 
-function resolveJournalProject(env?: NodeJS.ProcessEnv): string {
+function resolveKnowledgeProject(env?: NodeJS.ProcessEnv): string {
   return path.resolve(env?.RUNX_PROJECT ?? env?.RUNX_CWD ?? env?.INIT_CWD ?? process.cwd());
 }
 
@@ -3453,12 +3445,11 @@ interface PreparedAgentContext {
   readonly currentContext: readonly ArtifactEnvelope[];
   readonly historicalContext: readonly ArtifactEnvelope[];
   readonly provenance: readonly AgentContextProvenance[];
-  readonly projectMemory?: ProjectMemory;
-  readonly projectConventions?: ProjectConventions;
+  readonly context?: Context;
   readonly receiptMetadata?: Readonly<Record<string, unknown>>;
 }
 
-interface ProjectDocumentReceiptRef {
+interface ContextDocumentReceiptRef {
   readonly root_path: string;
   readonly path: string;
   readonly sha256: string;
@@ -3493,55 +3484,47 @@ function dedupeArtifacts(artifacts: readonly ArtifactEnvelope[]): readonly Artif
   return uniqueArtifacts;
 }
 
-async function loadProjectMemory(options: {
+async function loadContext(options: {
   readonly inputs: Readonly<Record<string, unknown>>;
   readonly env?: NodeJS.ProcessEnv;
   readonly fallbackStart?: string;
-}): Promise<ProjectMemory | undefined> {
-  return await loadProjectDocument({
-    fileName: "MEMORY.md",
-    inputs: options.inputs,
-    env: options.env,
-    fallbackStart: options.fallbackStart,
-  });
+}): Promise<Context | undefined> {
+  const [memory, conventions] = await Promise.all([
+    loadContextDocument({
+      fileName: "MEMORY.md",
+      inputs: options.inputs,
+      env: options.env,
+      fallbackStart: options.fallbackStart,
+    }),
+    loadContextDocument({
+      fileName: "CONVENTIONS.md",
+      inputs: options.inputs,
+      env: options.env,
+      fallbackStart: options.fallbackStart,
+    }),
+  ]);
+  if (!memory && !conventions) {
+    return undefined;
+  }
+  return {
+    memory,
+    conventions,
+  };
 }
 
-async function loadProjectConventions(options: {
-  readonly inputs: Readonly<Record<string, unknown>>;
-  readonly env?: NodeJS.ProcessEnv;
-  readonly fallbackStart?: string;
-}): Promise<ProjectConventions | undefined> {
-  return await loadProjectDocument({
-    fileName: "CONVENTIONS.md",
-    inputs: options.inputs,
-    env: options.env,
-    fallbackStart: options.fallbackStart,
-  });
+function contextReceiptMetadata(context: Context | undefined): Readonly<Record<string, unknown>> | undefined {
+  if (!context?.memory && !context?.conventions) {
+    return undefined;
+  }
+  return {
+    context: {
+      memory: context.memory ? toContextDocumentReceiptRef(context.memory) : undefined,
+      conventions: context.conventions ? toContextDocumentReceiptRef(context.conventions) : undefined,
+    },
+  };
 }
 
-function projectMemoryReceiptMetadata(projectMemory: ProjectMemory | undefined): Readonly<Record<string, unknown>> | undefined {
-  return projectMemory
-    ? {
-        project_memory: toProjectDocumentReceiptRef(projectMemory),
-      }
-    : undefined;
-}
-
-function projectConventionsReceiptMetadata(
-  projectConventions: ProjectConventions | undefined,
-): Readonly<Record<string, unknown>> | undefined {
-  return projectConventions
-    ? {
-        project_conventions: toProjectDocumentReceiptRef(projectConventions),
-      }
-    : undefined;
-}
-
-function toProjectDocumentReceiptRef(document: {
-  readonly root_path: string;
-  readonly path: string;
-  readonly sha256: string;
-}): ProjectDocumentReceiptRef {
+function toContextDocumentReceiptRef(document: ContextDocument): ContextDocumentReceiptRef {
   return {
     root_path: document.root_path,
     path: document.path,
@@ -3567,17 +3550,12 @@ function resolveProjectDocumentSearchStart(
   );
 }
 
-async function loadProjectDocument(options: {
+async function loadContextDocument(options: {
   readonly fileName: string;
   readonly inputs: Readonly<Record<string, unknown>>;
   readonly env?: NodeJS.ProcessEnv;
   readonly fallbackStart?: string;
-}): Promise<{
-  readonly root_path: string;
-  readonly path: string;
-  readonly sha256: string;
-  readonly content: string;
-} | undefined> {
+}): Promise<ContextDocument | undefined> {
   const searchStart = resolveProjectDocumentSearchStart(options.inputs, options.env, options.fallbackStart);
   const documentPath = await findNearestProjectDocument(searchStart, options.fileName);
   if (!documentPath) {
@@ -3679,7 +3657,7 @@ async function loadHistoricalAgentContext(options: {
   if (!candidate || candidate.kind !== "skill_execution") {
     return [];
   }
-  const entries = await readJournalEntries(options.receiptDir, candidate.id);
+  const entries = await readLedgerEntries(options.receiptDir, candidate.id);
   return entries.filter(isDomainArtifactEnvelope).slice(-MAX_HISTORICAL_AGENT_ARTIFACTS);
 }
 
@@ -3692,8 +3670,7 @@ async function prepareAgentContext(options: {
   readonly stepId?: string;
   readonly currentContext?: readonly MaterializedContextEdge[];
   readonly skillDirectory?: string;
-  readonly projectMemory?: ProjectMemory;
-  readonly projectConventions?: ProjectConventions;
+  readonly context?: Context;
 }): Promise<PreparedAgentContext> {
   const currentContext = dedupeArtifacts(
     (options.currentContext ?? [])
@@ -3710,16 +3687,9 @@ async function prepareAgentContext(options: {
       receipt_id: edge.receiptId,
     }));
   const projectKeyHash = resolveProjectScopeKeyHash(options.inputs, options.env);
-  const projectMemory =
-    options.projectMemory
-    ?? (await loadProjectMemory({
-      inputs: options.inputs,
-      env: options.env,
-      fallbackStart: options.skillDirectory,
-    }));
-  const projectConventions =
-    options.projectConventions
-    ?? (await loadProjectConventions({
+  const context =
+    options.context
+    ?? (await loadContext({
       inputs: options.inputs,
       env: options.env,
       fallbackStart: options.skillDirectory,
@@ -3734,8 +3704,7 @@ async function prepareAgentContext(options: {
     currentContext,
     historicalContext,
     provenance,
-    projectMemory,
-    projectConventions,
+    context,
     receiptMetadata: projectKeyHash
       ? mergeMetadata(
         {
@@ -3743,13 +3712,9 @@ async function prepareAgentContext(options: {
             project_key_hash: projectKeyHash,
           },
         },
-        projectMemoryReceiptMetadata(projectMemory),
-        projectConventionsReceiptMetadata(projectConventions),
+        contextReceiptMetadata(context),
       )
-      : mergeMetadata(
-        projectMemoryReceiptMetadata(projectMemory),
-        projectConventionsReceiptMetadata(projectConventions),
-      ),
+      : contextReceiptMetadata(context),
   };
 }
 
@@ -4260,8 +4225,7 @@ function buildAgentStepRequest(request: Parameters<SkillAdapter["invoke"]>[0]): 
       current_context: request.currentContext ?? [],
       historical_context: request.historicalContext ?? [],
       provenance: request.contextProvenance ?? [],
-      project_memory: request.projectMemory,
-      project_conventions: request.projectConventions,
+      context: request.context,
       expected_outputs: validateOutputContract(request.source.outputs, "source.outputs") ?? {},
       trust_boundary: "agent-mediated: runx yields skill context and receipts the supplied result on completion",
     },
@@ -4283,8 +4247,7 @@ function buildAgentRunnerRequest(request: Parameters<SkillAdapter["invoke"]>[0])
       current_context: request.currentContext ?? [],
       historical_context: request.historicalContext ?? [],
       provenance: request.contextProvenance ?? [],
-      project_memory: request.projectMemory,
-      project_conventions: request.projectConventions,
+      context: request.context,
       trust_boundary: "agent-mediated: runx yields skill context and receipts the supplied result on completion",
     },
   };
@@ -4417,7 +4380,7 @@ function resolveDeclaredInputAliasKey(
 }
 
 async function readResumedInputs(receiptDir: string, runId: string): Promise<Record<string, unknown>> {
-  const entries = await readJournalEntries(receiptDir, runId);
+  const entries = await readLedgerEntries(receiptDir, runId);
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;
     if (entry.type !== "run_event") {
@@ -4436,7 +4399,7 @@ async function readResumedInputs(receiptDir: string, runId: string): Promise<Rec
 }
 
 async function readResumedSelectedRunner(receiptDir: string, runId: string): Promise<string | undefined> {
-  const entries = await readJournalEntries(receiptDir, runId);
+  const entries = await readLedgerEntries(receiptDir, runId);
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;
     if (entry.type !== "run_event") {

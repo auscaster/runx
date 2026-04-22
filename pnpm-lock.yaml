@@ -45,7 +45,7 @@ importers:
 
   packages/marketplaces: {}
 
-  packages/memory: {}
+  packages/knowledge: {}
 
   packages/parser:
     dependencies:

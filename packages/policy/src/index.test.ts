@@ -15,6 +15,91 @@ describe("admitLocalSkill", () => {
     expect(admitLocalSkill({ name: "echo", source: { type: "cli-tool", timeoutSeconds: 10 } }).status).toBe("allow");
   });
 
+  it("denies inline cli-tool eval when strict workspace policy is enabled", () => {
+    const decision = admitLocalSkill(
+      {
+        name: "inline-node",
+        source: {
+          type: "cli-tool",
+          command: "node",
+          args: ["-e", "process.stdout.write('hi')"],
+        },
+      },
+      {
+        executionPolicy: {
+          strictCliToolInlineCode: true,
+        },
+      },
+    );
+
+    expect(decision).toEqual({
+      status: "deny",
+      reasons: [
+        "cli-tool source 'node' uses inline code via '-e', which is rejected by strict workspace policy; move the program into a checked-in script and invoke that file instead",
+      ],
+    });
+  });
+
+  it("allows checked-in cli-tool scripts when strict workspace policy is enabled", () => {
+    expect(
+      admitLocalSkill(
+        {
+          name: "file-node",
+          source: {
+            type: "cli-tool",
+            command: "node",
+            args: ["./run.mjs"],
+          },
+        },
+        {
+          executionPolicy: {
+            strictCliToolInlineCode: true,
+          },
+        },
+      ).status,
+    ).toBe("allow");
+  });
+
+  it("catches shell and python inline code wrappers in strict workspace policy", () => {
+    const shellDecision = admitLocalSkill(
+      {
+        name: "inline-shell",
+        source: {
+          type: "cli-tool",
+          command: "bash",
+          args: ["-lc", "echo hi"],
+        },
+      },
+      {
+        executionPolicy: {
+          strictCliToolInlineCode: true,
+        },
+      },
+    );
+    const pythonDecision = admitLocalSkill(
+      {
+        name: "inline-python",
+        source: {
+          type: "cli-tool",
+          command: "/usr/bin/env",
+          args: ["python3", "-c", "print('hi')"],
+        },
+      },
+      {
+        executionPolicy: {
+          strictCliToolInlineCode: true,
+        },
+      },
+    );
+
+    expect(shellDecision.status).toBe("deny");
+    expect(shellDecision.reasons[0]).toContain("'bash'");
+    expect(shellDecision.reasons[0]).toContain("'-lc'");
+    expect(pythonDecision.status).toBe("deny");
+    expect(pythonDecision.reasons[0]).toContain("'python3'");
+    expect(pythonDecision.reasons[0]).toContain("'-c'");
+  });
+
   it("allows standard skills through the agent runner by default", () => {
     expect(admitLocalSkill({ name: "standard", source: { type: "agent" } }).status).toBe("allow");
   });

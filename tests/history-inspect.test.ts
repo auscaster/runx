@@ -5,13 +5,13 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { runCli } from "../packages/cli/src/index.js";
-import { createFileJournalStore } from "../packages/memory/src/index.js";
+import { createFileKnowledgeStore } from "../packages/knowledge/src/index.js";
 
-describe("history, inspect, and journal CLI", () => {
-  it("uses receipt files for history/inspect and journal index for project facts", async () => {
+describe("history, inspect, and knowledge CLI", () => {
+  it("uses receipt files for history/inspect and knowledge for project projections", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-history-inspect-"));
     const receiptDir = path.join(tempDir, "receipts");
-    const journalDir = path.join(tempDir, "journal");
+    const knowledgeDir = path.join(tempDir, "knowledge");
     const project = path.join(tempDir, "project");
 
     try {
@@ -78,7 +78,7 @@ describe("history, inspect, and journal CLI", () => {
         },
       });
 
-      await createFileJournalStore(journalDir).addFact({
+      await createFileKnowledgeStore(knowledgeDir).addProjection({
         project,
         scope: "project",
         key: "homepage_url",
@@ -90,21 +90,21 @@ describe("history, inspect, and journal CLI", () => {
         createdAt: "2026-04-10T00:00:00Z",
       });
 
-      const journalStdout = createMemoryStream();
-      const journalExit = await runCli(
-        ["journal", "show", "--project", project, "--json"],
-        { stdin: process.stdin, stdout: journalStdout, stderr: createMemoryStream() },
+      const knowledgeStdout = createMemoryStream();
+      const knowledgeExit = await runCli(
+        ["knowledge", "show", "--project", project, "--json"],
+        { stdin: process.stdin, stdout: knowledgeStdout, stderr: createMemoryStream() },
         {
           ...process.env,
-          RUNX_JOURNAL_DIR: journalDir,
+          RUNX_KNOWLEDGE_DIR: knowledgeDir,
           RUNX_CWD: process.cwd(),
         },
       );
-      expect(journalExit).toBe(0);
-      expect(JSON.parse(journalStdout.contents())).toMatchObject({
+      expect(knowledgeExit).toBe(0);
+      expect(JSON.parse(knowledgeStdout.contents())).toMatchObject({
         status: "success",
         project,
-        facts: [
+        projections: [
           {
             key: "homepage_url",
             value: "https://example.test",

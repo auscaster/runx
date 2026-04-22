@@ -31,11 +31,11 @@ such as `aster`'s live issue-ledger flow.
 - `objective` (required): the capability to propose.
 - `project_context` (optional): repo, product, or operator context that
   constrains the proposal.
-- `subject_title` (optional): original subject title when the proposal comes
+- `thread_title` (optional): original thread title when the proposal comes
   from an issue, chat, ticket, or other work thread.
-- `subject_body` (optional): original subject body or request text.
-- `subject_locator` (optional): canonical locator for the bounded subject.
-- `subject_memory` (optional): provider-backed subject memory for the source
+- `thread_body` (optional): original thread body or request text.
+- `thread_locator` (optional): canonical locator for the bounded thread.
+- `thread` (optional): provider-backed thread for the source
   thread.
 - `channel` (optional): proposal delivery channel; defaults to
   `skill-proposal`.

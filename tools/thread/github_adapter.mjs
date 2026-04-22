@@ -66,7 +66,7 @@ export function parseGitHubIssueRef(...values) {
       return buildGitHubIssueRef(shortMatch[1], shortMatch[2]);
     }
   }
-  throw new Error("unable to resolve a GitHub issue reference from subject_memory.adapter.adapter_ref, subject_locator, or canonical_uri.");
+  throw new Error("unable to resolve a GitHub issue reference from thread.adapter.adapter_ref, thread_locator, or canonical_uri.");
 }
 
 export function buildGitHubIssueRef(repoSlug, issueNumber) {
@@ -79,7 +79,7 @@ export function buildGitHubIssueRef(repoSlug, issueNumber) {
     repo_slug: normalizedRepo,
     issue_number: normalizedIssue,
     adapter_ref: `${normalizedRepo}#issue/${normalizedIssue}`,
-    subject_locator: `github://${normalizedRepo}/issues/${normalizedIssue}`,
+    thread_locator: `github://${normalizedRepo}/issues/${normalizedIssue}`,
     issue_url: `https://github.com/${normalizedRepo}/issues/${normalizedIssue}`,
   };
 }
@@ -131,7 +131,7 @@ export function mapGitHubPullRequestStatus(pullRequest) {
   return "published";
 }
 
-export function mapGitHubPullRequestToOutboxEntry(pullRequest, subjectLocator) {
+export function mapGitHubPullRequestToOutboxEntry(pullRequest, threadLocator) {
   const number = firstNonEmptyString(pullRequest.number);
   if (!number) {
     throw new Error("GitHub pull request number is required.");
@@ -142,7 +142,7 @@ export function mapGitHubPullRequestToOutboxEntry(pullRequest, subjectLocator) {
     locator: firstNonEmptyString(pullRequest.url),
     title: firstNonEmptyString(pullRequest.title),
     status: mapGitHubPullRequestStatus(pullRequest),
-    subject_locator: subjectLocator,
+    thread_locator: threadLocator,
     metadata: prune({
       schema_version: "runx.outbox-entry.pull-request.v1",
       action: "refresh",
@@ -181,7 +181,7 @@ export function selectPreferredGitHubPullRequest(pullRequests, preferredBranch) 
     })[0];
 }
 
-export function hydrateGitHubIssueSubjectMemory({ adapterRef, issue, pullRequests }) {
+export function hydrateGitHubIssueThread({ adapterRef, issue, pullRequests }) {
   const issueRef = parseGitHubIssueRef(adapterRef, issue?.url);
   const issueRecord = asRecord(issue, "issue");
   const comments = Array.isArray(issueRecord.comments) ? issueRecord.comments.filter(isRecord) : [];
@@ -242,7 +242,7 @@ export function hydrateGitHubIssueSubjectMemory({ adapterRef, issue, pullRequest
   ].filter(Boolean);
 
   return prune({
-    kind: "runx.subject-memory.v1",
+    kind: "runx.thread.v1",
     adapter: {
       type: "github",
       provider: "github",
@@ -250,21 +250,19 @@ export function hydrateGitHubIssueSubjectMemory({ adapterRef, issue, pullRequest
       adapter_ref: issueRef.adapter_ref,
       cursor: buildGitHubIssueCursor(issueRecord, comments, normalizedPullRequests),
     },
-    subject: {
-      subject_kind: "work_item",
-      subject_locator: issueRef.subject_locator,
-      title: firstNonEmptyString(issueRecord.title),
-      canonical_uri: issueRef.issue_url,
-      metadata: prune({
-        repo: issueRef.repo_slug,
-        issue_number: issueRef.issue_number,
-        state: firstNonEmptyString(issueRecord.state),
-      }),
-    },
+    thread_kind: "work_item",
+    thread_locator: issueRef.thread_locator,
+    title: firstNonEmptyString(issueRecord.title),
+    canonical_uri: issueRef.issue_url,
+    metadata: prune({
+      repo: issueRef.repo_slug,
+      issue_number: issueRef.issue_number,
+      state: firstNonEmptyString(issueRecord.state),
+    }),
     entries,
     decisions: [],
-    subject_outbox: normalizedPullRequests.map((pullRequest) =>
-      mapGitHubPullRequestToOutboxEntry(pullRequest, issueRef.subject_locator)),
+    outbox: normalizedPullRequests.map((pullRequest) =>
+      mapGitHubPullRequestToOutboxEntry(pullRequest, issueRef.thread_locator)),
     source_refs: sourceRefs,
     generated_at: new Date().toISOString(),
     watermark: firstNonEmptyString(
@@ -277,7 +275,7 @@ export function hydrateGitHubIssueSubjectMemory({ adapterRef, issue, pullRequest
   });
 }
 
-export function fetchGitHubIssueSubjectMemory({ adapterRef, env, cwd }) {
+export function fetchGitHubIssueThread({ adapterRef, env, cwd }) {
   const issueRef = parseGitHubIssueRef(adapterRef);
   const issue = runGhJson([
     "issue",
@@ -304,7 +302,7 @@ export function fetchGitHubIssueSubjectMemory({ adapterRef, env, cwd }) {
       "baseRefName,headRefName,isDraft,number,state,title,updatedAt,url",
     ], { env, cwd })),
   ]);
-  return hydrateGitHubIssueSubjectMemory({
+  return hydrateGitHubIssueThread({
     adapterRef: issueRef.adapter_ref,
     issue,
     pullRequests,
@@ -312,20 +310,20 @@ export function fetchGitHubIssueSubjectMemory({ adapterRef, env, cwd }) {
 }
 
 export function pushGitHubPullRequest({
-  subjectMemory,
+  thread,
   draftPullRequest,
   outboxEntry,
   workspacePath,
   nextStatus,
   env,
 }) {
-  const memory = asRecord(subjectMemory, "subject_memory");
+  const state = asRecord(thread, "thread");
   const draft = asRecord(draftPullRequest, "draft_pull_request");
   const outbox = asRecord(outboxEntry, "outbox_entry");
   const issueRef = parseGitHubIssueRef(
-    optionalRecord(memory.adapter)?.adapter_ref,
-    optionalRecord(memory.subject)?.canonical_uri,
-    optionalRecord(memory.subject)?.subject_locator,
+    optionalRecord(state.adapter)?.adapter_ref,
+    state.canonical_uri,
+    state.thread_locator,
   );
   const target = asRecord(draft.target, "draft_pull_request.target");
   const pullRequest = asRecord(draft.pull_request, "draft_pull_request.pull_request");
@@ -333,7 +331,7 @@ export function pushGitHubPullRequest({
   const branch = firstNonEmptyString(target.branch);
   const base = firstNonEmptyString(target.base);
   const remote = firstNonEmptyString(target.remote, "origin");
-  const title = firstNonEmptyString(pullRequest.title, outbox.title, optionalRecord(memory.subject)?.title);
+  const title = firstNonEmptyString(pullRequest.title, outbox.title, state.title);
   const commitMessage = buildGitHubCommitMessage(draft, title);
 
   if (!workspacePath) {
@@ -433,7 +431,7 @@ export function pushGitHubPullRequest({
       ...pullRequestView,
       repo: repoSlug,
     },
-    firstNonEmptyString(optionalRecord(memory.subject)?.subject_locator, issueRef.subject_locator),
+    firstNonEmptyString(state.thread_locator, issueRef.thread_locator),
   );
   return {
     outbox_entry: prune({

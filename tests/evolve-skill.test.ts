@@ -5,13 +5,13 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { runCli } from "../packages/cli/src/index.js";
-import { createFileJournalStore } from "../packages/memory/src/index.js";
+import { createFileKnowledgeStore } from "../packages/knowledge/src/index.js";
 
 describe("evolve skill", () => {
   it("introspects by default with no objective and resumes to a bounded recommendation", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-evolve-introspect-"));
     const receiptDir = path.join(tempDir, "receipts");
-    const journalDir = path.join(tempDir, "journal");
+    const knowledgeDir = path.join(tempDir, "knowledge");
     const answersPath = path.join(tempDir, "answers.json");
     const stdout = createMemoryStream();
     const stderr = createMemoryStream();
@@ -24,7 +24,7 @@ describe("evolve skill", () => {
           ...process.env,
           RUNX_CWD: process.cwd(),
           RUNX_HOME: path.join(tempDir, "home"),
-          RUNX_JOURNAL_DIR: journalDir,
+          RUNX_KNOWLEDGE_DIR: knowledgeDir,
         },
       );
 
@@ -110,7 +110,7 @@ describe("evolve skill", () => {
           ...process.env,
           RUNX_CWD: process.cwd(),
           RUNX_HOME: path.join(tempDir, "home"),
-          RUNX_JOURNAL_DIR: journalDir,
+          RUNX_KNOWLEDGE_DIR: knowledgeDir,
         },
       );
 
@@ -126,12 +126,12 @@ describe("evolve skill", () => {
         kind: "graph_execution",
       });
 
-      const journal = await readFile(path.join(receiptDir, "journals", `${report.receipt.id}.jsonl`), "utf8");
-      expect(journal).toContain("\"type\":\"run_event\"");
-      expect(journal).toContain("\"step_id\":\"introspect\"");
-      expect(journal).toContain("\"selected_runner\":\"introspect\"");
-      expect(journal).not.toContain("\"kind\":\"reflect_projected\"");
-      await expect(createFileJournalStore(journalDir).listFacts({ project: process.cwd() })).resolves.toEqual([]);
+      const ledger = await readFile(path.join(receiptDir, "ledgers", `${report.receipt.id}.jsonl`), "utf8");
+      expect(ledger).toContain("\"type\":\"run_event\"");
+      expect(ledger).toContain("\"step_id\":\"introspect\"");
+      expect(ledger).toContain("\"selected_runner\":\"introspect\"");
+      expect(ledger).not.toContain("\"kind\":\"reflect_projected\"");
+      await expect(createFileKnowledgeStore(knowledgeDir).listProjections({ project: process.cwd() })).resolves.toEqual([]);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
@@ -140,7 +140,7 @@ describe("evolve skill", () => {
   it("yields the plan request and resumes to completion on the same run id", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-evolve-"));
     const receiptDir = path.join(tempDir, "receipts");
-    const journalDir = path.join(tempDir, "journal");
+    const knowledgeDir = path.join(tempDir, "knowledge");
     const answersPath = path.join(tempDir, "answers.json");
     const stdout = createMemoryStream();
     const stderr = createMemoryStream();
@@ -153,7 +153,7 @@ describe("evolve skill", () => {
           ...process.env,
           RUNX_CWD: process.cwd(),
           RUNX_HOME: path.join(tempDir, "home"),
-          RUNX_JOURNAL_DIR: journalDir,
+          RUNX_KNOWLEDGE_DIR: knowledgeDir,
         },
       );
 
@@ -220,7 +220,7 @@ describe("evolve skill", () => {
           ...process.env,
           RUNX_CWD: process.cwd(),
           RUNX_HOME: path.join(tempDir, "home"),
-          RUNX_JOURNAL_DIR: journalDir,
+          RUNX_KNOWLEDGE_DIR: knowledgeDir,
         },
       );
 
@@ -236,12 +236,12 @@ describe("evolve skill", () => {
         kind: "graph_execution",
       });
 
-      const journal = await readFile(path.join(receiptDir, "journals", `${report.receipt.id}.jsonl`), "utf8");
-      expect(journal).toContain("\"type\":\"run_event\"");
-      expect(journal).toContain("\"step_id\":\"plan\"");
-      expect(journal).toContain("\"type\":\"receipt_link\"");
-      expect(journal).toContain("\"kind\":\"reflect_projected\"");
-      await expect(createFileJournalStore(journalDir).listFacts({ project: process.cwd() })).resolves.toEqual(
+      const ledger = await readFile(path.join(receiptDir, "ledgers", `${report.receipt.id}.jsonl`), "utf8");
+      expect(ledger).toContain("\"type\":\"run_event\"");
+      expect(ledger).toContain("\"step_id\":\"plan\"");
+      expect(ledger).toContain("\"type\":\"receipt_link\"");
+      expect(ledger).toContain("\"kind\":\"reflect_projected\"");
+      await expect(createFileKnowledgeStore(knowledgeDir).listProjections({ project: process.cwd() })).resolves.toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             scope: "reflect",

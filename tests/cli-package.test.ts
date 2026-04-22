@@ -94,8 +94,8 @@ describe("Node CLI package", () => {
     expect(files).toContain("tools/sourcey/build/tool.yaml");
     expect(files).toContain("tools/sourcey/build/run.mjs");
     expect(files).toContain("tools/sourcey/verify/tool.yaml");
-    expect(files).toContain("tools/subject_memory/push_outbox/tool.yaml");
-    expect(files).toContain("tools/subject_memory/push_outbox/run.mjs");
+    expect(files).toContain("tools/thread/push_outbox/tool.yaml");
+    expect(files).toContain("tools/thread/push_outbox/run.mjs");
     expect(files).not.toContain("skills/evolve/SKILL.md");
     expect(files).not.toContain("skills/evolve/X.yaml");
     expect(files).not.toContain("skills/sourcey/SKILL.md");

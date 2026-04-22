@@ -1,4 +1,4 @@
-import { readJournalEntries, type ArtifactEnvelope } from "../../artifacts/src/index.js";
+import { readLedgerEntries, type ArtifactEnvelope } from "../../artifacts/src/index.js";
 import {
   defaultRunxHome,
   listVerifiedLocalReceipts,
@@ -44,7 +44,7 @@ export interface TrainableReceiptRow {
   readonly receipt: LocalReceipt;
   readonly receipt_verification: ReceiptVerification;
   readonly latest_outcome_resolution: VerifiedReceiptOutcomeResolution | null;
-  readonly journal_entries: readonly ArtifactEnvelope[];
+  readonly ledger_entries: readonly ArtifactEnvelope[];
   readonly runner_provenance: {
     readonly provider?: string;
     readonly model?: string;
@@ -92,7 +92,7 @@ export async function* streamTrainableReceipts(
       verification,
       effectiveOutcomeState,
       latestOutcomeResolution: latestOutcomeResolution ?? null,
-      journalEntries: await readJournalEntries(options.receiptDir, receipt.id),
+      ledgerEntries: await readLedgerEntries(options.receiptDir, receipt.id),
       runnerProvenance: runnerProvenance(receipt),
       exportedAt: new Date().toISOString(),
     });
@@ -104,7 +104,7 @@ export function projectTrainableReceiptRow(options: {
   readonly verification: ReceiptVerification;
   readonly effectiveOutcomeState: OutcomeState;
   readonly latestOutcomeResolution: VerifiedReceiptOutcomeResolution | null;
-  readonly journalEntries: readonly ArtifactEnvelope[];
+  readonly ledgerEntries: readonly ArtifactEnvelope[];
   readonly runnerProvenance: TrainableReceiptRow["runner_provenance"];
   readonly exportedAt: string;
 }): TrainableReceiptRow {
@@ -129,7 +129,7 @@ export function projectTrainableReceiptRow(options: {
     receipt,
     receipt_verification: options.verification,
     latest_outcome_resolution: options.latestOutcomeResolution,
-    journal_entries: options.journalEntries,
+    ledger_entries: options.ledgerEntries,
     runner_provenance: options.runnerProvenance,
   };
 }

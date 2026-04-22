@@ -1,11 +1,11 @@
 ---
 name: reflect-digest
-description: Aggregate projected reflect facts into bounded skill improvement proposals.
+description: Aggregate projected reflect knowledge into bounded skill improvement proposals.
 ---
 
 # Reflect Digest
 
-Read projected reflect facts from the local journal, group them by skill, and
+Read projected reflect projections from Knowledge, group them by skill, and
 draft bounded improvement proposals only when the grouped evidence clears the
 configured floors.
 
@@ -23,10 +23,10 @@ handoffs for later governed review and push.
 
 ## Inputs
 
-- `reflect_facts` (optional): explicit reflect fact entries. Useful for harness
+- `reflect_projections` (optional): explicit reflect projection entries. Useful for harness
   replay and controlled evaluation.
 - `skill_filter` (optional): only consider one skill ref.
-- `since` (optional): only consider facts recorded at or after this ISO time.
-- `min_support` (optional): minimum grouped fact count required to draft.
-- `min_confidence` (optional): minimum per-fact confidence required to include
-  a reflect fact in grouping.
+- `since` (optional): only consider projections recorded at or after this ISO time.
+- `min_support` (optional): minimum grouped projection count required to draft.
+- `min_confidence` (optional): minimum per-projection confidence required to include
+  a reflect projection in grouping.

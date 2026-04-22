@@ -33,7 +33,7 @@ export interface ArtifactMeta {
   readonly redacted: boolean;
 }
 
-export interface JournalAppendOptions {
+export interface LedgerAppendOptions {
   readonly receiptDir: string;
   readonly runId: string;
   readonly entries: readonly ArtifactEnvelope[];
@@ -233,22 +233,22 @@ export function createReceiptLinkEntry(options: {
   });
 }
 
-export async function appendJournalEntries(options: JournalAppendOptions): Promise<string> {
-  const journalPath = resolveJournalPath(options.receiptDir, options.runId);
-  await mkdir(path.dirname(journalPath), { recursive: true });
+export async function appendLedgerEntries(options: LedgerAppendOptions): Promise<string> {
+  const ledgerPath = resolveLedgerPath(options.receiptDir, options.runId);
+  await mkdir(path.dirname(ledgerPath), { recursive: true });
   const contents = options.entries.map((entry) => JSON.stringify(entry)).join("\n");
   if (contents.length === 0) {
-    return journalPath;
+    return ledgerPath;
   }
-  await writeFile(journalPath, `${contents}\n`, { flag: "a" });
-  return journalPath;
+  await writeFile(ledgerPath, `${contents}\n`, { flag: "a" });
+  return ledgerPath;
 }
 
-export async function readJournalEntries(receiptDir: string, runId: string): Promise<readonly ArtifactEnvelope[]> {
-  const journalPath = resolveJournalPath(receiptDir, runId);
+export async function readLedgerEntries(receiptDir: string, runId: string): Promise<readonly ArtifactEnvelope[]> {
+  const ledgerPath = resolveLedgerPath(receiptDir, runId);
   let contents = "";
   try {
-    contents = await readFile(journalPath, "utf8");
+    contents = await readFile(ledgerPath, "utf8");
   } catch {
     return [];
   }
@@ -259,8 +259,8 @@ export async function readJournalEntries(receiptDir: string, runId: string): Pro
     .map((line) => JSON.parse(line) as ArtifactEnvelope);
 }
 
-export function resolveJournalPath(receiptDir: string, runId: string): string {
-  return path.join(receiptDir, "journals", `${runId}.jsonl`);
+export function resolveLedgerPath(receiptDir: string, runId: string): string {
+  return path.join(receiptDir, "ledgers", `${runId}.jsonl`);
 }
 
 export function hashStable(value: unknown): string {

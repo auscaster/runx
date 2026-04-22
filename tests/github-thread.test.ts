@@ -3,22 +3,22 @@ import { describe, expect, it } from "vitest";
 import {
   ensureGitHubIssueReference,
   gitHubIssueSearchQuery,
-  hydrateGitHubIssueSubjectMemory,
+  hydrateGitHubIssueThread,
   parseGitHubIssueRef,
   selectPreferredGitHubPullRequest,
-} from "../tools/subject_memory/github_adapter.mjs";
+} from "../tools/thread/github_adapter.mjs";
 
-describe("GitHub subject memory helper", () => {
+describe("GitHub thread helper", () => {
   it("parses adapter refs, locators, and canonical issue URLs into one stable shape", () => {
     expect(parseGitHubIssueRef("example/repo#issue/123")).toEqual({
       repo_slug: "example/repo",
       issue_number: "123",
       adapter_ref: "example/repo#issue/123",
-      subject_locator: "github://example/repo/issues/123",
+      thread_locator: "github://example/repo/issues/123",
       issue_url: "https://github.com/example/repo/issues/123",
     });
     expect(parseGitHubIssueRef("github://example/repo/issues/123").adapter_ref).toBe("example/repo#issue/123");
-    expect(parseGitHubIssueRef("https://github.com/example/repo/issues/123").subject_locator).toBe(
+    expect(parseGitHubIssueRef("https://github.com/example/repo/issues/123").thread_locator).toBe(
       "github://example/repo/issues/123",
     );
   });
@@ -33,8 +33,8 @@ describe("GitHub subject memory helper", () => {
     );
   });
 
-  it("hydrates provider issue state into portable subject memory with linked pull requests", () => {
-    const memory = hydrateGitHubIssueSubjectMemory({
+  it("hydrates provider issue state into portable thread with linked pull requests", () => {
+    const state = hydrateGitHubIssueThread({
       adapterRef: "example/repo#issue/123",
       issue: {
         number: 123,
@@ -80,17 +80,16 @@ describe("GitHub subject memory helper", () => {
       ],
     });
 
-    expect(memory).toMatchObject({
-      kind: "runx.subject-memory.v1",
+    expect(state).toMatchObject({
+      kind: "runx.thread.v1",
       adapter: {
         type: "github",
         adapter_ref: "example/repo#issue/123",
       },
-      subject: {
-        subject_locator: "github://example/repo/issues/123",
-        title: "Fix fixture behavior",
-        canonical_uri: "https://github.com/example/repo/issues/123",
-      },
+      thread_kind: "work_item",
+      thread_locator: "github://example/repo/issues/123",
+      title: "Fix fixture behavior",
+      canonical_uri: "https://github.com/example/repo/issues/123",
       entries: [
         {
           entry_id: "issue-123",
@@ -107,7 +106,7 @@ describe("GitHub subject memory helper", () => {
           },
         },
       ],
-      subject_outbox: [
+      outbox: [
         {
           entry_id: "pr-77",
           kind: "pull_request",

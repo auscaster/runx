@@ -10,7 +10,7 @@ import { stdin as processStdin, stdout as processStdout } from "node:process";
 import { fileURLToPath } from "node:url";
 import { pathToFileURL } from "node:url";
 
-import { readJournalEntries } from "../../artifacts/src/index.js";
+import { readLedgerEntries } from "../../artifacts/src/index.js";
 import {
   isRemoteRegistryUrl,
   loadLocalSkillPackage,
@@ -20,7 +20,7 @@ import {
   resolvePathFromUserInput,
   resolveRunxGlobalHomeDir,
   resolveRunxHomeDir,
-  resolveRunxJournalDir,
+  resolveRunxKnowledgeDir,
   resolveRunxOfficialSkillsDir,
   resolveRunxProjectDir,
   resolveRunxRegistryPath,
@@ -33,7 +33,7 @@ import {
 } from "../../config/src/index.js";
 import { runHarness, runHarnessTarget, validatePublishHarness } from "../../harness/src/index.js";
 import { createFixtureMarketplaceAdapter, searchMarketplaceAdapters, type SkillSearchResult } from "../../marketplaces/src/index.js";
-import { createFileJournalStore } from "../../memory/src/index.js";
+import { createFileKnowledgeStore } from "../../knowledge/src/index.js";
 import {
   createDefaultHttpCachedRegistryStore,
   createFileRegistryStore,
@@ -309,7 +309,7 @@ export interface ParsedArgs {
   readonly subcommand?: string;
   readonly exportAction?: "trainable";
   readonly skillAction?: "search" | "add" | "publish" | "inspect";
-  readonly journalAction?: "show";
+  readonly knowledgeAction?: "show";
   readonly searchQuery?: string;
   readonly skillRef?: string;
   readonly publishPath?: string;
@@ -330,7 +330,7 @@ export interface ParsedArgs {
   readonly answersPath?: string;
   readonly receiptDir?: string;
   readonly runner?: string;
-  readonly journalProject?: string;
+  readonly knowledgeProject?: string;
   readonly sourceFilter?: string;
   readonly installVersion?: string;
   readonly installTo?: string;
@@ -365,7 +365,7 @@ const builtinRootCommands = new Set([
   "add",
   "inspect",
   "history",
-  "journal",
+  "knowledge",
   "harness",
   "connect",
   "config",
@@ -597,18 +597,18 @@ export async function runCli(
       return 0;
     }
 
-    if (parsed.command === "journal" && parsed.journalAction === "show") {
-      const project = resolvePathFromUserInput(parsed.journalProject ?? ".", env);
-      const facts = await createFileJournalStore(resolveJournalDir(env)).listFacts({ project });
+    if (parsed.command === "knowledge" && parsed.knowledgeAction === "show") {
+      const project = resolvePathFromUserInput(parsed.knowledgeProject ?? ".", env);
+      const projections = await createFileKnowledgeStore(resolveKnowledgeDir(env)).listProjections({ project });
       const report = {
         status: "success",
         project,
-        facts,
+        projections,
       };
       if (parsed.json) {
         io.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
       } else {
-        io.stdout.write(renderJournalFacts(project, facts, env));
+        io.stdout.write(renderKnowledgeProjections(project, projections, env));
       }
       return 0;
     }
@@ -851,7 +851,7 @@ function writeUsage(stream: NodeJS.WritableStream, env: NodeJS.ProcessEnv = proc
       "  runx inspect <receipt-id> [--receipt-dir dir] [--json]",
       "  runx history [query] [--skill s] [--status s] [--source s] [--since iso] [--until iso] [--receipt-dir dir] [--json]",
       "  runx export-receipts --trainable [--receipt-dir dir] [--since iso] [--until iso] [--status pending|complete|expired] [--source source-type]",
-      "  runx journal show --project . [--json]",
+      "  runx knowledge show --project . [--json]",
       "  runx connect list|revoke <grant-id>|<provider> [--scope scope] [--scope-family family] [--authority-kind read_only|constructive|destructive] [--target-repo owner/repo] [--target-locator locator] [--json]",
       "  runx config set|get|list [agent.provider|agent.model|agent.api_key] [value] [--json]",
       "  runx init [-g|--global] [--prefetch official] [--json]",
@@ -947,7 +947,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   const isSkillAdd = (command === "skill" && positionals[0] === "add") || command === "add";
   const isSkillPublish = command === "skill" && positionals[0] === "publish";
   const isSkillInspect = (command === "skill" && positionals[0] === "inspect") || command === "inspect";
-  const isJournalShow = command === "journal" && positionals[0] === "show";
+  const isKnowledgeShow = command === "knowledge" && positionals[0] === "show";
   const isConnect = command === "connect";
   const isConfig = command === "config";
   const isInit = command === "init";
@@ -957,7 +957,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   const searchPositionals = positionals.slice(adminOffset);
   const addPositionals = positionals.slice(adminOffset);
   const inspectPositionals = positionals.slice(adminOffset);
-  const journalProject = isJournalShow && typeof inputs.project === "string" ? inputs.project : undefined;
+  const knowledgeProject = isKnowledgeShow && typeof inputs.project === "string" ? inputs.project : undefined;
   const sourceFilter = isSkillSearch && typeof inputs.source === "string" ? inputs.source : undefined;
   const installVersion = isSkillAdd && typeof inputs.version === "string" ? inputs.version : undefined;
   const installTo = isSkillAdd && typeof inputs.to === "string" ? inputs.to : undefined;
@@ -1031,7 +1031,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     subcommand: positionals[0],
     exportAction: isExportReceipts && truthyFlag(inputs.trainable) ? "trainable" : undefined,
     skillAction: isSkillSearch ? "search" : isSkillAdd ? "add" : isSkillPublish ? "publish" : isSkillInspect ? "inspect" : undefined,
-    journalAction: isJournalShow ? "show" : undefined,
+    knowledgeAction: isKnowledgeShow ? "show" : undefined,
     searchQuery: isSkillSearch ? searchPositionals.join(" ") || undefined : undefined,
     skillRef: isSkillAdd ? addPositionals.join(" ") || undefined : undefined,
     publishPath: isSkillPublish ? positionals[1] : undefined,
@@ -1057,7 +1057,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     receiptDir,
     resumeReceiptId: isResume ? positionals[0] ?? resumeReceiptId : resumeReceiptId,
     runner,
-    journalProject,
+    knowledgeProject,
     sourceFilter,
     installVersion,
     installTo,
@@ -1110,7 +1110,7 @@ function isSupportedCommand(parsed: ParsedArgs): boolean {
   if (parsed.command === "history") {
     return true;
   }
-  if (parsed.command === "journal" && parsed.journalAction === "show") {
+  if (parsed.command === "knowledge" && parsed.knowledgeAction === "show") {
     return true;
   }
   if (parsed.command === "harness" && parsed.harnessPath) {
@@ -1799,7 +1799,7 @@ async function resolveResumeSkillPath(
   receiptDir: string | undefined,
   env: NodeJS.ProcessEnv,
 ): Promise<string> {
-  const entries = await readJournalEntries(receiptDir ? resolvePathFromUserInput(receiptDir, env) : resolveDefaultReceiptDir(env), runId);
+  const entries = await readLedgerEntries(receiptDir ? resolvePathFromUserInput(receiptDir, env) : resolveDefaultReceiptDir(env), runId);
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
     if (entry?.type !== "run_event") {
@@ -2095,9 +2095,9 @@ function renderVerificationBadge(verification: LocalReceiptSummary["verification
   return `  ${color}${verification.status}${t.reset}${reason}`;
 }
 
-function renderJournalFacts(
+function renderKnowledgeProjections(
   project: string,
-  facts: readonly {
+  projections: readonly {
     readonly key: string;
     readonly value: unknown;
     readonly scope: string;
@@ -2109,17 +2109,17 @@ function renderJournalFacts(
   env: NodeJS.ProcessEnv = process.env,
 ): string {
   const t = theme(undefined, env);
-  if (facts.length === 0) {
-    return `\n  ${t.dim}No journal facts for ${project}.${t.reset}\n\n`;
+  if (projections.length === 0) {
+    return `\n  ${t.dim}No knowledge projections for ${project}.${t.reset}\n\n`;
   }
-  const keyWidth = Math.min(32, Math.max(...facts.map((f) => f.key.length)));
+  const keyWidth = Math.min(32, Math.max(...projections.map((projection) => projection.key.length)));
   const lines: string[] = [""];
   lines.push(`  ${t.dim}${project}${t.reset}`);
   lines.push("");
-  for (const fact of facts) {
-    const value = typeof fact.value === "string" ? fact.value : JSON.stringify(fact.value);
+  for (const projection of projections) {
+    const value = typeof projection.value === "string" ? projection.value : JSON.stringify(projection.value);
     lines.push(
-      `  ${t.bold}${fact.key.padEnd(keyWidth)}${t.reset}  ${value}  ${t.dim}· ${fact.scope}/${fact.source} ${fact.freshness}${t.reset}`,
+      `  ${t.bold}${projection.key.padEnd(keyWidth)}${t.reset}  ${value}  ${t.dim}· ${projection.scope}/${projection.source} ${projection.freshness}${t.reset}`,
     );
   }
   lines.push("");
@@ -2258,8 +2258,8 @@ function renderConnectResult(
   );
 }
 
-function resolveJournalDir(env: NodeJS.ProcessEnv): string {
-  return resolveRunxJournalDir(env);
+function resolveKnowledgeDir(env: NodeJS.ProcessEnv): string {
+  return resolveRunxKnowledgeDir(env);
 }
 
 function resolveRunxDir(env: NodeJS.ProcessEnv): string {

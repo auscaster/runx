@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   loadLocalAgentApiKey,
   resolveRunxGlobalHomeDir,
-  resolveRunxJournalDir,
+  resolveRunxKnowledgeDir,
   updateRunxConfigValue,
 } from "./index.js";
 
@@ -43,28 +43,28 @@ describe("config package", () => {
     }
   });
 
-  it("anchors configured journal paths to the selected workspace base instead of an unrelated existing directory", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-config-journal-path-"));
+  it("anchors configured knowledge paths to the selected workspace base instead of an unrelated existing directory", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-config-knowledge-path-"));
     const workspaceDir = path.join(tempDir, "workspace");
     const runDir = path.join(tempDir, "run");
     const cwd = path.join(workspaceDir, "packages", "demo");
 
     try {
-      await mkdir(path.join(workspaceDir, "journal"), { recursive: true });
+      await mkdir(path.join(workspaceDir, "knowledge"), { recursive: true });
       await mkdir(cwd, { recursive: true });
       await writeFile(path.join(workspaceDir, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n");
 
       expect(
-        resolveRunxJournalDir(
+        resolveRunxKnowledgeDir(
           {
             ...process.env,
             RUNX_CWD: runDir,
             INIT_CWD: runDir,
-            RUNX_JOURNAL_DIR: "journal",
+            RUNX_KNOWLEDGE_DIR: "knowledge",
           },
           { cwd },
         ),
-      ).toBe(path.join(runDir, "journal"));
+      ).toBe(path.join(runDir, "knowledge"));
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

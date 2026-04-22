@@ -1,4 +1,4 @@
-export const memoryPackage = "@runx/memory";
+export const knowledgePackage = "@runx/knowledge";
 
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -8,60 +8,51 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import type { LocalReceipt } from "../../receipts/src/index.js";
 
 export const RUNX_SCHEMA_REFS = {
-  subject_memory: "https://runx.ai/spec/subject-memory.schema.json",
+  thread: "https://runx.ai/spec/thread.schema.json",
   outbox_entry: "https://runx.ai/spec/outbox-entry.schema.json",
-  subject_memory_decision: "https://runx.ai/spec/subject-memory-decision.schema.json",
-  journal_entry: "https://runx.ai/spec/journal-entry.schema.json",
+  thread_decision: "https://runx.ai/spec/thread-decision.schema.json",
+  knowledge_entry: "https://runx.ai/spec/knowledge-entry.schema.json",
 } as const;
 
-export type SubjectMemoryEntryKind = "message" | "decision" | "status" | "artifact_ref" | "note";
-export type SubjectMemoryDecisionValue = "allow" | "deny";
+export type ThreadEntryKind = "message" | "decision" | "status" | "artifact_ref" | "note";
+export type ThreadDecisionValue = "allow" | "deny";
 export type OutboxEntryKind = "pull_request" | "draft_change" | "patch_bundle" | "message" | "artifact";
 export type OutboxEntryStatus = "proposed" | "draft" | "published" | "superseded" | "closed";
 
-export interface MemoryEvidenceRef {
+export interface EvidenceRef {
   readonly type: string;
   readonly uri: string;
   readonly label?: string;
   readonly recorded_at?: string;
 }
 
-export interface MemoryActor {
+export interface Actor {
   readonly actor_id?: string;
   readonly display_name?: string;
   readonly role?: string;
   readonly provider_identity?: string;
 }
 
-export interface SubjectDescriptor {
-  readonly subject_kind: string;
-  readonly subject_locator: string;
-  readonly title?: string;
-  readonly canonical_uri?: string;
-  readonly aliases?: readonly string[];
-  readonly metadata?: Readonly<Record<string, unknown>>;
-}
-
-export interface SubjectMemoryEntry {
+export interface ThreadEntry {
   readonly entry_id: string;
-  readonly entry_kind: SubjectMemoryEntryKind;
+  readonly entry_kind: ThreadEntryKind;
   readonly recorded_at: string;
-  readonly actor?: MemoryActor;
+  readonly actor?: Actor;
   readonly body?: string;
   readonly structured_data?: Readonly<Record<string, unknown>>;
-  readonly source_ref?: MemoryEvidenceRef;
+  readonly source_ref?: EvidenceRef;
   readonly labels?: readonly string[];
   readonly supersedes?: readonly string[];
 }
 
-export interface SubjectMemoryDecision {
+export interface ThreadDecision {
   readonly decision_id: string;
   readonly gate_id: string;
-  readonly decision: SubjectMemoryDecisionValue;
+  readonly decision: ThreadDecisionValue;
   readonly recorded_at: string;
   readonly reason?: string;
-  readonly author?: MemoryActor;
-  readonly source_ref?: MemoryEvidenceRef;
+  readonly author?: Actor;
+  readonly source_ref?: EvidenceRef;
 }
 
 export interface OutboxEntry {
@@ -70,11 +61,11 @@ export interface OutboxEntry {
   readonly locator?: string;
   readonly title?: string;
   readonly status?: OutboxEntryStatus;
-  readonly subject_locator?: string;
+  readonly thread_locator?: string;
   readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
-export interface SubjectMemoryAdapterDescriptor {
+export interface ThreadAdapterDescriptor {
   readonly type: string;
   readonly provider?: string;
   readonly surface?: string;
@@ -82,35 +73,40 @@ export interface SubjectMemoryAdapterDescriptor {
   readonly adapter_ref?: string;
 }
 
-export interface SubjectMemory {
-  readonly kind: "runx.subject-memory.v1";
-  readonly adapter: SubjectMemoryAdapterDescriptor;
-  readonly subject: SubjectDescriptor;
-  readonly entries: readonly SubjectMemoryEntry[];
-  readonly decisions: readonly SubjectMemoryDecision[];
-  readonly subject_outbox: readonly OutboxEntry[];
-  readonly source_refs: readonly MemoryEvidenceRef[];
+export interface Thread {
+  readonly kind: "runx.thread.v1";
+  readonly adapter: ThreadAdapterDescriptor;
+  readonly thread_kind: string;
+  readonly thread_locator: string;
+  readonly title?: string;
+  readonly canonical_uri?: string;
+  readonly aliases?: readonly string[];
+  readonly metadata?: Readonly<Record<string, unknown>>;
+  readonly entries: readonly ThreadEntry[];
+  readonly decisions: readonly ThreadDecision[];
+  readonly outbox: readonly OutboxEntry[];
+  readonly source_refs: readonly EvidenceRef[];
   readonly generated_at?: string;
   readonly watermark?: string;
 }
 
-export interface SubjectMemoryFetchRequest {
-  readonly subject_kind: string;
-  readonly subject_locator: string;
+export interface ThreadFetchRequest {
+  readonly thread_kind: string;
+  readonly thread_locator: string;
   readonly cursor?: string;
-  readonly include_subject_outbox?: boolean;
+  readonly include_outbox?: boolean;
 }
 
 export interface PushOutboxEntryRequest {
-  readonly memory: SubjectMemory;
+  readonly thread: Thread;
   readonly entry: OutboxEntry;
-  readonly artifacts?: readonly MemoryEvidenceRef[];
+  readonly artifacts?: readonly EvidenceRef[];
   readonly next_status?: OutboxEntryStatus;
 }
 
-export interface SubjectMemoryAdapter {
+export interface ThreadAdapter {
   readonly type: string;
-  readonly fetchSubjectMemory: (request: SubjectMemoryFetchRequest) => Promise<SubjectMemory>;
+  readonly fetchThread: (request: ThreadFetchRequest) => Promise<Thread>;
   readonly push?: (request: PushOutboxEntryRequest) => Promise<OutboxEntry>;
 }
 
@@ -118,29 +114,34 @@ export interface PushOutboxEntryResult {
   readonly status: "pushed" | "skipped";
   readonly reason?: string;
   readonly outbox_entry: OutboxEntry;
-  readonly subject_memory: SubjectMemory;
+  readonly thread: Thread;
 }
 
-export function validateSubjectMemory(value: unknown, label = "subject_memory"): SubjectMemory {
+export function validateThread(value: unknown, label = "thread"): Thread {
   const record = requireRecord(value, label);
-  if (record.kind !== "runx.subject-memory.v1") {
-    throw new Error(`${label}.kind must be "runx.subject-memory.v1" (${RUNX_SCHEMA_REFS.subject_memory}).`);
+  if (record.kind !== "runx.thread.v1") {
+    throw new Error(`${label}.kind must be "runx.thread.v1" (${RUNX_SCHEMA_REFS.thread}).`);
   }
   return {
-    kind: "runx.subject-memory.v1",
-    adapter: validateSubjectMemoryAdapterDescriptor(record.adapter, `${label}.adapter`),
-    subject: validateSubjectDescriptor(record.subject, `${label}.subject`),
+    kind: "runx.thread.v1",
+    adapter: validateThreadAdapterDescriptor(record.adapter, `${label}.adapter`),
+    thread_kind: requireString(record.thread_kind, `${label}.thread_kind`),
+    thread_locator: requireString(record.thread_locator, `${label}.thread_locator`),
+    title: optionalString(record.title, `${label}.title`),
+    canonical_uri: optionalString(record.canonical_uri, `${label}.canonical_uri`),
+    aliases: optionalStringArray(record.aliases, `${label}.aliases`),
+    metadata: optionalPlainRecord(record.metadata, `${label}.metadata`),
     entries: requireArray(record.entries, `${label}.entries`).map((entry, index) =>
-      validateSubjectMemoryEntry(entry, `${label}.entries[${index}]`),
+      validateThreadEntry(entry, `${label}.entries[${index}]`),
     ),
     decisions: requireArray(record.decisions, `${label}.decisions`).map((decision, index) =>
-      validateSubjectMemoryDecision(decision, `${label}.decisions[${index}]`),
+      validateThreadDecision(decision, `${label}.decisions[${index}]`),
     ),
-    subject_outbox: requireArray(record.subject_outbox, `${label}.subject_outbox`).map((entry, index) =>
-      validateOutboxEntry(entry, `${label}.subject_outbox[${index}]`),
+    outbox: requireArray(record.outbox, `${label}.outbox`).map((entry, index) =>
+      validateOutboxEntry(entry, `${label}.outbox[${index}]`),
     ),
     source_refs: requireArray(record.source_refs, `${label}.source_refs`).map((ref, index) =>
-      validateMemoryEvidenceRef(ref, `${label}.source_refs[${index}]`),
+      validateEvidenceRef(ref, `${label}.source_refs[${index}]`),
     ),
     generated_at: optionalDateTime(record.generated_at, `${label}.generated_at`),
     watermark: optionalString(record.watermark, `${label}.watermark`),
@@ -163,15 +164,15 @@ export function validateOutboxEntry(value: unknown, label = "outbox_entry"): Out
       ["proposed", "draft", "published", "superseded", "closed"],
       `${label}.status`,
     ),
-    subject_locator: optionalString(record.subject_locator, `${label}.subject_locator`),
+    thread_locator: optionalString(record.thread_locator, `${label}.thread_locator`),
     metadata: optionalPlainRecord(record.metadata, `${label}.metadata`),
   };
 }
 
-export function validateSubjectMemoryDecision(
+export function validateThreadDecision(
   value: unknown,
-  label = "subject_memory_decision",
-): SubjectMemoryDecision {
+  label = "thread_decision",
+): ThreadDecision {
   const record = requireRecord(value, label);
   return {
     decision_id: requireString(record.decision_id, `${label}.decision_id`),
@@ -184,7 +185,7 @@ export function validateSubjectMemoryDecision(
   };
 }
 
-export function validateSubjectMemoryEntry(value: unknown, label = "subject_memory_entry"): SubjectMemoryEntry {
+export function validateThreadEntry(value: unknown, label = "thread_entry"): ThreadEntry {
   const record = requireRecord(value, label);
   return {
     entry_id: requireString(record.entry_id, `${label}.entry_id`),
@@ -199,32 +200,31 @@ export function validateSubjectMemoryEntry(value: unknown, label = "subject_memo
   };
 }
 
-export function latestDecisionForGate(memory: SubjectMemory, gateId: string): SubjectMemoryDecision | undefined {
-  return memory.decisions
+export function latestDecisionForGate(state: Thread, gateId: string): ThreadDecision | undefined {
+  return state.decisions
     .filter((decision) => decision.gate_id === gateId)
     .slice()
     .sort((left, right) => left.recorded_at.localeCompare(right.recorded_at))
     .at(-1);
 }
 
-export function subjectMemoryAllowsGate(memory: SubjectMemory, gateId: string): boolean {
-  return latestDecisionForGate(memory, gateId)?.decision === "allow";
+export function threadAllowsGate(state: Thread, gateId: string): boolean {
+  return latestDecisionForGate(state, gateId)?.decision === "allow";
 }
 
 export function findOutboxEntry(
-  memory: SubjectMemory,
+  state: Thread,
   kind: OutboxEntryKind,
 ): OutboxEntry | undefined {
-  return memory.subject_outbox.find((entry) => entry.kind === kind);
+  return state.outbox.find((entry) => entry.kind === kind);
 }
 
-export function createSubjectMemoryAdapter(
-  descriptor: SubjectMemoryAdapterDescriptor,
-): SubjectMemoryAdapter | undefined {
+export function createThreadAdapter(
+  descriptor: ThreadAdapterDescriptor,
+): ThreadAdapter | undefined {
   switch (descriptor.type) {
     case "file":
-    case "file_subject_memory":
-      return createFileSubjectMemoryAdapter(descriptor);
+      return createFileThreadAdapter(descriptor);
     default:
       return undefined;
   }
@@ -233,55 +233,55 @@ export function createSubjectMemoryAdapter(
 export async function pushOutboxEntryViaAdapter(
   request: PushOutboxEntryRequest,
 ): Promise<PushOutboxEntryResult> {
-  const adapter = createSubjectMemoryAdapter(request.memory.adapter);
+  const adapter = createThreadAdapter(request.thread.adapter);
   if (!adapter) {
     return {
       status: "skipped",
-      reason: `no subject memory adapter is registered for '${request.memory.adapter.type}'`,
+      reason: `no thread adapter is registered for '${request.thread.adapter.type}'`,
       outbox_entry: request.entry,
-      subject_memory: request.memory,
+      thread: request.thread,
     };
   }
   if (!adapter.push) {
     return {
       status: "skipped",
-      reason: `subject memory adapter '${adapter.type}' does not support push`,
+      reason: `thread adapter '${adapter.type}' does not support push`,
       outbox_entry: request.entry,
-      subject_memory: request.memory,
+      thread: request.thread,
     };
   }
 
   const outboxEntry = await adapter.push(request);
-  const subjectMemory = await adapter.fetchSubjectMemory({
-    subject_kind: request.memory.subject.subject_kind,
-    subject_locator: request.memory.subject.subject_locator,
-    cursor: request.memory.adapter.cursor,
-    include_subject_outbox: true,
+  const thread = await adapter.fetchThread({
+    thread_kind: request.thread.thread_kind,
+    thread_locator: request.thread.thread_locator,
+    cursor: request.thread.adapter.cursor,
+    include_outbox: true,
   });
   return {
     status: "pushed",
     outbox_entry: outboxEntry,
-    subject_memory: subjectMemory,
+    thread: thread,
   };
 }
 
-export function summarizeSubjectMemory(memory: SubjectMemory): string {
-  const subject = `${memory.subject.subject_kind}:${memory.subject.subject_locator}`;
-  const entryCount = memory.entries.length;
-  const decisionCount = memory.decisions.length;
-  const outboxKinds = memory.subject_outbox.map((entry) => entry.kind).join(", ") || "none";
-  return `${subject} via ${memory.adapter.type} | entries=${entryCount} decisions=${decisionCount} outbox=${outboxKinds}`;
+export function summarizeThread(state: Thread): string {
+  const threadRef = `${state.thread_kind}:${state.thread_locator}`;
+  const entryCount = state.entries.length;
+  const decisionCount = state.decisions.length;
+  const outboxKinds = state.outbox.map((entry) => entry.kind).join(", ") || "none";
+  return `${threadRef} via ${state.adapter.type} | entries=${entryCount} decisions=${decisionCount} outbox=${outboxKinds}`;
 }
 
-export type LocalJournalEntryKind = "receipt" | "fact" | "answer" | "artifact";
+export type LocalKnowledgeEntryKind = "receipt" | "projection" | "answer" | "artifact";
 
-export interface LocalJournalReceiptEntry {
+export interface LocalKnowledgeReceiptEntry {
   readonly entry_id: string;
   readonly entry_kind: "receipt";
   readonly receipt_id: string;
   readonly kind: LocalReceipt["kind"];
   readonly status: LocalReceipt["status"];
-  readonly subject: string;
+  readonly execution_ref: string;
   readonly source_type?: string;
   readonly receipt_path?: string;
   readonly project?: string;
@@ -290,9 +290,9 @@ export interface LocalJournalReceiptEntry {
   readonly indexed_at: string;
 }
 
-export interface LocalJournalFactEntry {
+export interface LocalKnowledgeProjectionEntry {
   readonly entry_id: string;
-  readonly entry_kind: "fact";
+  readonly entry_kind: "projection";
   readonly project: string;
   readonly scope: string;
   readonly key: string;
@@ -304,7 +304,7 @@ export interface LocalJournalFactEntry {
   readonly created_at: string;
 }
 
-export interface LocalJournalAnswerEntry {
+export interface LocalKnowledgeAnswerEntry {
   readonly entry_id: string;
   readonly entry_kind: "answer";
   readonly project: string;
@@ -314,7 +314,7 @@ export interface LocalJournalAnswerEntry {
   readonly created_at: string;
 }
 
-export interface LocalJournalArtifactEntry {
+export interface LocalKnowledgeArtifactEntry {
   readonly entry_id: string;
   readonly entry_kind: "artifact";
   readonly project: string;
@@ -323,15 +323,15 @@ export interface LocalJournalArtifactEntry {
   readonly created_at: string;
 }
 
-export type LocalJournalEntry =
-  | LocalJournalReceiptEntry
-  | LocalJournalFactEntry
-  | LocalJournalAnswerEntry
-  | LocalJournalArtifactEntry;
+export type LocalKnowledgeEntry =
+  | LocalKnowledgeReceiptEntry
+  | LocalKnowledgeProjectionEntry
+  | LocalKnowledgeAnswerEntry
+  | LocalKnowledgeArtifactEntry;
 
-export interface LocalJournal {
-  readonly schema_version: "runx.journal.v1";
-  readonly entries: readonly LocalJournalEntry[];
+export interface LocalKnowledge {
+  readonly schema_version: "runx.knowledge.v1";
+  readonly entries: readonly LocalKnowledgeEntry[];
 }
 
 export interface IndexReceiptOptions {
@@ -341,7 +341,7 @@ export interface IndexReceiptOptions {
   readonly indexedAt?: string;
 }
 
-export interface AddFactOptions {
+export interface AddProjectionOptions {
   readonly project: string;
   readonly scope: string;
   readonly key: string;
@@ -353,83 +353,83 @@ export interface AddFactOptions {
   readonly createdAt?: string;
 }
 
-export interface LocalJournalStore {
-  readonly init: () => Promise<LocalJournal>;
-  readonly read: () => Promise<LocalJournal>;
-  readonly indexReceipt: (options: IndexReceiptOptions) => Promise<LocalJournalReceiptEntry>;
-  readonly addFact: (options: AddFactOptions) => Promise<LocalJournalFactEntry>;
-  readonly listFacts: (filter?: { readonly project?: string }) => Promise<readonly LocalJournalFactEntry[]>;
-  readonly listReceipts: (filter?: { readonly project?: string }) => Promise<readonly LocalJournalReceiptEntry[]>;
+export interface LocalKnowledgeStore {
+  readonly init: () => Promise<LocalKnowledge>;
+  readonly read: () => Promise<LocalKnowledge>;
+  readonly indexReceipt: (options: IndexReceiptOptions) => Promise<LocalKnowledgeReceiptEntry>;
+  readonly addProjection: (options: AddProjectionOptions) => Promise<LocalKnowledgeProjectionEntry>;
+  readonly listProjections: (filter?: { readonly project?: string }) => Promise<readonly LocalKnowledgeProjectionEntry[]>;
+  readonly listReceipts: (filter?: { readonly project?: string }) => Promise<readonly LocalKnowledgeReceiptEntry[]>;
 }
 
-export function createFileJournalStore(journalDir: string): LocalJournalStore {
-  const indexPath = path.join(journalDir, "index.json");
-  const lockPath = path.join(journalDir, "index.lock");
+export function createFileKnowledgeStore(knowledgeDir: string): LocalKnowledgeStore {
+  const indexPath = path.join(knowledgeDir, "index.json");
+  const lockPath = path.join(knowledgeDir, "index.lock");
 
-  async function read(): Promise<LocalJournal> {
+  async function read(): Promise<LocalKnowledge> {
     try {
-      return normalizeJournal(JSON.parse(await readFile(indexPath, "utf8")) as unknown);
+      return normalizeKnowledge(JSON.parse(await readFile(indexPath, "utf8")) as unknown);
     } catch (error) {
       if (isNotFound(error)) {
-        return emptyJournal();
+        return emptyKnowledge();
       }
       throw error;
     }
   }
 
-  async function writeUnlocked(journal: LocalJournal): Promise<void> {
-    await mkdir(journalDir, { recursive: true });
+  async function writeUnlocked(knowledge: LocalKnowledge): Promise<void> {
+    await mkdir(knowledgeDir, { recursive: true });
     const tempPath = path.join(
-      journalDir,
+      knowledgeDir,
       `.index.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`,
     );
-    await writeFile(tempPath, `${JSON.stringify(journal, null, 2)}\n`, { mode: 0o600 });
+    await writeFile(tempPath, `${JSON.stringify(knowledge, null, 2)}\n`, { mode: 0o600 });
     await rename(tempPath, indexPath);
   }
 
-  async function updateJournal<T>(
-    updater: (journal: LocalJournal) => Promise<{ readonly journal: LocalJournal; readonly result: T }>,
+  async function updateKnowledge<T>(
+    updater: (knowledge: LocalKnowledge) => Promise<{ readonly knowledge: LocalKnowledge; readonly result: T }>,
   ): Promise<T> {
-    return await withJournalLock(journalDir, lockPath, async () => {
+    return await withKnowledgeLock(knowledgeDir, lockPath, async () => {
       const current = await read();
-      const { journal, result } = await updater(current);
-      await writeUnlocked(journal);
+      const { knowledge, result } = await updater(current);
+      await writeUnlocked(knowledge);
       return result;
     });
   }
 
   return {
     init: async () => {
-      return await updateJournal(async (journal) => ({ journal, result: journal }));
+      return await updateKnowledge(async (knowledge) => ({ knowledge, result: knowledge }));
     },
     read,
     indexReceipt: async (options) => {
-      return await updateJournal(async (journal) => {
+      return await updateKnowledge(async (knowledge) => {
         const entry = receiptEntry(options);
         return {
           result: entry,
-          journal: {
-            ...journal,
+          knowledge: {
+            ...knowledge,
             entries: [
-              ...journal.entries.filter((candidate) => !(candidate.entry_kind === "receipt" && candidate.receipt_id === entry.receipt_id)),
+              ...knowledge.entries.filter((candidate) => !(candidate.entry_kind === "receipt" && candidate.receipt_id === entry.receipt_id)),
               entry,
             ],
           },
         };
       });
     },
-    addFact: async (options) => {
-      return await updateJournal(async (journal) => {
+    addProjection: async (options) => {
+      return await updateKnowledge(async (knowledge) => {
         const createdAt = options.createdAt ?? new Date().toISOString();
-        const entry: LocalJournalFactEntry = {
-          entry_id: `fact_${hashStable({
+        const entry: LocalKnowledgeProjectionEntry = {
+          entry_id: `projection_${hashStable({
             project: options.project,
             scope: options.scope,
             key: options.key,
             receipt_id: options.receiptId,
             created_at: createdAt,
           }).slice(0, 24)}`,
-          entry_kind: "fact",
+          entry_kind: "projection",
           project: options.project,
           scope: options.scope,
           key: options.key,
@@ -442,22 +442,22 @@ export function createFileJournalStore(journalDir: string): LocalJournalStore {
         };
         return {
           result: entry,
-          journal: {
-            ...journal,
-            entries: [...journal.entries.filter((candidate) => candidate.entry_id !== entry.entry_id), entry],
+          knowledge: {
+            ...knowledge,
+            entries: [...knowledge.entries.filter((candidate) => candidate.entry_id !== entry.entry_id), entry],
           },
         };
       });
     },
-    listFacts: async (filter) => {
-      const journal = await read();
-      const facts = journal.entries.filter(isLocalJournalFactEntry);
+    listProjections: async (filter) => {
+      const knowledge = await read();
+      const projections = knowledge.entries.filter(isLocalKnowledgeProjectionEntry);
       const project = filter?.project;
-      return project ? facts.filter((fact) => sameProject(fact.project, project)) : facts;
+      return project ? projections.filter((projection) => sameProject(projection.project, project)) : projections;
     },
     listReceipts: async (filter) => {
-      const journal = await read();
-      const receipts = journal.entries.filter(isLocalJournalReceiptEntry);
+      const knowledge = await read();
+      const receipts = knowledge.entries.filter(isLocalKnowledgeReceiptEntry);
       const project = filter?.project;
       return project
         ? receipts.filter((receipt) => typeof receipt.project === "string" && sameProject(receipt.project, project))
@@ -466,8 +466,8 @@ export function createFileJournalStore(journalDir: string): LocalJournalStore {
   };
 }
 
-async function withJournalLock<T>(journalDir: string, lockPath: string, fn: () => Promise<T>): Promise<T> {
-  await mkdir(journalDir, { recursive: true });
+async function withKnowledgeLock<T>(knowledgeDir: string, lockPath: string, fn: () => Promise<T>): Promise<T> {
+  await mkdir(knowledgeDir, { recursive: true });
   const startedAt = Date.now();
   while (true) {
     try {
@@ -479,7 +479,7 @@ async function withJournalLock<T>(journalDir: string, lockPath: string, fn: () =
       }
       await removeStaleLock(lockPath);
       if (Date.now() - startedAt > 10_000) {
-        throw new Error(`Timed out waiting for local journal lock at ${lockPath}.`);
+        throw new Error(`Timed out waiting for local knowledge lock at ${lockPath}.`);
       }
       await delay(10 + Math.floor(Math.random() * 50));
     }
@@ -509,7 +509,7 @@ async function delay(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function receiptEntry(options: IndexReceiptOptions): LocalJournalReceiptEntry {
+function receiptEntry(options: IndexReceiptOptions): LocalKnowledgeReceiptEntry {
   const receipt = options.receipt;
   return {
     entry_id: `receipt_${receipt.id}`,
@@ -517,7 +517,7 @@ function receiptEntry(options: IndexReceiptOptions): LocalJournalReceiptEntry {
     receipt_id: receipt.id,
     kind: receipt.kind,
     status: receipt.status,
-    subject: receipt.kind === "skill_execution" ? receipt.subject.skill_name : receipt.subject.graph_name,
+    execution_ref: receipt.kind === "skill_execution" ? receipt.subject.skill_name : receipt.subject.graph_name,
     source_type: receipt.kind === "skill_execution" ? receipt.subject.source_type : undefined,
     receipt_path: options.receiptPath,
     project: options.project ? path.resolve(options.project) : undefined,
@@ -527,69 +527,69 @@ function receiptEntry(options: IndexReceiptOptions): LocalJournalReceiptEntry {
   };
 }
 
-function emptyJournal(): LocalJournal {
+function emptyKnowledge(): LocalKnowledge {
   return {
-    schema_version: "runx.journal.v1",
+    schema_version: "runx.knowledge.v1",
     entries: [],
   };
 }
 
-function normalizeJournal(value: unknown): LocalJournal {
-  if (!isRecord(value) || value.schema_version !== "runx.journal.v1") {
-    return emptyJournal();
+function normalizeKnowledge(value: unknown): LocalKnowledge {
+  if (!isRecord(value) || value.schema_version !== "runx.knowledge.v1") {
+    return emptyKnowledge();
   }
   return {
-    schema_version: "runx.journal.v1",
-    entries: normalizeJournalEntries(value.entries),
+    schema_version: "runx.knowledge.v1",
+    entries: normalizeKnowledgeEntries(value.entries),
   };
 }
 
-function normalizeJournalEntries(value: unknown): readonly LocalJournalEntry[] {
+function normalizeKnowledgeEntries(value: unknown): readonly LocalKnowledgeEntry[] {
   if (!Array.isArray(value)) {
     return [];
   }
-  const entries: LocalJournalEntry[] = [];
+  const entries: LocalKnowledgeEntry[] = [];
   for (const entry of value) {
-    const normalized = normalizeJournalEntry(entry);
+    const normalized = normalizeKnowledgeEntry(entry);
     if (normalized) {
       entries.push(normalized);
       continue;
     }
-    console.warn("warning: skipping malformed local journal entry");
+    console.warn("warning: skipping malformed local knowledge entry");
   }
   return entries;
 }
 
-function normalizeJournalEntry(value: unknown): LocalJournalEntry | undefined {
-  if (isLocalJournalReceiptEntry(value)) {
+function normalizeKnowledgeEntry(value: unknown): LocalKnowledgeEntry | undefined {
+  if (isLocalKnowledgeReceiptEntry(value)) {
     return value;
   }
-  if (isLocalJournalFactEntry(value)) {
+  if (isLocalKnowledgeProjectionEntry(value)) {
     return value;
   }
-  if (isLocalJournalAnswerEntry(value)) {
+  if (isLocalKnowledgeAnswerEntry(value)) {
     return value;
   }
-  if (isLocalJournalArtifactEntry(value)) {
+  if (isLocalKnowledgeArtifactEntry(value)) {
     return value;
   }
   return undefined;
 }
 
-function isLocalJournalReceiptEntry(value: unknown): value is LocalJournalReceiptEntry {
+function isLocalKnowledgeReceiptEntry(value: unknown): value is LocalKnowledgeReceiptEntry {
   return isRecord(value)
     && value.entry_kind === "receipt"
     && typeof value.entry_id === "string"
     && typeof value.receipt_id === "string"
     && typeof value.kind === "string"
     && typeof value.status === "string"
-    && typeof value.subject === "string"
+    && typeof value.execution_ref === "string"
     && typeof value.indexed_at === "string";
 }
 
-function isLocalJournalFactEntry(value: unknown): value is LocalJournalFactEntry {
+function isLocalKnowledgeProjectionEntry(value: unknown): value is LocalKnowledgeProjectionEntry {
   return isRecord(value)
-    && value.entry_kind === "fact"
+    && value.entry_kind === "projection"
     && typeof value.entry_id === "string"
     && typeof value.project === "string"
     && typeof value.scope === "string"
@@ -600,7 +600,7 @@ function isLocalJournalFactEntry(value: unknown): value is LocalJournalFactEntry
     && typeof value.created_at === "string";
 }
 
-function isLocalJournalAnswerEntry(value: unknown): value is LocalJournalAnswerEntry {
+function isLocalKnowledgeAnswerEntry(value: unknown): value is LocalKnowledgeAnswerEntry {
   return isRecord(value)
     && value.entry_kind === "answer"
     && typeof value.entry_id === "string"
@@ -610,7 +610,7 @@ function isLocalJournalAnswerEntry(value: unknown): value is LocalJournalAnswerE
     && typeof value.created_at === "string";
 }
 
-function isLocalJournalArtifactEntry(value: unknown): value is LocalJournalArtifactEntry {
+function isLocalKnowledgeArtifactEntry(value: unknown): value is LocalKnowledgeArtifactEntry {
   return isRecord(value)
     && value.entry_kind === "artifact"
     && typeof value.entry_id === "string"
@@ -652,7 +652,7 @@ function isAlreadyExists(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "EEXIST";
 }
 
-function validateSubjectMemoryAdapterDescriptor(value: unknown, label: string): SubjectMemoryAdapterDescriptor {
+function validateThreadAdapterDescriptor(value: unknown, label: string): ThreadAdapterDescriptor {
   const record = requireRecord(value, label);
   return {
     type: requireString(record.type, `${label}.type`),
@@ -663,19 +663,7 @@ function validateSubjectMemoryAdapterDescriptor(value: unknown, label: string): 
   };
 }
 
-function validateSubjectDescriptor(value: unknown, label: string): SubjectDescriptor {
-  const record = requireRecord(value, label);
-  return {
-    subject_kind: requireString(record.subject_kind, `${label}.subject_kind`),
-    subject_locator: requireString(record.subject_locator, `${label}.subject_locator`),
-    title: optionalString(record.title, `${label}.title`),
-    canonical_uri: optionalString(record.canonical_uri, `${label}.canonical_uri`),
-    aliases: optionalStringArray(record.aliases, `${label}.aliases`),
-    metadata: optionalPlainRecord(record.metadata, `${label}.metadata`),
-  };
-}
-
-function validateMemoryEvidenceRef(value: unknown, label: string): MemoryEvidenceRef {
+function validateEvidenceRef(value: unknown, label: string): EvidenceRef {
   const record = requireRecord(value, label);
   return {
     type: requireString(record.type, `${label}.type`),
@@ -685,7 +673,7 @@ function validateMemoryEvidenceRef(value: unknown, label: string): MemoryEvidenc
   };
 }
 
-function optionalActor(value: unknown, label: string): MemoryActor | undefined {
+function optionalActor(value: unknown, label: string): Actor | undefined {
   if (value === undefined) {
     return undefined;
   }
@@ -698,11 +686,11 @@ function optionalActor(value: unknown, label: string): MemoryActor | undefined {
   };
 }
 
-function optionalEvidenceRef(value: unknown, label: string): MemoryEvidenceRef | undefined {
+function optionalEvidenceRef(value: unknown, label: string): EvidenceRef | undefined {
   if (value === undefined) {
     return undefined;
   }
-  return validateMemoryEvidenceRef(value, label);
+  return validateEvidenceRef(value, label);
 }
 
 function requireRecord(value: unknown, label: string): Record<string, unknown> {
@@ -787,34 +775,34 @@ function optionalPlainRecord(value: unknown, label: string): Readonly<Record<str
   return requireRecord(value, label);
 }
 
-function createFileSubjectMemoryAdapter(
-  descriptor: SubjectMemoryAdapterDescriptor,
-): SubjectMemoryAdapter {
+function createFileThreadAdapter(
+  descriptor: ThreadAdapterDescriptor,
+): ThreadAdapter {
   const adapterRef = descriptor.adapter_ref;
   if (!adapterRef) {
-    throw new Error(`subject memory adapter '${descriptor.type}' requires adapter_ref.`);
+    throw new Error(`thread adapter '${descriptor.type}' requires adapter_ref.`);
   }
-  const memoryPath = resolveAdapterRefPath(adapterRef);
-  const adapterUri = pathToFileURL(memoryPath).href;
+  const statePath = resolveAdapterRefPath(adapterRef);
+  const adapterUri = pathToFileURL(statePath).href;
 
   return {
     type: descriptor.type,
-    fetchSubjectMemory: async (request) => {
-      const memory = validateSubjectMemory(JSON.parse(await readFile(memoryPath, "utf8")) as unknown);
+    fetchThread: async (request) => {
+      const state = validateThread(JSON.parse(await readFile(statePath, "utf8")) as unknown);
       if (
-        memory.subject.subject_kind !== request.subject_kind
-        || memory.subject.subject_locator !== request.subject_locator
+        state.thread_kind !== request.thread_kind
+        || state.thread_locator !== request.thread_locator
       ) {
         throw new Error(
-          `subject memory at ${memoryPath} does not match ${request.subject_kind}:${request.subject_locator}.`,
+          `thread at ${statePath} does not match ${request.thread_kind}:${request.thread_locator}.`,
         );
       }
-      return request.include_subject_outbox === false
-        ? { ...memory, subject_outbox: [] }
-        : memory;
+      return request.include_outbox === false
+        ? { ...state, outbox: [] }
+        : state;
     },
     push: async (request) => {
-      const current = validateSubjectMemory(JSON.parse(await readFile(memoryPath, "utf8")) as unknown);
+      const current = validateThread(JSON.parse(await readFile(statePath, "utf8")) as unknown);
       const pushedAt = new Date().toISOString();
       const outboxEntry = normalizePushedOutboxEntry({
         entry: request.entry,
@@ -822,9 +810,9 @@ function createFileSubjectMemoryAdapter(
         nextStatus: request.next_status,
         adapterUri,
       });
-      const eventEntry: SubjectMemoryEntry = {
+      const eventEntry: ThreadEntry = {
         entry_id: `entry_${hashStable({
-          subject: current.subject.subject_locator,
+          thread: current.thread_locator,
           outbox_entry: outboxEntry.entry_id,
           pushed_at: pushedAt,
         }).slice(0, 24)}`,
@@ -839,13 +827,13 @@ function createFileSubjectMemoryAdapter(
           status: outboxEntry.status,
         },
         source_ref: {
-          type: "subject_memory_adapter",
+          type: "thread_adapter",
           uri: adapterUri,
           recorded_at: pushedAt,
         },
       };
-      const outboxEntries = upsertOutboxEntry(current.subject_outbox, outboxEntry);
-      const nextMemory = validateSubjectMemory({
+      const outboxEntries = upsertOutboxEntry(current.outbox, outboxEntry);
+      const nextState = validateThread({
         ...current,
         adapter: {
           ...current.adapter,
@@ -853,11 +841,11 @@ function createFileSubjectMemoryAdapter(
           cursor: `push:${hashStable({ outbox_entry: outboxEntry.entry_id, pushed_at: pushedAt }).slice(0, 12)}`,
         },
         entries: [...current.entries, eventEntry],
-        subject_outbox: outboxEntries,
+        outbox: outboxEntries,
         generated_at: pushedAt,
         watermark: outboxEntry.entry_id,
       });
-      await writeSubjectMemoryFile(memoryPath, nextMemory);
+      await writeThreadFile(statePath, nextState);
       return outboxEntry;
     },
   };
@@ -872,18 +860,18 @@ function resolveAdapterRefPath(adapterRef: string): string {
 
 function normalizePushedOutboxEntry(options: {
   readonly entry: OutboxEntry;
-  readonly current: SubjectMemory;
+  readonly current: Thread;
   readonly nextStatus?: OutboxEntryStatus;
   readonly adapterUri: string;
 }): OutboxEntry {
   const { entry, current, nextStatus, adapterUri } = options;
-  const existing = current.subject_outbox.find((candidate) =>
+  const existing = current.outbox.find((candidate) =>
     candidate.entry_id === entry.entry_id
     || (typeof entry.locator === "string" && entry.locator.length > 0 && candidate.locator === entry.locator)
     || (
       candidate.kind === entry.kind
-      && (candidate.subject_locator ?? current.subject.subject_locator)
-        === (entry.subject_locator ?? current.subject.subject_locator)
+      && (candidate.thread_locator ?? current.thread_locator)
+        === (entry.thread_locator ?? current.thread_locator)
     )
   );
   return validateOutboxEntry({
@@ -891,28 +879,28 @@ function normalizePushedOutboxEntry(options: {
     ...entry,
     locator: entry.locator ?? existing?.locator ?? `${adapterUri}#outbox/${encodeURIComponent(entry.entry_id)}`,
     status: nextStatus ?? entry.status ?? existing?.status ?? "draft",
-    subject_locator: entry.subject_locator ?? existing?.subject_locator ?? current.subject.subject_locator,
+    thread_locator: entry.thread_locator ?? existing?.thread_locator ?? current.thread_locator,
   });
 }
 
 function upsertOutboxEntry(
-  subjectOutbox: readonly OutboxEntry[],
+  outbox: readonly OutboxEntry[],
   entry: OutboxEntry,
 ): readonly OutboxEntry[] {
-  const filtered = subjectOutbox.filter((candidate) =>
+  const filtered = outbox.filter((candidate) =>
     candidate.entry_id !== entry.entry_id
     && candidate.locator !== entry.locator
     && !(
       candidate.kind === entry.kind
-      && (candidate.subject_locator ?? "") === (entry.subject_locator ?? "")
+      && (candidate.thread_locator ?? "") === (entry.thread_locator ?? "")
     ),
   );
   return [...filtered, entry];
 }
 
-async function writeSubjectMemoryFile(memoryPath: string, memory: SubjectMemory): Promise<void> {
-  await mkdir(path.dirname(memoryPath), { recursive: true });
-  const tempPath = `${memoryPath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
-  await writeFile(tempPath, `${JSON.stringify(memory, null, 2)}\n`, { mode: 0o600 });
-  await rename(tempPath, memoryPath);
+async function writeThreadFile(statePath: string, state: Thread): Promise<void> {
+  await mkdir(path.dirname(statePath), { recursive: true });
+  const tempPath = `${statePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
+  await writeFile(tempPath, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
+  await rename(tempPath, statePath);
 }

@@ -35,7 +35,7 @@ describe("local skill runner", () => {
       expect(result.receipt.status).toBe("success");
 
       const files = await readdir(receiptDir);
-      expect(files).toContain("journals");
+      expect(files).toContain("ledgers");
       expect(files.filter((file) => file.endsWith(".json"))).toEqual([`${result.receipt.id}.json`]);
 
       const receiptContents = await readFile(path.join(receiptDir, `${result.receipt.id}.json`), "utf8");

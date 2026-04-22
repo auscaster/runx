@@ -7,7 +7,7 @@ const prBodyProjection = asRecord(inputs.pr_body_projection, "pr_body_projection
 const completionResult = asRecord(inputs.completion_result, "completion_result");
 const completionState = optionalRecord(inputs.completion_state);
 const statusSnapshot = optionalRecord(inputs.status_snapshot);
-const subjectMemory = optionalRecord(inputs.subject_memory);
+const thread = optionalRecord(inputs.thread);
 const explicitOutboxEntry = optionalRecord(inputs.outbox_entry);
 
 const summaryModel = optionalRecord(summaryProjection.model);
@@ -41,21 +41,21 @@ const originSource = optionalRecord(origin.source) ?? {};
 const check = optionalRecord(checksProjection.check) ?? {};
 const sync = optionalRecord(statusSnapshot?.sync) ?? optionalRecord(model.sync) ?? {};
 const reviewState = optionalRecord(statusSnapshot?.review_state) ?? optionalRecord(model.review) ?? {};
-const subject = optionalRecord(subjectMemory?.subject) ?? {};
+const threadContext = thread ?? {};
 
 const existingOutboxEntry = normalizePullRequestOutbox(explicitOutboxEntry)
-  ?? latestPullRequestOutbox(subjectMemory);
+  ?? latestPullRequestOutbox(thread);
 
-const subjectLocator = firstNonEmptyString(
-  inputs.subject_locator,
-  existingOutboxEntry?.subject_locator,
-  subject.subject_locator,
+const threadLocator = firstNonEmptyString(
+  inputs.thread_locator,
+  existingOutboxEntry?.thread_locator,
+  threadContext.thread_locator,
 );
 
 const title = firstNonEmptyString(
   model.title,
-  inputs.subject_title,
-  subject.title,
+  inputs.thread_title,
+  threadContext.title,
   taskId,
 );
 
@@ -89,11 +89,11 @@ const draftPullRequest = prune({
   action,
   push_ready: pushReady,
   task_id: taskId,
-  subject: prune({
-    subject_locator: subjectLocator,
-    subject_kind: firstNonEmptyString(subject.subject_kind),
-    title: firstNonEmptyString(inputs.subject_title, subject.title, title),
-    canonical_uri: firstNonEmptyString(subject.canonical_uri),
+  thread: prune({
+    thread_locator: threadLocator,
+    thread_kind: firstNonEmptyString(threadContext.thread_kind),
+    title: firstNonEmptyString(inputs.thread_title, threadContext.title, title),
+    canonical_uri: firstNonEmptyString(threadContext.canonical_uri),
   }),
   target: prune({
     repo: targetRepo,
@@ -138,7 +138,7 @@ const outboxEntry = prune({
     existingOutboxEntry?.status,
     existingOutboxEntry?.locator ? "draft" : "proposed",
   ),
-  subject_locator: subjectLocator,
+  thread_locator: threadLocator,
   metadata: prune({
     schema_version: "runx.outbox-entry.pull-request.v1",
     packet_schema_version: draftPullRequest.schema_version,
@@ -249,14 +249,14 @@ function normalizePullRequestOutbox(value) {
     kind: "pull_request",
     locator: firstNonEmptyString(value.locator),
     status: firstNonEmptyString(value.status),
-    subject_locator: firstNonEmptyString(value.subject_locator),
+    thread_locator: firstNonEmptyString(value.thread_locator),
   };
 }
 
-function latestPullRequestOutbox(memory) {
-  const subjectOutbox = Array.isArray(memory?.subject_outbox) ? memory.subject_outbox : [];
-  for (let index = subjectOutbox.length - 1; index >= 0; index -= 1) {
-    const candidate = normalizePullRequestOutbox(subjectOutbox[index]);
+function latestPullRequestOutbox(state) {
+  const outbox = Array.isArray(state?.outbox) ? state.outbox : [];
+  for (let index = outbox.length - 1; index >= 0; index -= 1) {
+    const candidate = normalizePullRequestOutbox(outbox[index]);
     if (candidate) {
       return candidate;
     }

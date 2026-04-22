@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
-  fetchGitHubIssueSubjectMemory,
+  fetchGitHubIssueThread,
   firstNonEmptyString,
   isRecord,
   optionalRecord,
@@ -12,7 +12,7 @@ import {
 } from "../github_adapter.mjs";
 
 const inputs = JSON.parse(process.env.RUNX_INPUTS_JSON || "{}");
-const subjectMemory = isRecord(inputs.subject_memory) ? inputs.subject_memory : undefined;
+const thread = isRecord(inputs.thread) ? inputs.thread : undefined;
 const outboxEntry = unwrapArtifactData(inputs.outbox_entry, "outbox_entry");
 const draftPullRequest = isRecord(inputs.draft_pull_request)
   ? unwrapArtifactData(inputs.draft_pull_request, "draft_pull_request")
@@ -20,24 +20,24 @@ const draftPullRequest = isRecord(inputs.draft_pull_request)
 const nextStatus = firstNonEmptyString(inputs.next_status);
 const workspacePath = firstNonEmptyString(inputs.workspace_path, inputs.fixture, process.env.RUNX_CWD);
 
-if (!subjectMemory) {
+if (!thread) {
   process.stdout.write(JSON.stringify({
     draft_pull_request: draftPullRequest,
     outbox_entry: outboxEntry,
     push: {
       status: "skipped",
-      reason: "subject_memory not provided",
+      reason: "thread not provided",
     },
   }));
   process.exit(0);
 }
 
-const adapter = isRecord(subjectMemory.adapter) ? subjectMemory.adapter : {};
+const adapter = isRecord(thread.adapter) ? thread.adapter : {};
 const adapterType = firstNonEmptyString(adapter.type);
 const adapterRef = firstNonEmptyString(adapter.adapter_ref);
 
 if (!adapterType) {
-  throw new Error("subject_memory.adapter.type is required.");
+  throw new Error("thread.adapter.type is required.");
 }
 
 if (adapterType === "github") {
@@ -45,10 +45,10 @@ if (adapterType === "github") {
     process.stdout.write(JSON.stringify({
       draft_pull_request: draftPullRequest,
       outbox_entry: outboxEntry,
-      subject_memory: subjectMemory,
+      thread: thread,
       push: {
         status: "skipped",
-        reason: `subject_memory adapter '${adapterType}' requires adapter_ref.`,
+        reason: `thread adapter '${adapterType}' requires adapter_ref.`,
         adapter: {
           type: adapterType,
         },
@@ -60,10 +60,10 @@ if (adapterType === "github") {
     process.stdout.write(JSON.stringify({
       draft_pull_request: draftPullRequest,
       outbox_entry: outboxEntry,
-      subject_memory: subjectMemory,
+      thread: thread,
       push: {
         status: "skipped",
-        reason: "workspace_path is required for the GitHub subject-memory adapter.",
+        reason: "workspace_path is required for the GitHub thread adapter.",
         adapter: {
           type: adapterType,
           adapter_ref: adapterRef,
@@ -75,10 +75,10 @@ if (adapterType === "github") {
   if (!draftPullRequest) {
     process.stdout.write(JSON.stringify({
       outbox_entry: outboxEntry,
-      subject_memory: subjectMemory,
+      thread: thread,
       push: {
         status: "skipped",
-        reason: "draft_pull_request is required to push through the GitHub subject-memory adapter.",
+        reason: "draft_pull_request is required to push through the GitHub thread adapter.",
         adapter: {
           type: adapterType,
           adapter_ref: adapterRef,
@@ -88,27 +88,27 @@ if (adapterType === "github") {
     process.exit(0);
   }
   const pushed = pushGitHubPullRequest({
-    subjectMemory,
+    thread,
     draftPullRequest,
     outboxEntry,
     workspacePath,
     nextStatus,
     env: process.env,
   });
-  const refreshedMemory = fetchGitHubIssueSubjectMemory({
+  const refreshedState = fetchGitHubIssueThread({
     adapterRef,
     env: process.env,
     cwd: workspacePath,
   });
   const refreshedOutboxEntry = selectMatchingOutboxEntry(
-    refreshedMemory,
+    refreshedState,
     pushed.outbox_entry,
   ) ?? pushed.outbox_entry;
 
   process.stdout.write(JSON.stringify({
     draft_pull_request: draftPullRequest,
     outbox_entry: refreshedOutboxEntry,
-    subject_memory: refreshedMemory,
+    thread: refreshedState,
     push: {
       status: "pushed",
       adapter: {
@@ -125,14 +125,14 @@ if (adapterType === "github") {
   process.exit(0);
 }
 
-if (adapterType !== "file" && adapterType !== "file_subject_memory") {
+if (adapterType !== "file") {
   process.stdout.write(JSON.stringify({
     draft_pull_request: draftPullRequest,
     outbox_entry: outboxEntry,
-    subject_memory: subjectMemory,
+    thread: thread,
     push: {
       status: "skipped",
-      reason: `no subject memory adapter is registered for '${adapterType}'`,
+      reason: `no thread adapter is registered for '${adapterType}'`,
       adapter: {
         type: adapterType,
       },
@@ -142,29 +142,28 @@ if (adapterType !== "file" && adapterType !== "file_subject_memory") {
 }
 
 if (!adapterRef) {
-  throw new Error(`subject_memory adapter '${adapterType}' requires adapter_ref.`);
+  throw new Error(`thread adapter '${adapterType}' requires adapter_ref.`);
 }
 
-const memoryPath = resolveAdapterRefPath(adapterRef);
-const adapterUri = pathToFileURL(memoryPath).href;
-const currentMemory = asRecord(JSON.parse(await readFile(memoryPath, "utf8")), "subject_memory_file");
-const currentSubject = asRecord(currentMemory.subject, "subject_memory_file.subject");
-const subjectLocator = firstNonEmptyString(
-  outboxEntry.subject_locator,
-  currentSubject.subject_locator,
+const statePath = resolveAdapterRefPath(adapterRef);
+const adapterUri = pathToFileURL(statePath).href;
+const currentState = asRecord(JSON.parse(await readFile(statePath, "utf8")), "thread_file");
+const threadLocator = firstNonEmptyString(
+  outboxEntry.thread_locator,
+  currentState.thread_locator,
 );
 
-if (!subjectLocator) {
-  throw new Error("subject locator is required to push an outbox entry.");
+if (!threadLocator) {
+  throw new Error("thread locator is required to push an outbox entry.");
 }
 
-const existingOutbox = Array.isArray(currentMemory.subject_outbox) ? currentMemory.subject_outbox.filter(isRecord) : [];
+const existingOutbox = Array.isArray(currentState.outbox) ? currentState.outbox.filter(isRecord) : [];
 const existing = existingOutbox.find((candidate) =>
   candidate.entry_id === outboxEntry.entry_id
   || (firstNonEmptyString(outboxEntry.locator) && candidate.locator === outboxEntry.locator)
   || (
     candidate.kind === outboxEntry.kind
-    && firstNonEmptyString(candidate.subject_locator, currentSubject.subject_locator) === subjectLocator
+    && firstNonEmptyString(candidate.thread_locator, currentState.thread_locator) === threadLocator
   )
 );
 const pushedAt = new Date().toISOString();
@@ -177,12 +176,12 @@ const pushedEntry = {
     `${adapterUri}#outbox/${encodeURIComponent(String(outboxEntry.entry_id || ""))}`,
   ),
   status: firstNonEmptyString(nextStatus, outboxEntry.status, existing?.status, "draft"),
-  subject_locator: subjectLocator,
+  thread_locator: threadLocator,
 };
 
 const pushEvent = {
   entry_id: `entry_${hashStable({
-    subject_locator: subjectLocator,
+    thread_locator: threadLocator,
     outbox_entry_id: pushedEntry.entry_id,
     pushed_at: pushedAt,
   }).slice(0, 24)}`,
@@ -197,33 +196,33 @@ const pushEvent = {
     status: pushedEntry.status,
   },
   source_ref: {
-    type: "subject_memory_adapter",
+    type: "thread_adapter",
     uri: adapterUri,
     recorded_at: pushedAt,
   },
 };
-const refreshedMemory = {
-  ...currentMemory,
+const refreshedState = {
+  ...currentState,
   adapter: {
     ...adapter,
     adapter_ref: adapterRef,
     cursor: `push:${hashStable({ outbox_entry: pushedEntry.entry_id, pushed_at: pushedAt }).slice(0, 12)}`,
   },
   entries: [
-    ...(Array.isArray(currentMemory.entries) ? currentMemory.entries : []),
+    ...(Array.isArray(currentState.entries) ? currentState.entries : []),
     pushEvent,
   ],
-  subject_outbox: upsertOutboxEntry(existingOutbox, pushedEntry),
+  outbox: upsertOutboxEntry(existingOutbox, pushedEntry),
   generated_at: pushedAt,
   watermark: pushedEntry.entry_id,
 };
 
-await writeSubjectMemoryFile(memoryPath, refreshedMemory);
+await writeThreadFile(statePath, refreshedState);
 
 process.stdout.write(JSON.stringify({
   draft_pull_request: draftPullRequest,
   outbox_entry: pushedEntry,
-  subject_memory: refreshedMemory,
+  thread: refreshedState,
   push: {
     status: "pushed",
     adapter: {
@@ -256,9 +255,9 @@ function resolveAdapterRefPath(adapterRefValue) {
   return path.resolve(adapterRefValue);
 }
 
-function selectMatchingOutboxEntry(subjectMemoryValue, pushedEntry) {
-  const subjectOutbox = Array.isArray(subjectMemoryValue?.subject_outbox) ? subjectMemoryValue.subject_outbox.filter(isRecord) : [];
-  return subjectOutbox.find((candidate) =>
+function selectMatchingOutboxEntry(threadValue, pushedEntry) {
+  const outbox = Array.isArray(threadValue?.outbox) ? threadValue.outbox.filter(isRecord) : [];
+  return outbox.find((candidate) =>
     candidate.entry_id === pushedEntry.entry_id
     || (firstNonEmptyString(pushedEntry.locator) && candidate.locator === pushedEntry.locator)
   );
@@ -270,17 +269,17 @@ function upsertOutboxEntry(existingEntries, entry) {
     && candidate.locator !== entry.locator
     && !(
       candidate.kind === entry.kind
-      && firstNonEmptyString(candidate.subject_locator) === firstNonEmptyString(entry.subject_locator)
+      && firstNonEmptyString(candidate.thread_locator) === firstNonEmptyString(entry.thread_locator)
     ),
   );
   return [...filtered, entry];
 }
 
-async function writeSubjectMemoryFile(memoryPath, memory) {
-  await mkdir(path.dirname(memoryPath), { recursive: true });
-  const tempPath = `${memoryPath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
-  await writeFile(tempPath, `${JSON.stringify(memory, null, 2)}\n`, { mode: 0o600 });
-  await rename(tempPath, memoryPath);
+async function writeThreadFile(statePath, state) {
+  await mkdir(path.dirname(statePath), { recursive: true });
+  const tempPath = `${statePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
+  await writeFile(tempPath, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
+  await rename(tempPath, statePath);
 }
 
 function hashStable(value) {

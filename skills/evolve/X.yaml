@@ -12,7 +12,7 @@ harness:
     - name: evolve-introspect
       runner: introspect
       env:
-        RUNX_JOURNAL_DIR: journal
+        RUNX_KNOWLEDGE_DIR: knowledge
       inputs:
         repo_root: .
       caller:
@@ -49,7 +49,7 @@ harness:
     - name: evolve-plan-spec
       runner: evolve
       env:
-        RUNX_JOURNAL_DIR: journal
+        RUNX_KNOWLEDGE_DIR: knowledge
       inputs:
         objective: add release notes
         repo_root: .
@@ -106,29 +106,7 @@ runners:
             type: cli-tool
             command: node
             args:
-              - -e
-              - |
-                const fs = require("node:fs");
-                const path = require("node:path");
-                const inputs = JSON.parse(process.env.RUNX_INPUTS_JSON || "{}");
-                const callerRoot = process.env.RUNX_CWD || process.cwd();
-                const repoRoot = path.resolve(callerRoot, String(inputs.repo_root || "."));
-                const hasScafld = fs.existsSync(path.join(repoRoot, ".ai"));
-                const packageJsonPath = path.join(repoRoot, "package.json");
-                const packageJson = fs.existsSync(packageJsonPath)
-                  ? JSON.parse(fs.readFileSync(packageJsonPath, "utf8"))
-                  : null;
-                const languages = [];
-                if (packageJson) languages.push("javascript");
-                if (fs.existsSync(path.join(repoRoot, "pnpm-workspace.yaml"))) languages.push("typescript");
-                process.stdout.write(JSON.stringify({
-                  repo_profile: {
-                    root: repoRoot,
-                    has_scafld: hasScafld,
-                    languages,
-                    risk_signals: hasScafld ? [] : ["missing_scafld"]
-                  }
-                }));
+              - ./inspect_repo.mjs
           artifacts:
             named_emits:
               repo_profile: repo_profile
@@ -192,46 +170,14 @@ runners:
             type: cli-tool
             command: node
             args:
-              - -e
-              - |
-                const inputs = JSON.parse(process.env.RUNX_INPUTS_JSON || "{}");
-                const terminate = String(inputs.terminate || "spec");
-                if (terminate !== "spec") {
-                  console.error(
-                    `evolve currently stops at spec. Received terminate=${terminate}. ` +
-                    `Plan the change with runx evolve, then execute it through a real skill or governed lane.`,
-                  );
-                  process.exit(1);
-                }
+              - ./validate_mode.mjs
         - id: preflight
           label: inspect repo
           run:
             type: cli-tool
             command: node
             args:
-              - -e
-              - |
-                const fs = require("node:fs");
-                const path = require("node:path");
-                const inputs = JSON.parse(process.env.RUNX_INPUTS_JSON || "{}");
-                const callerRoot = process.env.RUNX_CWD || process.cwd();
-                const repoRoot = path.resolve(callerRoot, String(inputs.repo_root || "."));
-                const hasScafld = fs.existsSync(path.join(repoRoot, ".ai"));
-                const packageJsonPath = path.join(repoRoot, "package.json");
-                const packageJson = fs.existsSync(packageJsonPath)
-                  ? JSON.parse(fs.readFileSync(packageJsonPath, "utf8"))
-                  : null;
-                const languages = [];
-                if (packageJson) languages.push("javascript");
-                if (fs.existsSync(path.join(repoRoot, "pnpm-workspace.yaml"))) languages.push("typescript");
-                process.stdout.write(JSON.stringify({
-                  repo_profile: {
-                    root: repoRoot,
-                    has_scafld: hasScafld,
-                    languages,
-                    risk_signals: hasScafld ? [] : ["missing_scafld"]
-                  }
-                }));
+              - ./inspect_repo.mjs
           artifacts:
             named_emits:
               repo_profile: repo_profile

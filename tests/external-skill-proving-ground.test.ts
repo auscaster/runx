@@ -160,7 +160,7 @@ const harnessScenarios: readonly HarnessProvingGroundScenario[] = [
     skillName: "skill-lab",
     expectation: {
       requestId: "agent_step.work-plan.output",
-      inputKeys: ["objective", "project_context", "subject_locator", "subject_memory"],
+      inputKeys: ["objective", "project_context", "thread_locator", "thread"],
       sourceType: "agent-step",
     },
   },
@@ -219,7 +219,7 @@ const harnessScenarios: readonly HarnessProvingGroundScenario[] = [
     skillName: "reflect-digest",
     expectation: {
       requestId: "agent_step.reflect-digest.output",
-      inputKeys: ["reflect_facts", "min_support"],
+      inputKeys: ["reflect_projections", "min_support"],
       sourceType: "agent-step",
     },
   },
@@ -236,7 +236,7 @@ const harnessScenarios: readonly HarnessProvingGroundScenario[] = [
     skillName: "request-triage",
     expectation: {
       requestId: "agent_step.request-triage.output",
-      inputKeys: ["subject_title", "subject_body", "subject_locator", "outbox_entry", "product_context", "operator_context"],
+      inputKeys: ["thread_title", "thread_body", "thread_locator", "outbox_entry", "product_context", "operator_context"],
       sourceType: "agent-step",
     },
   },
@@ -260,9 +260,9 @@ const customScenarios: readonly CustomProvingGroundScenario[] = [
         inputs: {
           fixture: lane.repoDir,
           task_id: "issue-to-pr-proving-ground",
-          subject_title: "Clarify the external proving-ground guide",
-          subject_body: "Operators should be able to run the lane with no hidden caller help.",
-          subject_locator: "github://nilstate/runx/issues/241",
+          thread_title: "Clarify the external proving-ground guide",
+          thread_body: "Operators should be able to run the lane with no hidden caller help.",
+          thread_locator: "github://nilstate/runx/issues/241",
           target_repo: "nilstate/runx",
           size: "micro",
           risk: "low",
@@ -278,9 +278,9 @@ const customScenarios: readonly CustomProvingGroundScenario[] = [
       inputKeys: [
         "fixture",
         "task_id",
-        "subject_title",
-        "subject_body",
-        "subject_locator",
+        "thread_title",
+        "thread_body",
+        "thread_locator",
         "target_repo",
         "size",
         "risk",

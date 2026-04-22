@@ -35,18 +35,16 @@ export interface AgentContextProvenance {
   readonly receipt_id?: string;
 }
 
-export interface ProjectMemory {
+export interface ContextDocument {
   readonly root_path: string;
   readonly path: string;
   readonly sha256: string;
   readonly content: string;
 }
 
-export interface ProjectConventions {
-  readonly root_path: string;
-  readonly path: string;
-  readonly sha256: string;
-  readonly content: string;
+export interface Context {
+  readonly memory?: ContextDocument;
+  readonly conventions?: ContextDocument;
 }
 
 export interface AgentContextEnvelope {
@@ -59,8 +57,7 @@ export interface AgentContextEnvelope {
   readonly current_context: readonly ArtifactEnvelope[];
   readonly historical_context: readonly ArtifactEnvelope[];
   readonly provenance: readonly AgentContextProvenance[];
-  readonly project_memory?: ProjectMemory;
-  readonly project_conventions?: ProjectConventions;
+  readonly context?: Context;
   readonly expected_outputs?: OutputContract;
   readonly trust_boundary: string;
 }
@@ -132,8 +129,7 @@ export interface AdapterInvokeRequest {
   readonly currentContext?: readonly ArtifactEnvelope[];
   readonly historicalContext?: readonly ArtifactEnvelope[];
   readonly contextProvenance?: readonly AgentContextProvenance[];
-  readonly projectMemory?: ProjectMemory;
-  readonly projectConventions?: ProjectConventions;
+  readonly context?: Context;
 }
 
 export type AdapterInvokeResult =
@@ -195,8 +191,7 @@ export interface ExecuteSkillOptions {
   readonly currentContext?: readonly ArtifactEnvelope[];
   readonly historicalContext?: readonly ArtifactEnvelope[];
   readonly contextProvenance?: readonly AgentContextProvenance[];
-  readonly projectMemory?: ProjectMemory;
-  readonly projectConventions?: ProjectConventions;
+  readonly context?: Context;
 }
 
 export async function executeSkill(options: ExecuteSkillOptions): Promise<AdapterInvokeResult> {
@@ -230,8 +225,7 @@ export async function executeSkill(options: ExecuteSkillOptions): Promise<Adapte
     currentContext: options.currentContext,
     historicalContext: options.historicalContext,
     contextProvenance: options.contextProvenance,
-    projectMemory: options.projectMemory,
-    projectConventions: options.projectConventions,
+    context: options.context,
   });
 }
 
@@ -299,31 +293,26 @@ export function validateAgentContextEnvelope(
     historical_context: requireArray(record.historical_context, `${label}.historical_context`) as readonly ArtifactEnvelope[],
     provenance: requireArray(record.provenance, `${label}.provenance`).map((entry, index) =>
       validateAgentContextProvenance(entry, `${label}.provenance[${index}]`)),
-    project_memory: record.project_memory === undefined
+    context: record.context === undefined
       ? undefined
-      : validateProjectMemory(record.project_memory, `${label}.project_memory`),
-    project_conventions: record.project_conventions === undefined
-      ? undefined
-      : validateProjectConventions(record.project_conventions, `${label}.project_conventions`),
+      : validateContext(record.context, `${label}.context`),
     expected_outputs: validateOutputContract(record.expected_outputs, `${label}.expected_outputs`),
     trust_boundary: requireString(record.trust_boundary, `${label}.trust_boundary`),
   };
 }
 
-function validateProjectMemory(value: unknown, label: string): ProjectMemory {
-  return validateProjectDocument(value, label);
+function validateContext(value: unknown, label: string): Context {
+  const record = asRecord(value);
+  if (!record) {
+    throw new Error(`${label} must match ${CONTROL_SCHEMA_REFS.agent_context_envelope}.`);
+  }
+  return {
+    memory: record.memory === undefined ? undefined : validateContextDocument(record.memory, `${label}.memory`),
+    conventions: record.conventions === undefined ? undefined : validateContextDocument(record.conventions, `${label}.conventions`),
+  };
 }
 
-function validateProjectConventions(value: unknown, label: string): ProjectConventions {
-  return validateProjectDocument(value, label);
-}
-
-function validateProjectDocument(value: unknown, label: string): {
-  readonly root_path: string;
-  readonly path: string;
-  readonly sha256: string;
-  readonly content: string;
-} {
+function validateContextDocument(value: unknown, label: string): ContextDocument {
   const record = asRecord(value);
   if (!record) {
     throw new Error(`${label} must match ${CONTROL_SCHEMA_REFS.agent_context_envelope}.`);

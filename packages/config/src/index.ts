@@ -15,6 +15,16 @@ export interface RunxConfigFile {
   };
 }
 
+export interface RunxWorkspaceConfigFile {
+  readonly policy?: {
+    readonly strict_cli_tool_inline_code?: boolean;
+  };
+}
+
+export interface RunxWorkspacePolicy {
+  readonly strictCliToolInlineCode: boolean;
+}
+
 export interface LocalSkillPackage {
   readonly markdown: string;
   readonly profileDocument?: string;
@@ -117,6 +127,10 @@ export function resolveRunxProjectDir(env: NodeJS.ProcessEnv, options: PathResol
   return findNearestProjectRunxDir(cwd) ?? path.resolve(resolveRunxWorkspaceBase(env, options), ".runx");
 }
 
+export function resolveRunxWorkspaceConfigPath(env: NodeJS.ProcessEnv, options: PathResolutionOptions = {}): string {
+  return path.join(resolveRunxProjectDir(env, options), "config.json");
+}
+
 export function resolveRunxGlobalHomeDir(env: NodeJS.ProcessEnv, options: PathResolutionOptions = {}): string {
   return env.RUNX_HOME
     ? resolvePathFromUserInput(env.RUNX_HOME, env, { ...options, preferExisting: false })
@@ -127,10 +141,10 @@ export function resolveRunxHomeDir(env: NodeJS.ProcessEnv, options: PathResoluti
   return resolveRunxGlobalHomeDir(env, options);
 }
 
-export function resolveRunxJournalDir(env: NodeJS.ProcessEnv, options: PathResolutionOptions = {}): string {
-  return env.RUNX_JOURNAL_DIR
-    ? resolvePathFromUserInput(env.RUNX_JOURNAL_DIR, env, { ...options, preferExisting: false })
-    : path.join(resolveRunxProjectDir(env, options), "journal");
+export function resolveRunxKnowledgeDir(env: NodeJS.ProcessEnv, options: PathResolutionOptions = {}): string {
+  return env.RUNX_KNOWLEDGE_DIR
+    ? resolvePathFromUserInput(env.RUNX_KNOWLEDGE_DIR, env, { ...options, preferExisting: false })
+    : path.join(resolveRunxProjectDir(env, options), "knowledge");
 }
 
 export function resolveSkillInstallRoot(env: NodeJS.ProcessEnv, to?: string, options: PathResolutionOptions = {}): string {
@@ -271,11 +285,32 @@ export async function resolveLocalSkillProfile(
 }
 
 export async function loadRunxConfigFile(configPath: string): Promise<RunxConfigFile> {
+  return await loadOptionalJsonFile<RunxConfigFile>(configPath);
+}
+
+export async function loadRunxWorkspaceConfigFile(configPath: string): Promise<RunxWorkspaceConfigFile> {
+  return await loadOptionalJsonFile<RunxWorkspaceConfigFile>(configPath);
+}
+
+export async function loadRunxWorkspacePolicy(
+  env: NodeJS.ProcessEnv,
+  options: PathResolutionOptions = {},
+): Promise<RunxWorkspacePolicy> {
+  const config = await loadRunxWorkspaceConfigFile(resolveRunxWorkspaceConfigPath(env, options));
+  return {
+    strictCliToolInlineCode:
+      parseBooleanEnv(env.RUNX_STRICT_INLINE_CLI_TOOL_CODE)
+      ?? config.policy?.strict_cli_tool_inline_code
+      ?? false,
+  };
+}
+
+async function loadOptionalJsonFile<T>(filePath: string): Promise<T> {
   try {
-    return JSON.parse(await readFile(configPath, "utf8")) as RunxConfigFile;
+    return JSON.parse(await readFile(filePath, "utf8")) as T;
   } catch (error) {
     if (isNodeError(error) && error.code === "ENOENT") {
-      return {};
+      return {} as T;
     }
     throw error;
   }
@@ -321,6 +356,20 @@ export function maskRunxConfigFile(config: RunxConfigFile): RunxConfigFile {
   return config.agent?.api_key_ref
     ? { ...config, agent: { ...config.agent, api_key_ref: "[encrypted]" } }
     : config;
+}
+
+function parseBooleanEnv(value: string | undefined): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on") {
+    return true;
+  }
+  if (normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off") {
+    return false;
+  }
+  return undefined;
 }
 
 export async function loadLocalAgentApiKey(configDir: string, ref: string): Promise<string> {

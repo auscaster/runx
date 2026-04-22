@@ -49,20 +49,20 @@ describe("project rules", () => {
           ? result.requests[0].work.envelope
           : undefined;
 
-      expect(envelope?.project_memory).toEqual({
+      expect(envelope?.context?.memory).toEqual({
         root_path: workspaceDir,
         path: path.join(workspaceDir, "MEMORY.md"),
-        sha256: envelope?.project_memory?.sha256,
+        sha256: envelope?.context?.memory?.sha256,
         content: memoryContents,
       });
-      expect(envelope?.project_memory?.sha256).toHaveLength(64);
-      expect(envelope?.project_conventions).toEqual({
+      expect(envelope?.context?.memory?.sha256).toHaveLength(64);
+      expect(envelope?.context?.conventions).toEqual({
         root_path: workspaceDir,
         path: path.join(workspaceDir, "CONVENTIONS.md"),
-        sha256: envelope?.project_conventions?.sha256,
+        sha256: envelope?.context?.conventions?.sha256,
         content: conventionsContents,
       });
-      expect(envelope?.project_conventions?.sha256).toHaveLength(64);
+      expect(envelope?.context?.conventions?.sha256).toHaveLength(64);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
@@ -81,17 +81,19 @@ describe("project rules", () => {
     const mutatedConventions = "# Project Conventions\n\nThis also changed mid-run.\n";
     let seenEnvelope:
       | {
-          readonly project_memory?: {
-            readonly root_path: string;
-            readonly path: string;
-            readonly sha256: string;
-            readonly content: string;
-          };
-          readonly project_conventions?: {
-            readonly root_path: string;
-            readonly path: string;
-            readonly sha256: string;
-            readonly content: string;
+          readonly context?: {
+            readonly memory?: {
+              readonly root_path: string;
+              readonly path: string;
+              readonly sha256: string;
+              readonly content: string;
+            };
+            readonly conventions?: {
+              readonly root_path: string;
+              readonly path: string;
+              readonly sha256: string;
+              readonly content: string;
+            };
           };
         }
       | undefined;
@@ -130,8 +132,7 @@ steps:
             return undefined;
           }
           seenEnvelope = {
-            project_memory: request.work.envelope.project_memory,
-            project_conventions: request.work.envelope.project_conventions,
+            context: request.work.envelope.context,
           };
           return {
             actor: "agent",
@@ -164,26 +165,28 @@ steps:
 
       expect(await readFile(memoryPath, "utf8")).toBe(mutatedMemory);
       expect(await readFile(conventionsPath, "utf8")).toBe(mutatedConventions);
-      expect(seenEnvelope?.project_memory).toMatchObject({
+      expect(seenEnvelope?.context?.memory).toMatchObject({
         root_path: workspaceDir,
         path: memoryPath,
         content: originalMemory,
       });
-      expect(seenEnvelope?.project_conventions).toMatchObject({
+      expect(seenEnvelope?.context?.conventions).toMatchObject({
         root_path: workspaceDir,
         path: conventionsPath,
         content: originalConventions,
       });
       expect(result.receipt.metadata).toMatchObject({
-        project_memory: {
-          root_path: workspaceDir,
-          path: memoryPath,
-          sha256: seenEnvelope?.project_memory?.sha256,
-        },
-        project_conventions: {
-          root_path: workspaceDir,
-          path: conventionsPath,
-          sha256: seenEnvelope?.project_conventions?.sha256,
+        context: {
+          memory: {
+            root_path: workspaceDir,
+            path: memoryPath,
+            sha256: seenEnvelope?.context?.memory?.sha256,
+          },
+          conventions: {
+            root_path: workspaceDir,
+            path: conventionsPath,
+            sha256: seenEnvelope?.context?.conventions?.sha256,
+          },
         },
       });
 
@@ -196,12 +199,16 @@ steps:
       const chainReceiptContents = await readFile(path.join(receiptDir, `${result.receipt.id}.json`), "utf8");
 
       expect(firstStepReceipt.metadata).toMatchObject({
-        project_memory: { sha256: seenEnvelope?.project_memory?.sha256 },
-        project_conventions: { sha256: seenEnvelope?.project_conventions?.sha256 },
+        context: {
+          memory: { sha256: seenEnvelope?.context?.memory?.sha256 },
+          conventions: { sha256: seenEnvelope?.context?.conventions?.sha256 },
+        },
       });
       expect(secondStepReceipt.metadata).toMatchObject({
-        project_memory: { sha256: seenEnvelope?.project_memory?.sha256 },
-        project_conventions: { sha256: seenEnvelope?.project_conventions?.sha256 },
+        context: {
+          memory: { sha256: seenEnvelope?.context?.memory?.sha256 },
+          conventions: { sha256: seenEnvelope?.context?.conventions?.sha256 },
+        },
       });
       expect(chainReceiptContents).not.toContain(originalMemory);
       expect(chainReceiptContents).not.toContain(originalConventions);

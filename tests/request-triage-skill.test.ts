@@ -23,10 +23,10 @@ describe("request-triage official skill", () => {
       triage_report: "object",
       change_set: "object",
     });
-    expect(runner.inputs.subject_title?.type).toBe("string");
-    expect(runner.inputs.subject_body?.type).toBe("string");
-    expect(runner.inputs.subject_locator?.type).toBe("string");
-    expect(runner.inputs.subject_memory?.type).toBe("json");
+    expect(runner.inputs.thread_title?.type).toBe("string");
+    expect(runner.inputs.thread_body?.type).toBe("string");
+    expect(runner.inputs.thread_locator?.type).toBe("string");
+    expect(runner.inputs.thread?.type).toBe("json");
     expect(runner.inputs.outbox_entry?.type).toBe("json");
     expect(runner.inputs.product_context?.type).toBe("string");
     expect(runner.inputs.operator_context?.type).toBe("string");

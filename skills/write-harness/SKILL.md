@@ -68,8 +68,8 @@ Test the contract, not the internal wiring.
 Fixtures must be reproducible — no network calls, no external state, no
 wall clock dependencies. They should run in seconds.
 
-For subject-driven skills, model the fixture inputs using portable runx nouns.
-Prefer `subject_title`, `subject_body`, `subject_locator`, `subject_memory`,
+For thread-driven skills, model the fixture inputs using portable runx nouns.
+Prefer `thread_title`, `thread_body`, `thread_locator`, `thread`,
 and `outbox_entry`. Adapter-specific identifiers should live inside the
 locator or snapshot payload, not as top-level contract fields.
 

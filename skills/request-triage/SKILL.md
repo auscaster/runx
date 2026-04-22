@@ -5,7 +5,7 @@ description: Turn a noisy inbound request into a bounded triage artifact and an 
 
 # Request Triage
 
-Convert an inbound subject, support report, or operator request into one
+Convert an inbound thread, support report, or operator request into one
 explicit triage decision plus the parent change artifact that downstream
 planning or mutation lanes must share.
 
@@ -31,7 +31,7 @@ Use `manual-triage` when the report is ambiguous, risky, or missing key context.
 - `category`: one of `bug`, `feature_request`, `docs`, `billing`, `account`,
   `question`, or `other`
 - `severity`: one of `low`, `medium`, `high`, or `critical`
-- `summary`: concise summary of the actual subject or report
+- `summary`: concise summary of the actual request or report
 - `suggested_reply`: a user-facing reply draft or operator handoff note
 - `recommended_lane`: `issue-to-pr`, `work-plan`, `reply-only`, or
   `manual-triage`
@@ -44,7 +44,7 @@ Use `manual-triage` when the report is ambiguous, risky, or missing key context.
 - `commence_decision`: `approve`, `hold`, `reject`, or `needs_human`
 - `action_decision`: `proceed_to_build`, `proceed_to_plan`,
   `request_review`, or `stop`
-- `review_target`: `subject`, `outbox_entry`, or `none`
+- `review_target`: `thread`, `outbox_entry`, or `none`
 - `review_comment`: markdown comment body for the supervisor to post before the
   next lane proceeds
 
@@ -60,7 +60,7 @@ When present, these fields mean:
 - `review_target=outbox_entry` only makes sense when a current
   outbox entry already exists. If no draft change, message surface, or
   other outbox entry exists yet, the supervisor should fall back to the
-  source subject and say that clearly in the posted comment
+  source thread and say that clearly in the posted comment
 - `action_decision=proceed_to_plan` should usually still result in a public
   supervisor comment so the hold/plan decision is visible outside the raw
   receipt stream
@@ -75,7 +75,7 @@ objective.
 `change_set` must contain:
 
 - `change_set_id`
-- `subject_locator`
+- `thread_locator`
 - `summary`
 - `category`
 - `severity`
@@ -94,13 +94,13 @@ objective.
 - `outbox_entry` (optional): current outbox entry for status
   updates, replies, or draft-change refreshes when the caller already knows it
 
-When `recommended_lane=issue-to-pr`, also include `subject_change_request` with:
+When `recommended_lane=issue-to-pr`, also include `thread_change_request` with:
 
 - `task_id`
-- `subject_title`
-- `subject_body`
-- `subject_locator`
-- `subject_memory` (optional)
+- `thread_title`
+- `thread_body`
+- `thread_locator`
+- `thread` (optional)
 - `outbox_entry` (optional)
 - `size`: one of `micro`, `small`, `medium`, or `large`
 - `risk`: one of `low`, `medium`, or `high`
@@ -111,13 +111,13 @@ When `recommended_lane=work-plan`, also include
 - `change_set_id`
 - `objective`
 - `project_context`
-- `subject_locator`
-- `subject_memory` (optional)
+- `thread_locator`
+- `thread` (optional)
 - `target_surfaces`
 - `shared_invariants`
 - `success_criteria`
 
-Do not emit both `subject_change_request` and `workspace_change_plan_request` for
+Do not emit both `thread_change_request` and `workspace_change_plan_request` for
 the same report.
 
 Prefer conservative routing:
@@ -134,12 +134,12 @@ Prefer conservative routing:
 
 ## Inputs
 
-- `subject_title`: canonical subject title
-- `subject_body`: canonical subject body or request text
-- `subject_locator` (optional): canonical locator for the bounded subject,
+- `thread_title`: canonical thread title
+- `thread_body`: canonical thread body or request text
+- `thread_locator` (optional): canonical locator for the bounded thread,
   such as an issue, chat thread, ticket, or local agent session
-- `subject_memory` (optional): provider-backed subject memory for the current
-  subject thread
+- `thread` (optional): provider-backed thread for the current
+  thread
 - `outbox_entry` (optional): current outbox entry for replies, draft changes,
   or refreshes
 - `product_context` (optional): product-specific constraints or routing hints

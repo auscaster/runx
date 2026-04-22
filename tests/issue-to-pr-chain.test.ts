@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { parseRunnerManifestYaml, validateRunnerManifest } from "../packages/parser/src/index.js";
 import { runLocalSkill, type Caller } from "../packages/runner-local/src/index.js";
-import { fetchGitHubIssueSubjectMemory } from "../tools/subject_memory/github_adapter.mjs";
+import { fetchGitHubIssueThread } from "../tools/thread/github_adapter.mjs";
 
 const scafldBin = process.env.SCAFLD_BIN ?? "/home/kam/dev/scafld/cli/scafld";
 const caller: Caller = {
@@ -86,19 +86,19 @@ describe("issue-to-PR composite skill", () => {
       type: "string",
       required: false,
     });
-    expect(runner.inputs.subject_title).toMatchObject({
+    expect(runner.inputs.thread_title).toMatchObject({
       type: "string",
       required: false,
     });
-    expect(runner.inputs.subject_body).toMatchObject({
+    expect(runner.inputs.thread_body).toMatchObject({
       type: "string",
       required: false,
     });
-    expect(runner.inputs.subject_locator).toMatchObject({
+    expect(runner.inputs.thread_locator).toMatchObject({
       type: "string",
       required: false,
     });
-    expect(runner.inputs.subject_memory).toMatchObject({
+    expect(runner.inputs.thread).toMatchObject({
       type: "json",
       required: false,
     });
@@ -119,8 +119,8 @@ describe("issue-to-PR composite skill", () => {
       required: false,
     });
     expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("repo_snapshot_path");
-    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("subject_title");
-    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("subject_locator");
+    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("thread_title");
+    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("thread_locator");
     expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("Never author acceptance criteria that depend on git history");
     expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("HEAD~1");
     expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("Never write an exhaustive whole-tree assertion");
@@ -241,7 +241,7 @@ describe("issue-to-PR composite skill", () => {
       },
     });
     expect(chain.steps.find((step) => step.id === "push-pull-request")).toMatchObject({
-      tool: "subject_memory.push_outbox",
+      tool: "thread.push_outbox",
       context: {
         outbox_entry: "package-pull-request.outbox_entry",
         draft_pull_request: "package-pull-request.draft_pull_request",
@@ -283,9 +283,9 @@ describe("issue-to-PR composite skill", () => {
         inputs: {
           fixture: tempDir,
           task_id: taskId,
-          subject_title: "Fixture subject-driven change",
-          subject_body: "Apply a bounded fixture docs update.",
-          subject_locator: "github://example/repo/issues/123",
+          thread_title: "Fixture thread-driven change",
+          thread_body: "Apply a bounded fixture docs update.",
+          thread_locator: "github://example/repo/issues/123",
           target_repo: "fixtures/repo",
           size: "micro",
           risk: "low",
@@ -334,8 +334,8 @@ describe("issue-to-PR composite skill", () => {
             base: "main",
           },
           pull_request: {
-            title: "Fixture subject-driven change",
-            body_markdown: expect.stringContaining("# Fixture subject-driven change"),
+            title: "Fixture thread-driven change",
+            body_markdown: expect.stringContaining("# Fixture thread-driven change"),
             is_draft: true,
           },
           governance: {
@@ -347,7 +347,7 @@ describe("issue-to-PR composite skill", () => {
         },
         push: {
           status: "skipped",
-          reason: "subject_memory not provided",
+          reason: "thread not provided",
         },
       });
       expect(result.receipt.steps.map((step) => [step.step_id, step.status])).toEqual([
@@ -389,25 +389,23 @@ describe("issue-to-PR composite skill", () => {
     }
   }, 90_000);
 
-  it.skipIf(!existsSync(scafldBin))("pushes the packaged pull_request outbox entry through a file-backed subject-memory adapter and rehydrates provider state", async () => {
+  it.skipIf(!existsSync(scafldBin))("pushes the packaged pull_request outbox entry through a file-backed thread adapter and rehydrates provider state", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-issue-to-pr-provider-loop-"));
     const runtime = await createExternalRuntimePaths("runx-issue-to-pr-runtime-");
     const taskId = "issue-to-pr-provider-loop-fixture";
-    const memoryPath = path.join(runtime.root, "provider", "subject-memory.json");
-    const fileBackedSubjectMemory = {
-      kind: "runx.subject-memory.v1",
+    const statePath = path.join(runtime.root, "provider", "thread.json");
+    const fileBackedThread = {
+      kind: "runx.thread.v1",
       adapter: {
         type: "file",
-        adapter_ref: memoryPath,
+        adapter_ref: statePath,
       },
-      subject: {
-        subject_kind: "work_item",
-        subject_locator: "local://provider/issues/123",
-        canonical_uri: "https://example.test/issues/123",
-      },
+      thread_kind: "work_item",
+      thread_locator: "local://provider/issues/123",
+      canonical_uri: "https://example.test/issues/123",
       entries: [],
       decisions: [],
-      subject_outbox: [],
+      outbox: [],
       source_refs: [],
     };
     const caller: Caller = {
@@ -423,8 +421,8 @@ describe("issue-to-PR composite skill", () => {
 
     try {
       await initScafldRepo(tempDir);
-      await mkdir(path.dirname(memoryPath), { recursive: true });
-      await writeFile(memoryPath, `${JSON.stringify(fileBackedSubjectMemory, null, 2)}\n`);
+      await mkdir(path.dirname(statePath), { recursive: true });
+      await writeFile(statePath, `${JSON.stringify(fileBackedThread, null, 2)}\n`);
       runChecked("git", ["checkout", "-b", taskId], tempDir);
 
       const result = await runLocalSkill({
@@ -432,16 +430,16 @@ describe("issue-to-PR composite skill", () => {
         inputs: {
           fixture: tempDir,
           task_id: taskId,
-          subject_title: "Fixture subject-driven change",
-          subject_body: "Apply a bounded fixture docs update.",
-          subject_locator: "local://provider/issues/123",
+          thread_title: "Fixture thread-driven change",
+          thread_body: "Apply a bounded fixture docs update.",
+          thread_locator: "local://provider/issues/123",
           target_repo: "fixtures/repo",
           size: "micro",
           risk: "low",
           phase: "phase1",
           draft_spec_path: `.ai/specs/drafts/${taskId}.yaml`,
           scafld_bin: scafldBin,
-          subject_memory: fileBackedSubjectMemory,
+          thread: fileBackedThread,
         },
         caller,
         env: process.env,
@@ -459,27 +457,25 @@ describe("issue-to-PR composite skill", () => {
           kind: "pull_request",
           entry_id: `pull_request:${taskId}`,
           status: "draft",
-          subject_locator: "local://provider/issues/123",
+          thread_locator: "local://provider/issues/123",
           locator: expect.stringContaining("#outbox/pull_request%3A"),
         },
         draft_pull_request: {
           action: "create",
           task_id: taskId,
         },
-        subject_memory: {
+        thread: {
           adapter: {
             type: "file",
-            adapter_ref: memoryPath,
+            adapter_ref: statePath,
           },
-          subject: {
-            subject_locator: "local://provider/issues/123",
-          },
-          subject_outbox: [
+          thread_locator: "local://provider/issues/123",
+          outbox: [
             {
               entry_id: `pull_request:${taskId}`,
               kind: "pull_request",
               status: "draft",
-              subject_locator: "local://provider/issues/123",
+              thread_locator: "local://provider/issues/123",
             },
           ],
         },
@@ -487,17 +483,17 @@ describe("issue-to-PR composite skill", () => {
           status: "pushed",
           adapter: {
             type: "file",
-            adapter_ref: memoryPath,
+            adapter_ref: statePath,
           },
         },
       });
-      expect(JSON.parse(await readFile(memoryPath, "utf8"))).toMatchObject({
-        subject_outbox: [
+      expect(JSON.parse(await readFile(statePath, "utf8"))).toMatchObject({
+        outbox: [
           {
             entry_id: `pull_request:${taskId}`,
             kind: "pull_request",
             status: "draft",
-            subject_locator: "local://provider/issues/123",
+            thread_locator: "local://provider/issues/123",
           },
         ],
       });
@@ -507,7 +503,7 @@ describe("issue-to-PR composite skill", () => {
     }
   }, 90_000);
 
-  it.skipIf(!existsSync(scafldBin))("pushes the governed lane upstream through a GitHub-backed subject-memory adapter and rehydrates the provider thread for the next run", async () => {
+  it.skipIf(!existsSync(scafldBin))("pushes the governed lane upstream through a GitHub-backed thread adapter and rehydrates the provider thread for the next run", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-issue-to-pr-github-loop-"));
     const runtime = await createExternalRuntimePaths("runx-issue-to-pr-runtime-");
     const taskId = "issue-to-pr-github-loop-fixture";
@@ -531,7 +527,7 @@ describe("issue-to-PR composite skill", () => {
       await writeFakeGitHubState(fakeState, {
         issue: {
           number: 123,
-          title: "Fixture subject-driven change",
+          title: "Fixture thread-driven change",
           body: "Apply a bounded fixture docs update.",
           url: "https://github.com/example/repo/issues/123",
           state: "OPEN",
@@ -555,29 +551,27 @@ describe("issue-to-PR composite skill", () => {
         inputs: {
           fixture: tempDir,
           task_id: taskId,
-          subject_title: "Fixture subject-driven change",
-          subject_body: "Apply a bounded fixture docs update.",
-          subject_locator: "github://example/repo/issues/123",
+          thread_title: "Fixture thread-driven change",
+          thread_body: "Apply a bounded fixture docs update.",
+          thread_locator: "github://example/repo/issues/123",
           target_repo: "example/repo",
           size: "micro",
           risk: "low",
           phase: "phase1",
           draft_spec_path: `.ai/specs/drafts/${taskId}.yaml`,
           scafld_bin: scafldBin,
-          subject_memory: {
-            kind: "runx.subject-memory.v1",
+          thread: {
+            kind: "runx.thread.v1",
             adapter: {
               type: "github",
               adapter_ref: "example/repo#issue/123",
             },
-            subject: {
-              subject_kind: "work_item",
-              subject_locator: "github://example/repo/issues/123",
-              canonical_uri: "https://github.com/example/repo/issues/123",
-            },
+            thread_kind: "work_item",
+            thread_locator: "github://example/repo/issues/123",
+            canonical_uri: "https://github.com/example/repo/issues/123",
             entries: [],
             decisions: [],
-            subject_outbox: [],
+            outbox: [],
             source_refs: [],
           },
         },
@@ -602,14 +596,14 @@ describe("issue-to-PR composite skill", () => {
           kind: "pull_request",
           locator: "https://github.com/example/repo/pull/77",
           status: "draft",
-          subject_locator: "github://example/repo/issues/123",
+          thread_locator: "github://example/repo/issues/123",
         },
-        subject_memory: {
+        thread: {
           adapter: {
             type: "github",
             adapter_ref: "example/repo#issue/123",
           },
-          subject_outbox: [
+          outbox: [
             {
               entry_id: "pr-77",
               locator: "https://github.com/example/repo/pull/77",
@@ -634,7 +628,7 @@ describe("issue-to-PR composite skill", () => {
         pulls: [
           {
             number: 77,
-            title: "Fixture subject-driven change",
+            title: "Fixture thread-driven change",
             url: "https://github.com/example/repo/pull/77",
             body: expect.stringContaining("Source issue: https://github.com/example/repo/issues/123"),
             headRefName: taskId,
@@ -645,7 +639,7 @@ describe("issue-to-PR composite skill", () => {
         ],
       });
 
-      const rehydratedMemory = fetchGitHubIssueSubjectMemory({
+      const rehydratedState = fetchGitHubIssueThread({
         adapterRef: "example/repo#issue/123",
         env: {
           ...process.env,
@@ -654,12 +648,12 @@ describe("issue-to-PR composite skill", () => {
         },
         cwd: tempDir,
       });
-      expect(rehydratedMemory.subject_outbox).toEqual([
+      expect(rehydratedState.outbox).toEqual([
         expect.objectContaining({
           entry_id: "pr-77",
           locator: "https://github.com/example/repo/pull/77",
           status: "draft",
-          subject_locator: "github://example/repo/issues/123",
+          thread_locator: "github://example/repo/issues/123",
         }),
       ]);
     } finally {
@@ -668,7 +662,7 @@ describe("issue-to-PR composite skill", () => {
     }
   }, 90_000);
 
-  it.skipIf(!existsSync(scafldBin))("refreshes an existing pull_request outbox entry from subject_memory through the full issue-to-pr lane", async () => {
+  it.skipIf(!existsSync(scafldBin))("refreshes an existing pull_request outbox entry from thread through the full issue-to-pr lane", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-issue-to-pr-refresh-"));
     const runtime = await createExternalRuntimePaths("runx-issue-to-pr-runtime-");
     const taskId = "issue-to-pr-refresh-fixture";
@@ -692,34 +686,32 @@ describe("issue-to-PR composite skill", () => {
         inputs: {
           fixture: tempDir,
           task_id: taskId,
-          subject_title: "Fixture subject-driven change",
-          subject_body: "Apply a bounded fixture docs update.",
-          subject_locator: "github://example/repo/issues/123",
+          thread_title: "Fixture thread-driven change",
+          thread_body: "Apply a bounded fixture docs update.",
+          thread_locator: "github://example/repo/issues/123",
           target_repo: "fixtures/repo",
           size: "micro",
           risk: "low",
           phase: "phase1",
           draft_spec_path: `.ai/specs/drafts/${taskId}.yaml`,
           scafld_bin: scafldBin,
-          subject_memory: {
-            kind: "runx.subject-memory.v1",
+          thread: {
+            kind: "runx.thread.v1",
             adapter: {
               type: "github",
             },
-            subject: {
-              subject_kind: "work_item",
-              subject_locator: "github://example/repo/issues/123",
-              canonical_uri: "https://github.com/example/repo/issues/123",
-            },
+            thread_kind: "work_item",
+            thread_locator: "github://example/repo/issues/123",
+            canonical_uri: "https://github.com/example/repo/issues/123",
             entries: [],
             decisions: [],
-            subject_outbox: [
+            outbox: [
               {
                 entry_id: "pr-77",
                 kind: "pull_request",
                 locator: "https://github.com/example/repo/pull/77",
                 status: "draft",
-                subject_locator: "github://example/repo/issues/123",
+                thread_locator: "github://example/repo/issues/123",
               },
             ],
             source_refs: [],
@@ -742,7 +734,7 @@ describe("issue-to-PR composite skill", () => {
           kind: "pull_request",
           locator: "https://github.com/example/repo/pull/77",
           status: "draft",
-          subject_locator: "github://example/repo/issues/123",
+          thread_locator: "github://example/repo/issues/123",
           metadata: {
             action: "refresh",
             repo: "fixtures/repo",
@@ -755,8 +747,8 @@ describe("issue-to-PR composite skill", () => {
         draft_pull_request: {
           action: "refresh",
           push_ready: false,
-          subject: {
-            subject_locator: "github://example/repo/issues/123",
+          thread: {
+            thread_locator: "github://example/repo/issues/123",
             canonical_uri: "https://github.com/example/repo/issues/123",
           },
           target: {
@@ -809,9 +801,9 @@ describe("issue-to-PR composite skill", () => {
         inputs: {
           fixture: tempDir,
           task_id: taskId,
-          subject_title: "Blocked fixture subject-driven change",
-          subject_body: "Apply a bounded fixture docs update.",
-          subject_locator: "github://example/repo/issues/456",
+          thread_title: "Blocked fixture thread-driven change",
+          thread_body: "Apply a bounded fixture docs update.",
+          thread_locator: "github://example/repo/issues/456",
           target_repo: "fixtures/repo",
           size: "micro",
           risk: "low",
@@ -1140,7 +1132,7 @@ updated: "2026-04-10T00:00:00Z"
 status: "draft"
 
 task:
-  title: "Fixture subject-driven change"
+  title: "Fixture thread-driven change"
   summary: "Apply one bounded fixture fix and archive the completed review."
   size: "micro"
   risk_level: "low"

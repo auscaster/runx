@@ -101,7 +101,7 @@ describe("scafld issue-to-PR skill contract", () => {
       "scafld.capture_checks",
       "",
       "outbox.build_pull_request",
-      "subject_memory.push_outbox",
+      "thread.push_outbox",
     ]);
     expect(
       Object.fromEntries(chain.steps.filter((step) => step.inputs.command !== undefined).map((step) => [step.id, step.inputs.command])),
@@ -226,7 +226,7 @@ describe("scafld issue-to-PR skill contract", () => {
       },
     });
     expect(chain.steps.find((step) => step.id === "push-pull-request")).toMatchObject({
-      tool: "subject_memory.push_outbox",
+      tool: "thread.push_outbox",
       context: {
         outbox_entry: "package-pull-request.outbox_entry",
         draft_pull_request: "package-pull-request.draft_pull_request",

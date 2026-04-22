@@ -1,19 +1,19 @@
-name: subject_memory.push_outbox
-description: Push an outbox entry through the current subject-memory adapter and return the refreshed subject memory.
+name: thread.push_outbox
+description: Push an outbox entry through the current thread adapter and return the refreshed thread.
 source:
   type: cli-tool
   command: node
   args:
     - ./run.mjs
 inputs:
-  subject_memory:
+  thread:
     type: json
     required: false
-    description: Current hydrated subject memory for the bounded provider subject.
+    description: Current hydrated thread for the bounded provider surface.
   outbox_entry:
     type: json
     required: true
-    description: Outbox entry to push through the subject-memory adapter.
+    description: Outbox entry to push through the thread adapter.
   draft_pull_request:
     type: json
     required: false
@@ -31,4 +31,4 @@ inputs:
     required: false
     description: Optional status to apply after a successful provider push, such as `draft`.
 scopes:
-  - subject_memory:push
+  - thread:push

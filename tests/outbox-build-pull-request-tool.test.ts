@@ -9,8 +9,8 @@ describe("outbox.build_pull_request tool", () => {
   it("packages native scafld projections into a proposed pull_request outbox entry", () => {
     const result = runTool({
       task_id: "fixture-task",
-      subject_title: "Fix fixture behavior",
-      subject_locator: "github://example/repo/issues/123",
+      thread_title: "Fix fixture behavior",
+      thread_locator: "github://example/repo/issues/123",
       target_repo: "example/repo",
       summary_projection: {
         markdown: "## scafld: Fix fixture behavior\n",
@@ -86,7 +86,7 @@ describe("outbox.build_pull_request tool", () => {
       entry_id: "pull_request:fixture-task",
       kind: "pull_request",
       status: "proposed",
-      subject_locator: "github://example/repo/issues/123",
+      thread_locator: "github://example/repo/issues/123",
       title: "Fix fixture behavior",
       metadata: {
         action: "create",
@@ -124,10 +124,13 @@ describe("outbox.build_pull_request tool", () => {
         non_blocking_count: 1,
         sync_status: "in_sync",
       },
+      thread: {
+        thread_locator: "github://example/repo/issues/123",
+      },
     });
   });
 
-  it("refreshes an existing pull_request outbox entry from subject_memory", () => {
+  it("refreshes an existing pull_request outbox entry from thread", () => {
     const result = runTool({
       task_id: "fixture-task",
       summary_projection: {
@@ -173,25 +176,23 @@ describe("outbox.build_pull_request tool", () => {
         status: "completed",
         review_verdict: "pass",
       },
-      subject_memory: {
-        kind: "runx.subject-memory.v1",
+      thread: {
+        kind: "runx.thread.v1",
         adapter: {
           type: "github",
         },
-        subject: {
-          subject_kind: "work_item",
-          subject_locator: "github://example/repo/issues/123",
-          canonical_uri: "https://github.com/example/repo/issues/123",
-        },
+        thread_kind: "work_item",
+        thread_locator: "github://example/repo/issues/123",
+        canonical_uri: "https://github.com/example/repo/issues/123",
         entries: [],
         decisions: [],
-        subject_outbox: [
+        outbox: [
           {
             entry_id: "pr-77",
             kind: "pull_request",
             locator: "https://github.com/example/repo/pull/77",
             status: "draft",
-            subject_locator: "github://example/repo/issues/123",
+            thread_locator: "github://example/repo/issues/123",
           },
         ],
         source_refs: [],
@@ -203,7 +204,7 @@ describe("outbox.build_pull_request tool", () => {
       kind: "pull_request",
       locator: "https://github.com/example/repo/pull/77",
       status: "draft",
-      subject_locator: "github://example/repo/issues/123",
+      thread_locator: "github://example/repo/issues/123",
       metadata: {
         action: "refresh",
         push_ready: true,
@@ -214,8 +215,8 @@ describe("outbox.build_pull_request tool", () => {
       target: {
         repo: "example/repo",
       },
-      subject: {
-        subject_locator: "github://example/repo/issues/123",
+      thread: {
+        thread_locator: "github://example/repo/issues/123",
       },
     });
   });

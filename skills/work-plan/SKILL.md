@@ -12,11 +12,11 @@ For cross-repo or cross-surface work, the output must be a phased
 thing that keeps repo-local workers aligned when one issue fans out into
 multiple mutation surfaces.
 
-When the objective originates from an existing subject thread, treat that thread
-as provider-backed subject memory. GitHub issues, chat threads, support
+When the objective originates from an existing thread, treat that thread
+as provider-backed thread. GitHub issues, chat threads, support
 tickets, and local agent sessions are adapter examples, not core nouns. The
-plan should preserve the generic `subject_locator` and any supplied
-`subject_memory`.
+plan should preserve the generic `thread_locator` and any supplied
+`thread`.
 
 The central insight: split at governance boundaries, not cognitive boundaries.
 A skill keeps its full context window. If two actions need the same context
@@ -93,7 +93,7 @@ condition, action, and exit artifact.
   constrains the decomposition.
 - `change_set` (optional): parent change artifact from `request-triage` or a
   workspace supervisor. Prefer this when present.
-- `subject_locator` (optional): canonical locator for the bounded subject the
+- `thread_locator` (optional): canonical locator for the bounded thread the
   plan is serving.
-- `subject_memory` (optional): portable subject memory when the objective is
+- `thread` (optional): portable thread when the objective is
   grounded in an existing issue, chat, ticket, or other adapter surface.

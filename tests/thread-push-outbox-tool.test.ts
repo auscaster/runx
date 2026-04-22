@@ -5,10 +5,10 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const toolPath = path.resolve("tools/subject_memory/push_outbox/run.mjs");
+const toolPath = path.resolve("tools/thread/push_outbox/run.mjs");
 
-describe("subject_memory.push_outbox tool", () => {
-  it("skips cleanly when subject memory is not present", () => {
+describe("thread.push_outbox tool", () => {
+  it("skips cleanly when thread is not present", () => {
     const result = runTool({
       outbox_entry: {
         entry_id: "pull_request:fixture-task",
@@ -25,49 +25,45 @@ describe("subject_memory.push_outbox tool", () => {
       },
       push: {
         status: "skipped",
-        reason: "subject_memory not provided",
+        reason: "thread not provided",
       },
     });
   });
 
-  it("pushes an outbox entry through the file subject-memory adapter and returns refreshed memory", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-subject-memory-tool-"));
-    const memoryPath = path.join(tempDir, "subject-memory.json");
+  it("pushes an outbox entry through the file thread adapter and returns refreshed state", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-thread-tool-"));
+    const statePath = path.join(tempDir, "thread.json");
 
     try {
       await writeFile(
-        memoryPath,
+        statePath,
         `${JSON.stringify({
-          kind: "runx.subject-memory.v1",
+          kind: "runx.thread.v1",
           adapter: {
             type: "file",
-            adapter_ref: memoryPath,
+            adapter_ref: statePath,
           },
-          subject: {
-            subject_kind: "work_item",
-            subject_locator: "local://provider/issues/123",
-          },
+          thread_kind: "work_item",
+          thread_locator: "local://provider/issues/123",
           entries: [],
           decisions: [],
-          subject_outbox: [],
+          outbox: [],
           source_refs: [],
         }, null, 2)}\n`,
       );
 
       const result = runTool({
-        subject_memory: {
-          kind: "runx.subject-memory.v1",
+        thread: {
+          kind: "runx.thread.v1",
           adapter: {
             type: "file",
-            adapter_ref: memoryPath,
+            adapter_ref: statePath,
           },
-          subject: {
-            subject_kind: "work_item",
-            subject_locator: "local://provider/issues/123",
-          },
+          thread_kind: "work_item",
+          thread_locator: "local://provider/issues/123",
           entries: [],
           decisions: [],
-          subject_outbox: [],
+          outbox: [],
           source_refs: [],
         },
         outbox_entry: {
@@ -94,10 +90,10 @@ describe("subject_memory.push_outbox tool", () => {
           title: "Fixture PR",
           status: "draft",
           locator: expect.stringContaining("#outbox/pull_request%3Afixture-task"),
-          subject_locator: "local://provider/issues/123",
+          thread_locator: "local://provider/issues/123",
         },
-        subject_memory: {
-          subject_outbox: [
+        thread: {
+          outbox: [
             {
               entry_id: "pull_request:fixture-task",
               status: "draft",
@@ -108,13 +104,13 @@ describe("subject_memory.push_outbox tool", () => {
           status: "pushed",
           adapter: {
             type: "file",
-            adapter_ref: memoryPath,
+            adapter_ref: statePath,
           },
         },
       });
 
-      expect(JSON.parse(await readFile(memoryPath, "utf8"))).toMatchObject({
-        subject_outbox: [
+      expect(JSON.parse(await readFile(statePath, "utf8"))).toMatchObject({
+        outbox: [
           {
             entry_id: "pull_request:fixture-task",
             kind: "pull_request",
@@ -127,8 +123,8 @@ describe("subject_memory.push_outbox tool", () => {
     }
   });
 
-  it("pushes a GitHub draft pull request, rehydrates the issue thread, and returns refreshed subject memory", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-subject-memory-gh-tool-"));
+  it("pushes a GitHub draft pull request, rehydrates the issue thread, and returns refreshed thread", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-thread-gh-tool-"));
     const workspace = path.join(tempDir, "workspace");
     const remote = path.join(tempDir, "remote.git");
     const fakeGh = path.join(tempDir, "fake-gh.mjs");
@@ -165,20 +161,18 @@ describe("subject_memory.push_outbox tool", () => {
       await writeFakeGhScript(fakeGh);
 
       const result = runTool({
-        subject_memory: {
-          kind: "runx.subject-memory.v1",
+        thread: {
+          kind: "runx.thread.v1",
           adapter: {
             type: "github",
             adapter_ref: "example/repo#issue/123",
           },
-          subject: {
-            subject_kind: "work_item",
-            subject_locator: "github://example/repo/issues/123",
-            canonical_uri: "https://github.com/example/repo/issues/123",
-          },
+          thread_kind: "work_item",
+          thread_locator: "github://example/repo/issues/123",
+          canonical_uri: "https://github.com/example/repo/issues/123",
           entries: [],
           decisions: [],
-          subject_outbox: [],
+          outbox: [],
           source_refs: [],
         },
         outbox_entry: {
@@ -186,15 +180,15 @@ describe("subject_memory.push_outbox tool", () => {
           kind: "pull_request",
           title: "Fix fixture behavior",
           status: "proposed",
-          subject_locator: "github://example/repo/issues/123",
+          thread_locator: "github://example/repo/issues/123",
         },
         draft_pull_request: {
           schema_version: "runx.pull-request-draft.v1",
           action: "create",
           push_ready: true,
           task_id: "issue-123",
-          subject: {
-            subject_locator: "github://example/repo/issues/123",
+          thread: {
+            thread_locator: "github://example/repo/issues/123",
             canonical_uri: "https://github.com/example/repo/issues/123",
             title: "Fix fixture behavior",
           },
@@ -223,17 +217,15 @@ describe("subject_memory.push_outbox tool", () => {
           kind: "pull_request",
           locator: "https://github.com/example/repo/pull/77",
           status: "draft",
-          subject_locator: "github://example/repo/issues/123",
+          thread_locator: "github://example/repo/issues/123",
         },
-        subject_memory: {
+        thread: {
           adapter: {
             type: "github",
             adapter_ref: "example/repo#issue/123",
           },
-          subject: {
-            subject_locator: "github://example/repo/issues/123",
-          },
-          subject_outbox: [
+          thread_locator: "github://example/repo/issues/123",
+          outbox: [
             {
               entry_id: "pr-77",
               locator: "https://github.com/example/repo/pull/77",

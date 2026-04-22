@@ -79,7 +79,7 @@ harness:
           channel: github_issue_comment
           body: The canonical output directory is `.sourcey/runx-docs`.
         target:
-          subject_locator: github.com/nilstate/runx/issues/241
+          thread_locator: github.com/nilstate/runx/issues/241
           repo: nilstate/runx
       caller:
         answers:
@@ -97,7 +97,7 @@ harness:
               retrigger_on:
                 - maintainer reply
                 - operator amendment
-              closure_rule: close when the subject thread is resolved or the operator retires the attempt
+              closure_rule: close when the thread is resolved or the operator retires the attempt
       expect:
         status: success
         receipt:
@@ -183,7 +183,7 @@ runners:
       channel:
         type: string
         required: false
-        description: "Target outward channel or subject surface."
+        description: "Target outward channel or thread surface."
       boundary_kind:
         type: string
         required: false
@@ -195,7 +195,7 @@ runners:
       target:
         type: json
         required: false
-        description: "Repo, thread, or subject summary for the outward handoff."
+        description: "Repo summary or thread summary for the outward handoff."
       approval:
         type: json
         required: false

@@ -12,26 +12,26 @@ harness:
       inputs:
         objective: Add a governed release-notes skill
         project_context: runx OSS registry launch surface
-        subject_locator: github://nilstate/runx/issues/118
-        subject_memory:
-          kind: runx.subject-memory.v1
+        thread_locator: github://nilstate/runx/issues/118
+        thread:
+          kind: runx.thread.v1
           adapter:
             type: github
             provider: github
             surface: issue_thread
           subject:
-            subject_kind: work_item
-            subject_locator: github://nilstate/runx/issues/118
+            thread_kind: work_item
+            thread_locator: github://nilstate/runx/issues/118
           entries: []
           decisions: []
-          subject_outbox: []
+          outbox: []
           source_refs: []
       caller:
         answers:
           agent_step.work-plan.output:
             change_set:
               change_set_id: change_set_release_notes_skill
-              subject_locator: github://nilstate/runx/issues/118
+              thread_locator: github://nilstate/runx/issues/118
               summary: Add a governed release-notes skill.
               category: other
               severity: medium
@@ -197,22 +197,22 @@ runners:
         type: string
         required: false
         description: "Repo, product, or operator context that constrains the proposal."
-      subject_title:
+      thread_title:
         type: string
         required: false
-        description: "Original subject title when the proposal comes from a work thread."
-      subject_body:
+        description: "Original thread title when the proposal comes from a work thread."
+      thread_body:
         type: string
         required: false
-        description: "Original subject body or request text."
-      subject_locator:
+        description: "Original thread body or request text."
+      thread_locator:
         type: string
         required: false
-        description: "Canonical locator for the bounded subject."
-      subject_memory:
+        description: "Canonical locator for the bounded thread."
+      thread:
         type: json
         required: false
-        description: "Provider-backed subject memory for the source thread."
+        description: "Provider-backed thread for the source thread."
       channel:
         type: string
         required: false

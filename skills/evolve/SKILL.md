@@ -32,7 +32,7 @@ The current `evolve` runner uses a bounded subset and compresses some phases
 into fewer concrete steps. That is allowed. What stays fixed is the meaning of
 the phases, not the number of steps. When a runner opts in, runx may also
 append a runner-owned post-run reflect projection after the receipt is written.
-That projection is journal-only metadata, not another canonical phase.
+That projection is Knowledge-only metadata, not another canonical phase.
 
 ## Current runner mapping
 
@@ -72,7 +72,7 @@ artifacts in one pass:
 - `spec_document` — draft scafld spec when governance applies.
 
 Directed `evolve` runs opt into runner-owned post-run reflect. That projection
-is derived from the completed receipt and run journal after the bounded plan
+is derived from the completed receipt and run ledger after the bounded plan
 lane finishes; it does not add another visible chain step or mutation path.
 
 ### Termination guard

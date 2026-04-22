@@ -6,11 +6,11 @@ import { mkdtemp, readFile } from "node:fs/promises";
 
 import { runLocalSkill } from "../packages/runner-local/src/index.js";
 import {
-  fetchGitHubIssueSubjectMemory,
+  fetchGitHubIssueThread,
   firstNonEmptyString,
   parseGitHubIssueRef,
   selectPreferredGitHubPullRequest,
-} from "../tools/subject_memory/github_adapter.mjs";
+} from "../tools/thread/github_adapter.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 const issueRef = parseGitHubIssueRef(`${requiredFlag(args, "repo")}#issue/${requiredFlag(args, "issue")}`);
@@ -26,7 +26,7 @@ const runtimeRoot = await mkdtemp(path.join(os.tmpdir(), `runx-github-issue-to-p
 const receiptDir = path.resolve(args.receipt_dir ?? path.join(runtimeRoot, "receipts"));
 const runxHome = path.resolve(args.runx_home ?? path.join(runtimeRoot, "home"));
 
-const before = fetchGitHubIssueSubjectMemory({
+const before = fetchGitHubIssueThread({
   adapterRef: issueRef.adapter_ref,
   env: process.env,
   cwd: workspace,
@@ -39,10 +39,10 @@ const result = await runLocalSkill({
     task_id: taskId,
     name: branchName,
     bind_current: false,
-    subject_title: firstNonEmptyString(before.subject.title, `Issue #${issueRef.issue_number}`),
-    subject_body: firstIssueBody(before),
-    subject_locator: issueRef.subject_locator,
-    subject_memory: before,
+    thread_title: firstNonEmptyString(before.title, `Issue #${issueRef.issue_number}`),
+    thread_body: firstIssueBody(before),
+    thread_locator: issueRef.thread_locator,
+    thread: before,
     target_repo: issueRef.repo_slug,
     scafld_bin: scafldBin,
   },
@@ -51,7 +51,7 @@ const result = await runLocalSkill({
   receiptDir,
   runxHome,
 });
-const after = fetchGitHubIssueSubjectMemory({
+const after = fetchGitHubIssueThread({
   adapterRef: issueRef.adapter_ref,
   env: process.env,
   cwd: workspace,
@@ -61,7 +61,7 @@ const executionPayload = result.status === "success"
   ? safeJsonParse(result.execution.stdout)
   : undefined;
 const preferredBeforePull = selectPreferredGitHubPullRequest(
-  before.subject_outbox.map((entry) => ({
+  before.outbox.map((entry) => ({
     number: optionalNumber(entry.metadata?.number),
     url: entry.locator,
     headRefName: entry.metadata?.branch,
@@ -72,7 +72,7 @@ const preferredBeforePull = selectPreferredGitHubPullRequest(
   branchName,
 );
 const preferredAfterPull = selectPreferredGitHubPullRequest(
-  after.subject_outbox.map((entry) => ({
+  after.outbox.map((entry) => ({
     number: optionalNumber(entry.metadata?.number),
     url: entry.locator,
     headRefName: entry.metadata?.branch,
@@ -94,8 +94,8 @@ const output = {
   workspace,
   receipt_dir: receiptDir,
   runx_home: runxHome,
-  before: summarizeSubjectMemory(before, preferredBeforePull),
-  after: summarizeSubjectMemory(after, preferredAfterPull),
+  before: summarizeThread(before, preferredBeforePull),
+  after: summarizeThread(after, preferredAfterPull),
   execution: executionPayload,
 };
 
@@ -151,16 +151,16 @@ async function createAnswersCaller(answersPath) {
   };
 }
 
-function firstIssueBody(memory) {
-  const issueEntry = memory.entries.find((entry) => String(entry.entry_id).startsWith("issue-"));
+function firstIssueBody(state) {
+  const issueEntry = state.entries.find((entry) => String(entry.entry_id).startsWith("issue-"));
   return firstNonEmptyString(issueEntry?.body);
 }
 
-function summarizeSubjectMemory(memory, preferredPull) {
+function summarizeThread(state, preferredPull) {
   return {
-    entries: memory.entries.length,
-    subject_outbox: memory.subject_outbox.length,
-    cursor: memory.adapter.cursor,
+    entries: state.entries.length,
+    outbox: state.outbox.length,
+    cursor: state.adapter.cursor,
     preferred_pull_request: preferredPull
       ? {
           number: firstNonEmptyString(preferredPull.number),

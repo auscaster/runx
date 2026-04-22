@@ -7,32 +7,30 @@ import { describe, expect, it } from "vitest";
 import { writeLocalReceipt } from "../../receipts/src/index.js";
 
 import {
-  createSubjectMemoryAdapter,
-  createFileJournalStore,
+  createThreadAdapter,
+  createFileKnowledgeStore,
   findOutboxEntry,
   latestDecisionForGate,
   pushOutboxEntryViaAdapter,
-  subjectMemoryAllowsGate,
-  summarizeSubjectMemory,
-  validateSubjectMemory,
+  threadAllowsGate,
+  summarizeThread,
+  validateThread,
 } from "./index.js";
 
-describe("subject memory contract", () => {
-  it("accepts provider-native subject memory without leaking provider nouns into core fields", () => {
-    const memory = validateSubjectMemory({
-      kind: "runx.subject-memory.v1",
+describe("thread contract", () => {
+  it("accepts provider-native thread without leaking provider nouns into core fields", () => {
+    const state = validateThread({
+      kind: "runx.thread.v1",
       adapter: {
         type: "github",
         provider: "github",
         surface: "issue_thread",
         cursor: "comment:4286817434",
       },
-      subject: {
-        subject_kind: "work_item",
-        subject_locator: "nilstate/aster#issue/110",
-        title: "[skill] Add a collaboration issue distillation skill",
-        canonical_uri: "https://github.com/nilstate/aster/issues/110",
-      },
+      thread_kind: "work_item",
+      thread_locator: "nilstate/aster#issue/110",
+      title: "[skill] Add a collaboration issue distillation skill",
+      canonical_uri: "https://github.com/nilstate/aster/issues/110",
       entries: [
         {
           entry_id: "comment-1",
@@ -54,7 +52,7 @@ describe("subject memory contract", () => {
           reason: "same subject approved one rolling draft PR",
         },
       ],
-      subject_outbox: [
+      outbox: [
         {
           entry_id: "pr-111",
           kind: "pull_request",
@@ -71,23 +69,21 @@ describe("subject memory contract", () => {
       generated_at: "2026-04-21T08:05:00Z",
     });
 
-    expect(memory.subject.subject_kind).toBe("work_item");
-    expect(memory.subject.subject_locator).toBe("nilstate/aster#issue/110");
-    expect(memory.adapter.type).toBe("github");
-    expect(subjectMemoryAllowsGate(memory, "skill-lab.publish")).toBe(true);
-    expect(findOutboxEntry(memory, "pull_request")?.status).toBe("draft");
+    expect(state.thread_kind).toBe("work_item");
+    expect(state.thread_locator).toBe("nilstate/aster#issue/110");
+    expect(state.adapter.type).toBe("github");
+    expect(threadAllowsGate(state, "skill-lab.publish")).toBe(true);
+    expect(findOutboxEntry(state, "pull_request")?.status).toBe("draft");
   });
 
   it("returns the newest matching decision for a gate", () => {
-    const memory = validateSubjectMemory({
-      kind: "runx.subject-memory.v1",
+    const state = validateThread({
+      kind: "runx.thread.v1",
       adapter: {
         type: "local-conversation",
       },
-      subject: {
-        subject_kind: "work_item",
-        subject_locator: "local://conversation/42",
-      },
+      thread_kind: "work_item",
+      thread_locator: "local://conversation/42",
       entries: [],
       decisions: [
         {
@@ -103,26 +99,24 @@ describe("subject memory contract", () => {
           recorded_at: "2026-04-21T08:05:00Z",
         },
       ],
-      subject_outbox: [],
+      outbox: [],
       source_refs: [],
     });
 
-    expect(latestDecisionForGate(memory, "issue-triage.plan")?.decision_id).toBe("plan-2");
-    expect(subjectMemoryAllowsGate(memory, "issue-triage.plan")).toBe(true);
+    expect(latestDecisionForGate(state, "issue-triage.plan")?.decision_id).toBe("plan-2");
+    expect(threadAllowsGate(state, "issue-triage.plan")).toBe(true);
   });
 
   it("renders a stable provider-agnostic summary", () => {
-    const memory = validateSubjectMemory({
-      kind: "runx.subject-memory.v1",
+    const state = validateThread({
+      kind: "runx.thread.v1",
       adapter: {
         type: "ticketing",
         provider: "linear",
         surface: "ticket_thread",
       },
-      subject: {
-        subject_kind: "work_item",
-        subject_locator: "linear://issue/ENG-42",
-      },
+      thread_kind: "work_item",
+      thread_locator: "linear://issue/ENG-42",
       entries: [
         {
           entry_id: "entry-1",
@@ -136,7 +130,7 @@ describe("subject memory contract", () => {
         },
       ],
       decisions: [],
-      subject_outbox: [
+      outbox: [
         {
           entry_id: "draft-1",
           kind: "draft_change",
@@ -146,56 +140,52 @@ describe("subject memory contract", () => {
       source_refs: [],
     });
 
-    expect(summarizeSubjectMemory(memory)).toBe(
+    expect(summarizeThread(state)).toBe(
       "work_item:linear://issue/ENG-42 via ticketing | entries=2 decisions=0 outbox=draft_change",
     );
   });
 
-  it("rejects missing subject locator fields", () => {
+  it("rejects missing thread locator fields", () => {
     expect(
       () =>
-        validateSubjectMemory({
-          kind: "runx.subject-memory.v1",
+        validateThread({
+          kind: "runx.thread.v1",
           adapter: {
             type: "github",
           },
-          subject: {
-            subject_kind: "work_item",
-            title: "missing locator",
-          },
+          thread_kind: "work_item",
+          title: "missing locator",
           entries: [],
           decisions: [],
-          subject_outbox: [],
+          outbox: [],
           source_refs: [],
         }),
-    ).toThrow(/subject_locator/);
+    ).toThrow(/thread_locator/);
   });
 
-  it("pushes and rehydrates through the file subject-memory adapter", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-subject-memory-file-"));
-    const memoryPath = path.join(tempDir, "subject-memory.json");
+  it("pushes and rehydrates through the file thread adapter", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-thread-file-"));
+    const statePath = path.join(tempDir, "thread.json");
     const initial = {
-      kind: "runx.subject-memory.v1",
+      kind: "runx.thread.v1",
       adapter: {
         type: "file",
-        adapter_ref: memoryPath,
+        adapter_ref: statePath,
       },
-      subject: {
-        subject_kind: "work_item",
-        subject_locator: "local://provider/issues/123",
-        canonical_uri: "https://example.test/issues/123",
-      },
+      thread_kind: "work_item",
+      thread_locator: "local://provider/issues/123",
+      canonical_uri: "https://example.test/issues/123",
       entries: [],
       decisions: [],
-      subject_outbox: [],
+      outbox: [],
       source_refs: [],
     };
 
     try {
-      await writeFile(memoryPath, `${JSON.stringify(initial, null, 2)}\n`);
-      const memory = validateSubjectMemory(initial);
+      await writeFile(statePath, `${JSON.stringify(initial, null, 2)}\n`);
+      const state = validateThread(initial);
       const result = await pushOutboxEntryViaAdapter({
-        memory,
+        thread: state,
         entry: {
           entry_id: "pull_request:fixture-task",
           kind: "pull_request",
@@ -211,15 +201,15 @@ describe("subject memory contract", () => {
         kind: "pull_request",
         status: "draft",
         locator: expect.stringContaining("#outbox/pull_request%3Afixture-task"),
-        subject_locator: "local://provider/issues/123",
+        thread_locator: "local://provider/issues/123",
       });
-      expect(result.subject_memory.subject_outbox).toEqual([
+      expect(result.thread.outbox).toEqual([
         expect.objectContaining({
           entry_id: "pull_request:fixture-task",
           status: "draft",
         }),
       ]);
-      expect(result.subject_memory.entries.at(-1)).toMatchObject({
+      expect(result.thread.entries.at(-1)).toMatchObject({
         entry_kind: "status",
         structured_data: {
           event: "push_outbox_entry",
@@ -228,14 +218,14 @@ describe("subject memory contract", () => {
         },
       });
 
-      const adapter = createSubjectMemoryAdapter(result.subject_memory.adapter);
+      const adapter = createThreadAdapter(result.thread.adapter);
       expect(adapter?.type).toBe("file");
-      const fetched = await adapter?.fetchSubjectMemory({
-        subject_kind: "work_item",
-        subject_locator: "local://provider/issues/123",
-        include_subject_outbox: true,
+      const fetched = await adapter?.fetchThread({
+        thread_kind: "work_item",
+        thread_locator: "local://provider/issues/123",
+        include_outbox: true,
       });
-      expect(fetched?.subject_outbox).toEqual([
+      expect(fetched?.outbox).toEqual([
         expect.objectContaining({
           entry_id: "pull_request:fixture-task",
           status: "draft",
@@ -247,23 +237,21 @@ describe("subject memory contract", () => {
   });
 
   it("skips push when no runtime adapter is registered", async () => {
-    const memory = validateSubjectMemory({
-      kind: "runx.subject-memory.v1",
+    const state = validateThread({
+      kind: "runx.thread.v1",
       adapter: {
         type: "github",
       },
-      subject: {
-        subject_kind: "work_item",
-        subject_locator: "github://example/repo/issues/123",
-      },
+      thread_kind: "work_item",
+      thread_locator: "github://example/repo/issues/123",
       entries: [],
       decisions: [],
-      subject_outbox: [],
+      outbox: [],
       source_refs: [],
     });
 
     const result = await pushOutboxEntryViaAdapter({
-      memory,
+      thread: state,
       entry: {
         entry_id: "pull_request:fixture-task",
         kind: "pull_request",
@@ -272,29 +260,29 @@ describe("subject memory contract", () => {
 
     expect(result).toEqual({
       status: "skipped",
-      reason: "no subject memory adapter is registered for 'github'",
+      reason: "no thread adapter is registered for 'github'",
       outbox_entry: {
         entry_id: "pull_request:fixture-task",
         kind: "pull_request",
       },
-      subject_memory: memory,
+      thread: state,
     });
   });
 });
 
-describe("file local journal store", () => {
-  it("initializes an idempotent filesystem index and stores project-scoped facts", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-journal-"));
-    const journalDir = path.join(tempDir, "journal");
+describe("file local knowledge store", () => {
+  it("initializes an idempotent filesystem index and stores project-scoped projections", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-knowledge-"));
+    const knowledgeDir = path.join(tempDir, "knowledge");
 
     try {
-      const store = createFileJournalStore(journalDir);
+      const store = createFileKnowledgeStore(knowledgeDir);
       await expect(store.init()).resolves.toMatchObject({
-        schema_version: "runx.journal.v1",
+        schema_version: "runx.knowledge.v1",
         entries: [],
       });
       await expect(store.init()).resolves.toMatchObject({
-        schema_version: "runx.journal.v1",
+        schema_version: "runx.knowledge.v1",
       });
 
       const receipt = await writeLocalReceipt({
@@ -322,7 +310,7 @@ describe("file local journal store", () => {
         project,
         indexedAt: "2026-04-10T00:00:02Z",
       });
-      await store.addFact({
+      await store.addProjection({
         project,
         scope: "project",
         key: "homepage_url",
@@ -337,12 +325,12 @@ describe("file local journal store", () => {
       await expect(store.listReceipts({ project })).resolves.toEqual([
         expect.objectContaining({
           receipt_id: receipt.id,
-          subject: "echo",
+          execution_ref: "echo",
           source_type: "cli-tool",
           indexed_at: "2026-04-10T00:00:02Z",
         }),
       ]);
-      await expect(store.listFacts({ project })).resolves.toEqual([
+      await expect(store.listProjections({ project })).resolves.toEqual([
         expect.objectContaining({
           key: "homepage_url",
           value: "https://example.test",
@@ -354,21 +342,21 @@ describe("file local journal store", () => {
     }
   });
 
-  it("preserves concurrent fact writes through the filesystem index", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-journal-concurrent-"));
-    const journalDir = path.join(tempDir, "journal");
+  it("preserves concurrent projection writes through the filesystem index", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-knowledge-concurrent-"));
+    const knowledgeDir = path.join(tempDir, "knowledge");
     const project = path.join(tempDir, "project");
 
     try {
-      const store = createFileJournalStore(journalDir);
+      const store = createFileKnowledgeStore(knowledgeDir);
       await store.init();
 
       await Promise.all(
         Array.from({ length: 20 }, async (_, index) =>
-          createFileJournalStore(journalDir).addFact({
+          createFileKnowledgeStore(knowledgeDir).addProjection({
             project,
             scope: "project",
-            key: `fact_${index}`,
+            key: `projection_${index}`,
             value: index,
             source: "concurrency-test",
             confidence: 1,
@@ -378,10 +366,10 @@ describe("file local journal store", () => {
         ),
       );
 
-      const facts = await store.listFacts({ project });
-      expect(facts).toHaveLength(20);
-      expect(facts.map((fact) => fact.key).sort()).toEqual(
-        Array.from({ length: 20 }, (_, index) => `fact_${index}`).sort(),
+      const projections = await store.listProjections({ project });
+      expect(projections).toHaveLength(20);
+      expect(projections.map((projection) => projection.key).sort()).toEqual(
+        Array.from({ length: 20 }, (_, index) => `projection_${index}`).sort(),
       );
     } finally {
       await rm(tempDir, { recursive: true, force: true });
@@ -389,16 +377,16 @@ describe("file local journal store", () => {
   });
 
   it("skips malformed stored index entries instead of throwing", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-journal-malformed-"));
-    const journalDir = path.join(tempDir, "journal");
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-knowledge-malformed-"));
+    const knowledgeDir = path.join(tempDir, "knowledge");
     const project = path.join(tempDir, "project");
 
     try {
-      await mkdir(journalDir, { recursive: true });
+      await mkdir(knowledgeDir, { recursive: true });
       await writeFile(
-        path.join(journalDir, "index.json"),
+        path.join(knowledgeDir, "index.json"),
         `${JSON.stringify({
-          schema_version: "runx.journal.v1",
+          schema_version: "runx.knowledge.v1",
           entries: [
             {
               entry_id: "receipt_rx_valid",
@@ -406,14 +394,14 @@ describe("file local journal store", () => {
               receipt_id: "rx_valid",
               kind: "skill_execution",
               status: "success",
-              subject: "echo",
+              execution_ref: "echo",
               indexed_at: "2026-04-10T00:00:00Z",
               project,
             },
             { receipt_id: 123, indexed_at: 1 },
             {
-              entry_id: "fact_valid",
-              entry_kind: "fact",
+              entry_id: "projection_valid",
+              entry_kind: "projection",
               project,
               scope: "project",
               key: "homepage_url",
@@ -423,7 +411,7 @@ describe("file local journal store", () => {
               freshness: "fresh",
               created_at: "2026-04-10T00:00:01Z",
             },
-            { id: "fact_bad", key: 42 },
+            { id: "projection_bad", key: 42 },
           ],
         }, null, 2)}\n`,
       );
@@ -435,17 +423,17 @@ describe("file local journal store", () => {
       };
 
       try {
-        const store = createFileJournalStore(journalDir);
-        const journal = await store.read();
-        expect(journal.entries.filter((entry) => entry.entry_kind === "receipt")).toEqual([
+        const store = createFileKnowledgeStore(knowledgeDir);
+        const knowledge = await store.read();
+        expect(knowledge.entries.filter((entry) => entry.entry_kind === "receipt")).toEqual([
           expect.objectContaining({
             receipt_id: "rx_valid",
-            subject: "echo",
+            execution_ref: "echo",
           }),
         ]);
-        expect(journal.entries.filter((entry) => entry.entry_kind === "fact")).toEqual([
+        expect(knowledge.entries.filter((entry) => entry.entry_kind === "projection")).toEqual([
           expect.objectContaining({
-            entry_id: "fact_valid",
+            entry_id: "projection_valid",
             key: "homepage_url",
           }),
         ]);
@@ -454,8 +442,8 @@ describe("file local journal store", () => {
       }
 
       expect(warnings).toHaveLength(2);
-      expect(warnings[0]).toContain("malformed local journal entry");
-      expect(warnings[1]).toContain("malformed local journal entry");
+      expect(warnings[0]).toContain("malformed local knowledge entry");
+      expect(warnings[1]).toContain("malformed local knowledge entry");
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

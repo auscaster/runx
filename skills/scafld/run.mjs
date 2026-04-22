@@ -51,8 +51,8 @@ switch (command) {
     break;
   case "new":
     args.push("new", taskId);
-    if (inputs.subject_title) {
-      args.push("-t", String(inputs.subject_title));
+    if (inputs.thread_title) {
+      args.push("-t", String(inputs.thread_title));
     }
     if (inputs.size) {
       args.push("-s", String(inputs.size));

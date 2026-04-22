@@ -15,7 +15,7 @@ harness:
         project_context: OSS skill package catalog
         change_set:
           change_set_id: change_set_ecosystem_brief
-          subject_locator: objective://ecosystem-brief
+          thread_locator: objective://ecosystem-brief
           summary: Launch a governed ecosystem-brief briefing flow.
           category: other
           severity: medium
@@ -36,7 +36,7 @@ harness:
           agent_step.work-plan.output:
             change_set:
               change_set_id: change_set_ecosystem_brief
-              subject_locator: objective://ecosystem-brief
+              thread_locator: objective://ecosystem-brief
               summary: Launch a governed ecosystem-brief briefing flow.
               category: other
               severity: medium
@@ -127,7 +127,7 @@ harness:
         project_context: Nitrosend workspace with repo-local worker lanes
         change_set:
           change_set_id: change_set_abandoned_cart_982
-          subject_locator: support://request/982
+          thread_locator: support://request/982
           summary: Add abandoned cart recovery across api, app, and mcp.
           category: feature_request
           severity: medium
@@ -158,7 +158,7 @@ harness:
           agent_step.work-plan.output:
             change_set:
               change_set_id: change_set_abandoned_cart_982
-              subject_locator: support://request/982
+              thread_locator: support://request/982
               summary: Add abandoned cart recovery across api, app, and mcp.
               category: feature_request
               severity: medium
@@ -315,14 +315,14 @@ runners:
         type: string
         required: false
         description: "Optional repo, product, or user context for the objective."
-      subject_locator:
+      thread_locator:
         type: string
         required: false
-        description: "Canonical locator for the bounded subject behind the objective."
-      subject_memory:
+        description: "Canonical locator for the bounded thread behind the objective."
+      thread:
         type: object
         required: false
-        description: "Portable subject memory when the objective came from an existing subject thread."
+        description: "Portable thread when the objective came from an existing thread."
       change_set:
         type: object
         required: false

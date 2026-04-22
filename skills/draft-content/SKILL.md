@@ -49,6 +49,6 @@ Handoff runner:
 - `draft` (optional): existing draft text when packaging or revising.
 - `packet` (optional): already-packaged outward payload when moving through the
   explicit handoff boundary.
-- `target` (optional): subject locator or repo/thread summary for the outward
+- `target` (optional): thread locator or repo/thread summary for the outward
   move.
 - `boundary_kind` (optional): boundary type such as `external_maintainer`.

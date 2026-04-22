@@ -5,7 +5,7 @@ description: Govern a scafld-backed issue-to-PR lane with a visible reviewer bou
 
 # Issue to PR
 
-Drive a bounded subject-driven change lane through the full scafld lifecycle under
+Drive a bounded thread-driven change lane through the full scafld lifecycle under
 runx governance, from spec creation through authored fix, explicit review, and
 projection-ready PR surfaces.
 
@@ -45,8 +45,8 @@ phase is captured as native JSON even when the projection itself reports
 failure, so the lane can package the real engineering state instead of
 aborting before the PR packet exists. The packaging step does not reconstruct
 workflow state. It packages the native scafld outputs into a provider-agnostic
-PR draft contract, then a single subject-memory push step can push that outbox
-entry upstream and return refreshed subject memory when the adapter supports
+PR draft contract, then a single thread push step can push that outbox
+entry upstream and return refreshed thread when the adapter supports
 it. When the adapter is GitHub-backed, the lane forwards the repo workspace
 path into that push step so the boundary can push the branch, open or refresh
 the draft PR, and then rehydrate the issue thread. Each step gets only the
@@ -77,12 +77,12 @@ provider push result:
   scafld `summary`, `checks`, `pr-body`, branch binding, and completion data.
 - `outbox_entry`: a `pull_request` outbox entry suitable for later adapter
   `push`.
-- `push`: adapter push status plus refreshed `subject_memory` when the current
-  subject-memory adapter supports push.
+- `push`: adapter push status plus refreshed `thread` when the current
+  thread adapter supports push.
 
-If the caller already provides `outbox_entry`, or if `subject_memory` already
+If the caller already provides `outbox_entry`, or if `thread` already
 contains a `pull_request` entry, the lane refreshes that entry instead of
-minting a parallel one. When `subject_memory.adapter` is backed by a push-capable
+minting a parallel one. When `thread.adapter` is backed by a push-capable
 runtime adapter, the lane then pushes that refreshed outbox entry upstream and
 returns the rehydrated provider state directly.
 
@@ -136,16 +136,16 @@ repo.
 ## Inputs
 
 - `task_id`: scafld task id (default: `issue-to-pr-fixture`).
-- `subject_title`: canonical subject title passed into the lane.
-- `subject_body`: full subject body or request text when available.
-- `subject_locator` (optional): canonical locator for the bounded subject.
-- `subject_memory` (optional): portable subject memory for the current work
+- `thread_title`: canonical thread title passed into the lane.
+- `thread_body`: full thread body or request text when available.
+- `thread_locator` (optional): canonical locator for the bounded thread.
+- `thread` (optional): portable thread for the current work
   thread. To close the provider loop in one run, provide a push-capable
   adapter descriptor such as `adapter.type: file` plus `adapter.adapter_ref`,
   or `adapter.type: github` plus a GitHub issue adapter ref like
   `owner/repo#issue/123`.
 - `outbox_entry` (optional): current outbox entry when the lane is refreshing
-  a draft change, subject thread, or other adapter-owned target.
+  a draft change, thread, or other adapter-owned target.
 - `target_repo`: intended repo slug for repo-local dispatchers.
 - `repo_snapshot`: bounded structured snapshot of the target repo, when the
   supervisor or worker can inspect the real workspace before yielding the
@@ -161,7 +161,7 @@ repo.
 - `base`: optional base ref forwarded to `scafld branch` and `scafld audit`.
 - `bind_current`: when true, bind the current branch instead of creating or
   switching.
-- `fixture`: workspace root containing `.ai/`. When the subject-memory adapter
+- `fixture`: workspace root containing `.ai/`. When the thread adapter
   pushes a real GitHub PR, this must point at the repo checkout whose branch
   should be published.
 - `scafld_bin`: explicit scafld executable path.

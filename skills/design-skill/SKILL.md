@@ -13,9 +13,9 @@ This is a composite chain that composes three reusable builder capabilities:
 high-level goal and produces everything needed to implement and test a
 new skill.
 
-When the proposed skill is subject-driven, the generated contract should model
-portable runx nouns, not provider nouns. Prefer `subject_title`,
-`subject_body`, `subject_locator`, `subject_memory`, and `outbox_entry` over
+When the proposed skill is thread-driven, the generated contract should model
+portable runx nouns, not provider nouns. Prefer `thread_title`,
+`thread_body`, `thread_locator`, `thread`, and `outbox_entry` over
 adapter-shaped fields such as issue ids, thread URLs, or provider-specific
 review handles.
 
@@ -73,6 +73,6 @@ review handles.
 - `project_context` (optional): repo, product, or operator context
   that constrains the design. Include language, framework, existing
   tooling, governance requirements, and any constraints on scope.
-- `subject_memory` (optional): portable bounded subject memory when the
+- `thread` (optional): portable bounded thread when the
   objective comes from an existing issue, chat, ticket, or other adapter
   surface.

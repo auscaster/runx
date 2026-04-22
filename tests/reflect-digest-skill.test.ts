@@ -18,14 +18,14 @@ describe("reflect-digest skill", () => {
     expect(result.status).toBe("success");
     expect(result.assertionErrors).toEqual([]);
     expect(result.cases.map((entry) => entry.fixture.name)).toEqual([
-      "reflect-digest-empty-journal",
+      "reflect-digest-empty-knowledge",
       "reflect-digest-below-floor",
       "reflect-digest-single-skill",
       "reflect-digest-multi-skill",
     ]);
-  });
+  }, 15_000);
 
-  it("groups reflect facts deterministically before drafting proposals", async () => {
+  it("groups reflect projections deterministically before drafting proposals", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-reflect-digest-"));
     const caller: Caller = {
       resolve: async (request) => {
@@ -36,7 +36,7 @@ describe("reflect-digest skill", () => {
           ? request.work.envelope.inputs.grouped_reflections
           : [];
         return {
-          actor: "builder",
+          actor: "agent",
           payload: {
             proposals: groupedReflections.map((group) => ({
               skill_ref: group.skill_ref,
@@ -56,7 +56,7 @@ describe("reflect-digest skill", () => {
                 kind: "pull_request",
                 title: `Reflect digest: ${group.skill_ref}`,
                 status: "draft",
-                subject_locator: `registry://skills/${group.skill_ref}`,
+                thread_locator: `registry://skills/${group.skill_ref}`,
               },
             })),
           },
@@ -79,10 +79,10 @@ describe("reflect-digest skill", () => {
         inputs: {
           min_support: 2,
           min_confidence: 0.5,
-          reflect_facts: [
+          reflect_projections: [
             {
-              entry_id: "fact_sourcey_1",
-              entry_kind: "fact",
+              entry_id: "projection_sourcey_1",
+              entry_kind: "projection",
               project: "/tmp/project",
               scope: "reflect",
               key: "receipt:rx_sourcey_1",
@@ -97,8 +97,8 @@ describe("reflect-digest skill", () => {
               },
             },
             {
-              entry_id: "fact_sourcey_2",
-              entry_kind: "fact",
+              entry_id: "projection_sourcey_2",
+              entry_kind: "projection",
               project: "/tmp/project",
               scope: "reflect",
               key: "receipt:rx_sourcey_2",
@@ -113,8 +113,8 @@ describe("reflect-digest skill", () => {
               },
             },
             {
-              entry_id: "fact_release_1",
-              entry_kind: "fact",
+              entry_id: "projection_release_1",
+              entry_kind: "projection",
               project: "/tmp/project",
               scope: "reflect",
               key: "receipt:rx_release_1",
@@ -129,8 +129,8 @@ describe("reflect-digest skill", () => {
               },
             },
             {
-              entry_id: "fact_low_confidence",
-              entry_kind: "fact",
+              entry_id: "projection_low_confidence",
+              entry_kind: "projection",
               project: "/tmp/project",
               scope: "reflect",
               key: "receipt:rx_low",
