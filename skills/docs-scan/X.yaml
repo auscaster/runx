@@ -75,3 +75,5 @@ runners:
           context:
             stack_detection: detect-stack.stack_detection.data
             docs_input_candidates: discover-inputs.docs_input_candidates.data.candidates
+    artifacts:
+      wrap_as: docs_scan_packet
