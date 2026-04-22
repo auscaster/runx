@@ -90,7 +90,7 @@ runners:
       if (result.receipt.kind !== "skill_execution") {
         return;
       }
-      expect(result.receipt.subject.source_type).toBe("cli-tool");
+      expect(result.receipt.source_type).toBe("cli-tool");
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

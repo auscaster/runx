@@ -80,9 +80,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: request-triage
-            source_type: agent-step
+          skill_name: request-triage
+          source_type: agent-step
     - name: feature-needs-decomposition
       inputs:
         thread_title: Add abandoned cart recovery across email and SMS
@@ -162,9 +161,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: request-triage
-            source_type: agent-step
+          skill_name: request-triage
+          source_type: agent-step
     - name: reply-only-question
       inputs:
         thread_title: How do I rotate my API key?
@@ -208,9 +206,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: request-triage
-            source_type: agent-step
+          skill_name: request-triage
+          source_type: agent-step
     - name: request-review-before-mutation
       inputs:
         thread_title: Clarify the affected repo before we start
@@ -269,9 +266,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: request-triage
-            source_type: agent-step
+          skill_name: request-triage
+          source_type: agent-step
 
 runners:
   triage:

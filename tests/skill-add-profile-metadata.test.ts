@@ -88,7 +88,7 @@ runners:
       if (run.receipt.kind !== "skill_execution") {
         return;
       }
-      expect(run.receipt.subject.source_type).toBe("cli-tool");
+      expect(run.receipt.source_type).toBe("cli-tool");
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
@@ -152,7 +152,7 @@ runners:
       if (run.receipt.kind !== "skill_execution") {
         return;
       }
-      expect(run.receipt.subject.source_type).toBe("agent");
+      expect(run.receipt.source_type).toBe("agent");
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

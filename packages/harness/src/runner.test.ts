@@ -19,8 +19,7 @@ expect:
   status: success
   receipt:
     kind: skill_execution
-    subject:
-      skill_name: echo
+    skill_name: echo
 `);
 
     expect(fixture.name).toBe("echo-fixture");
@@ -39,7 +38,7 @@ expect:
     if (result.receipt?.kind !== "skill_execution") {
       return;
     }
-    expect(result.receipt.subject.skill_name).toBe("echo");
+    expect(result.receipt.skill_name).toBe("echo");
     expect(result.trace.events.map((event) => event.type)).toContain("completed");
   });
 

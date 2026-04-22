@@ -136,7 +136,10 @@ export interface HarnessCallerFixture {
 export interface HarnessReceiptExpectation {
   readonly kind?: "skill_execution" | "graph_execution";
   readonly status?: "success" | "failure";
-  readonly subject?: Readonly<Record<string, unknown>>;
+  readonly skill_name?: string;
+  readonly source_type?: string;
+  readonly graph_name?: string;
+  readonly owner?: string;
 }
 
 export interface HarnessExpectation {
@@ -768,7 +771,10 @@ function validateHarnessReceiptExpectation(
   return {
     kind: optionalHarnessReceiptKind(value.kind, `${field}.kind`),
     status: optionalHarnessReceiptStatus(value.status, `${field}.status`),
-    subject: optionalRecord(value.subject, `${field}.subject`),
+    skill_name: optionalString(value.skill_name, `${field}.skill_name`),
+    source_type: optionalString(value.source_type, `${field}.source_type`),
+    graph_name: optionalString(value.graph_name, `${field}.graph_name`),
+    owner: optionalString(value.owner, `${field}.owner`),
   };
 }
 

@@ -319,10 +319,39 @@ function assertHarnessResult(
       if (fixture.expect.receipt.status && receipt.status !== fixture.expect.receipt.status) {
         errors.push(`Expected receipt status ${fixture.expect.receipt.status}, got ${receipt.status}.`);
       }
-      for (const [key, expected] of Object.entries(fixture.expect.receipt.subject ?? {})) {
-        if (receipt.subject[key as keyof typeof receipt.subject] !== expected) {
-          errors.push(`Expected receipt subject.${key} to equal ${String(expected)}.`);
-        }
+      if (fixture.expect.receipt.skill_name && receipt.kind !== "skill_execution") {
+        errors.push(`Expected skill_execution receipt for skill_name ${fixture.expect.receipt.skill_name}.`);
+      } else if (
+        fixture.expect.receipt.skill_name
+        && receipt.kind === "skill_execution"
+        && receipt.skill_name !== fixture.expect.receipt.skill_name
+      ) {
+        errors.push(`Expected receipt skill_name to equal ${fixture.expect.receipt.skill_name}.`);
+      }
+      if (fixture.expect.receipt.source_type && receipt.kind !== "skill_execution") {
+        errors.push(`Expected skill_execution receipt for source_type ${fixture.expect.receipt.source_type}.`);
+      } else if (
+        fixture.expect.receipt.source_type
+        && receipt.kind === "skill_execution"
+        && receipt.source_type !== fixture.expect.receipt.source_type
+      ) {
+        errors.push(`Expected receipt source_type to equal ${fixture.expect.receipt.source_type}.`);
+      }
+      if (fixture.expect.receipt.graph_name && receipt.kind !== "graph_execution") {
+        errors.push(`Expected graph_execution receipt for graph_name ${fixture.expect.receipt.graph_name}.`);
+      } else if (
+        fixture.expect.receipt.graph_name
+        && receipt.kind === "graph_execution"
+        && receipt.graph_name !== fixture.expect.receipt.graph_name
+      ) {
+        errors.push(`Expected receipt graph_name to equal ${fixture.expect.receipt.graph_name}.`);
+      }
+      if (
+        fixture.expect.receipt.owner
+        && receipt.kind === "graph_execution"
+        && receipt.owner !== fixture.expect.receipt.owner
+      ) {
+        errors.push(`Expected receipt owner to equal ${fixture.expect.receipt.owner}.`);
       }
     }
   }
@@ -434,7 +463,10 @@ function validateReceiptExpectation(value: Record<string, unknown> | undefined):
   return {
     kind: optionalReceiptKind(value.kind, "expect.receipt.kind"),
     status: optionalSuccessFailure(value.status, "expect.receipt.status"),
-    subject: optionalRecord(value.subject, "expect.receipt.subject"),
+    skill_name: optionalString(value.skill_name, "expect.receipt.skill_name"),
+    source_type: optionalString(value.source_type, "expect.receipt.source_type"),
+    graph_name: optionalString(value.graph_name, "expect.receipt.graph_name"),
+    owner: optionalString(value.owner, "expect.receipt.owner"),
   };
 }
 

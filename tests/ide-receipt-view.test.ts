@@ -11,7 +11,7 @@ describe("ide receipt view", () => {
       status: "success",
       output_hash: "hash-output",
       raw_output: "secret full output body",
-      subject: { graph_name: "fanout-docs" },
+      graph_name: "fanout-docs",
       steps: [
         {
           step_id: "research-a",

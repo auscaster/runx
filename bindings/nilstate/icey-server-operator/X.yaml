@@ -87,8 +87,7 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: icey-server-operator
+          skill_name: icey-server-operator
 
     - name: release-plan-preserves-pins
       runner: operator-plan
@@ -121,5 +120,4 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: icey-server-operator
+          skill_name: icey-server-operator

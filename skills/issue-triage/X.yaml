@@ -34,9 +34,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: issue-triage
-            source_type: agent-step
+          skill_name: issue-triage
+          source_type: agent-step
     - name: issue-triage-draft-response
       runner: respond
       inputs:
@@ -64,9 +63,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: issue-triage
-            source_type: agent-step
+          skill_name: issue-triage
+          source_type: agent-step
 
 runners:
   agent:

@@ -43,9 +43,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: research
-            source_type: agent-step
+          skill_name: research
+          source_type: agent-step
 
     - name: research-needs-objective
       inputs: {}

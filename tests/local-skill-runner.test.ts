@@ -84,7 +84,7 @@ describe("local skill runner", () => {
       if (result.receipt.kind !== "skill_execution") {
         return;
       }
-      expect(result.receipt.subject.source_type).toBe("agent");
+      expect(result.receipt.source_type).toBe("agent");
       expect(result.receipt.metadata).toMatchObject({
         agent_runner: {
           skill: "portable",

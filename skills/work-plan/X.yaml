@@ -118,9 +118,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: work-plan
-            source_type: agent-step
+          skill_name: work-plan
+          source_type: agent-step
     - name: work-plan-phased-workspace-plan
       inputs:
         objective: Roll out abandoned cart recovery across api, app, and mcp
@@ -287,9 +286,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: work-plan
-            source_type: agent-step
+          skill_name: work-plan
+          source_type: agent-step
 
 runners:
   work-plan-agent:

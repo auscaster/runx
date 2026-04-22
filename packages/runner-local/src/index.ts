@@ -37,7 +37,11 @@ import {
   type SkillAdapter,
   validateOutputContract,
 } from "../../executor/src/index.js";
-import { createFileKnowledgeStore } from "../../knowledge/src/index.js";
+import {
+  createFileKnowledgeStore,
+  validateOutboxEntry,
+  validateThread,
+} from "../../knowledge/src/index.js";
 import {
   loadRunxWorkspacePolicy,
   resolveLocalSkillProfile,
@@ -3017,7 +3021,7 @@ export async function inspectLocalGraph(options: InspectLocalGraphOptions): Prom
     verification,
     summary: {
       id: receipt.id,
-      name: receipt.subject.graph_name,
+      name: receipt.graph_name,
       status: receipt.status,
       verification,
       steps: receipt.steps.map((step) => ({
@@ -3197,7 +3201,7 @@ async function projectReflectIfEnabled(options: ReflectProjectionOptions): Promi
           runId: options.runId,
           producer: {
             skill: options.skillName,
-            runner: options.receipt.kind === "graph_execution" ? "graph" : options.receipt.subject.source_type,
+            runner: options.receipt.kind === "graph_execution" ? "graph" : options.receipt.source_type,
           },
           kind: "reflect_projected",
           status: "success",
@@ -3275,7 +3279,7 @@ function buildReflectProjection(options: {
     summary:
       options.receipt.kind === "graph_execution"
         ? `${options.skillName} ${options.receipt.status} with ${options.receipt.steps.length} step(s)`
-        : `${options.skillName} ${options.receipt.status} via ${options.receipt.subject.source_type}`,
+        : `${options.skillName} ${options.receipt.status} via ${options.receipt.source_type}`,
     signals,
     ledger: {
       event_kinds: eventKinds,
@@ -3331,8 +3335,8 @@ function summarizeLocalReceipt(receipt: LocalReceipt, verification: ReceiptVerif
       kind: receipt.kind,
       status: receipt.status,
       verification,
-      name: receipt.subject.skill_name,
-      sourceType: receipt.subject.source_type,
+      name: receipt.skill_name,
+      sourceType: receipt.source_type,
       startedAt: receipt.started_at,
       completedAt: receipt.completed_at,
     };
@@ -3343,7 +3347,7 @@ function summarizeLocalReceipt(receipt: LocalReceipt, verification: ReceiptVerif
     kind: receipt.kind,
     status: receipt.status,
     verification,
-    name: receipt.subject.graph_name,
+    name: receipt.graph_name,
     startedAt: receipt.started_at,
     completedAt: receipt.completed_at,
   };
@@ -3649,7 +3653,7 @@ async function loadHistoricalAgentContext(options: {
     receipt.kind === "skill_execution"
     && receipt.id !== options.excludeRunId
     && receipt.status === "success"
-    && receipt.subject.skill_name === options.skillName
+    && receiptSkillName(receipt) === options.skillName
     && receiptProjectScopeKeyHash(receipt) === options.projectKeyHash
     && Array.isArray(receipt.artifact_ids)
     && receipt.artifact_ids.length > 0,
@@ -3659,6 +3663,13 @@ async function loadHistoricalAgentContext(options: {
   }
   const entries = await readLedgerEntries(options.receiptDir, candidate.id);
   return entries.filter(isDomainArtifactEnvelope).slice(-MAX_HISTORICAL_AGENT_ARTIFACTS);
+}
+
+function receiptSkillName(receipt: LocalReceipt): string | undefined {
+  if (receipt.kind !== "skill_execution") {
+    return undefined;
+  }
+  return receipt.skill_name;
 }
 
 async function prepareAgentContext(options: {
@@ -4326,9 +4337,10 @@ async function resolveInputs(
     };
   }
 
+  const normalizedInputs = normalizeRuntimeInputs(resolved);
   return {
     status: "resolved",
-    inputs: resolved,
+    inputs: normalizedInputs,
   };
 }
 
@@ -4360,6 +4372,47 @@ function materializeDeclaredInputs(
   }
   assignDefined(resolved, normalizeDeclaredInputAliases(declaredInputs, providedInputs));
   return resolved;
+}
+
+function normalizeRuntimeInputs(
+  inputs: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  const normalized = { ...inputs };
+  const thread = normalized.thread === undefined
+    ? undefined
+    : validateThread(normalized.thread, "inputs.thread");
+  const outboxEntry = normalized.outbox_entry === undefined
+    ? undefined
+    : validateOutboxEntry(normalized.outbox_entry, "inputs.outbox_entry");
+  const threadLocator = typeof normalized.thread_locator === "string"
+    ? normalized.thread_locator
+    : undefined;
+
+  if (thread) {
+    normalized.thread = thread;
+    if (threadLocator && thread.thread_locator !== threadLocator) {
+      throw new Error(
+        `inputs.thread.thread_locator '${thread.thread_locator}' does not match inputs.thread_locator '${threadLocator}'.`,
+      );
+    }
+  }
+
+  if (outboxEntry) {
+    normalized.outbox_entry = outboxEntry;
+    if (threadLocator && outboxEntry.thread_locator && outboxEntry.thread_locator !== threadLocator) {
+      throw new Error(
+        `inputs.outbox_entry.thread_locator '${outboxEntry.thread_locator}' does not match inputs.thread_locator '${threadLocator}'.`,
+      );
+    }
+  }
+
+  if (thread && outboxEntry?.thread_locator && outboxEntry.thread_locator !== thread.thread_locator) {
+    throw new Error(
+      `inputs.outbox_entry.thread_locator '${outboxEntry.thread_locator}' does not match inputs.thread.thread_locator '${thread.thread_locator}'.`,
+    );
+  }
+
+  return normalized;
 }
 
 function resolveDeclaredInputAliasKey(

@@ -44,9 +44,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: moltbook
-            source_type: agent-step
+          skill_name: moltbook
+          source_type: agent-step
     - name: moltbook-post-packet
       runner: post
       inputs:
@@ -73,9 +72,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: moltbook
-            source_type: agent-step
+          skill_name: moltbook
+          source_type: agent-step
 
 runners:
   agent:

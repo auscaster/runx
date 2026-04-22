@@ -32,9 +32,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: review-receipt
-            source_type: agent-step
+          skill_name: review-receipt
+          source_type: agent-step
 
     - name: review-receipt-passes-on-paused-chain
       inputs:
@@ -54,9 +53,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: review-receipt
-            source_type: agent-step
+          skill_name: review-receipt
+          source_type: agent-step
 
 runners:
   review-receipt-agent:

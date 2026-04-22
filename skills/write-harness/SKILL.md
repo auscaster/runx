@@ -26,9 +26,8 @@ expect:
   receipt:
     kind: skill_execution      # or graph_execution
     status: success
-    subject:
-      skill_name: expected-name
-      source_type: cli-tool    # or agent, agent-step, chain, etc.
+    skill_name: expected-name
+    source_type: cli-tool    # or agent, agent-step, chain, etc.
 ```
 
 For chain fixtures, assert step completion:
@@ -42,8 +41,7 @@ expect:
   receipt:
     kind: graph_execution
     status: success
-    subject:
-      graph_name: my-chain
+    graph_name: my-chain
   steps:
     - step-one
     - step-two
@@ -54,7 +52,8 @@ expect:
 Start from the skill contract (SKILL.md + execution profile). Design fixtures for:
 
 - **Happy path**: one fixture with valid inputs exercising the primary
-  flow. Assert the receipt kind, status, and subject fields.
+  flow. Assert the receipt kind, status, and the
+  `skill_name`/`source_type` or `graph_name`/`owner` fields.
 - **Missing required input**: one fixture omitting a required input.
   Expect `needs_resolution` status.
 - **Tool not found**: if the skill wraps a CLI tool, one fixture with an

@@ -52,9 +52,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: prior-art
-            source_type: agent-step
+          skill_name: prior-art
+          source_type: agent-step
 
     - name: prior-art-recommends-reuse
       inputs:
@@ -89,9 +88,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: prior-art
-            source_type: agent-step
+          skill_name: prior-art
+          source_type: agent-step
 
 runners:
   prior-art-agent:

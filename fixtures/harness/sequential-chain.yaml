@@ -6,8 +6,7 @@ expect:
   receipt:
     kind: graph_execution
     status: success
-    subject:
-      graph_name: sequential-echo
+    graph_name: sequential-echo
   steps:
     - first
     - second

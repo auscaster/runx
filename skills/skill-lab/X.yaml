@@ -19,9 +19,8 @@ harness:
             type: github
             provider: github
             surface: issue_thread
-          subject:
-            thread_kind: work_item
-            thread_locator: github://nilstate/runx/issues/118
+          thread_kind: work_item
+          thread_locator: github://nilstate/runx/issues/118
           entries: []
           decisions: []
           outbox: []

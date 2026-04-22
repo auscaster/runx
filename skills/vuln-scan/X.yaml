@@ -38,9 +38,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: vuln-scan
-            source_type: agent-step
+          skill_name: vuln-scan
+          source_type: agent-step
     - name: vuln-scan-advisory-packet
       runner: advisory
       inputs:
@@ -65,9 +64,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: vuln-scan
-            source_type: agent-step
+          skill_name: vuln-scan
+          source_type: agent-step
 
 runners:
   agent:

@@ -39,13 +39,13 @@ describe("A2A skill runner", () => {
         execution: { stdout: string };
         receipt: {
           id: string;
-          subject: { source_type: string };
+          source_type: string;
           metadata?: Record<string, unknown>;
         };
       };
 
       expect(result.execution.stdout).toBe("hi");
-      expect(result.receipt.subject.source_type).toBe("a2a");
+      expect(result.receipt.source_type).toBe("a2a");
       expect(result.receipt.metadata).toMatchObject({
         a2a: {
           agent_card_url_hash: expect.stringMatching(/^[a-f0-9]{64}$/),

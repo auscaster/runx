@@ -142,10 +142,8 @@ describe("trainable receipts export", () => {
         receipt: {
           id: completeReceipt.id,
           kind: "skill_execution",
-          subject: {
-            skill_name: "issue-triage",
-            source_type: "cli-tool",
-          },
+          skill_name: "issue-triage",
+          source_type: "cli-tool",
         },
         receipt_verification: { status: "verified" },
         effective_outcome_state: "complete",

@@ -307,7 +307,7 @@ describe("issue-to-PR composite skill", () => {
       if (result.receipt.kind !== "graph_execution") {
         return;
       }
-      expect(result.receipt.subject.graph_name).toBe("issue-to-pr");
+      expect(result.receipt.graph_name).toBe("issue-to-pr");
       expect(JSON.parse(result.execution.stdout)).toMatchObject({
         outbox_entry: {
           kind: "pull_request",

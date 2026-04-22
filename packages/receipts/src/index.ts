@@ -246,10 +246,8 @@ export interface LocalSkillReceipt {
     readonly kid: string;
     readonly public_key_sha256: string;
   };
-  readonly subject: {
-    readonly skill_name: string;
-    readonly source_type: string;
-  };
+  readonly skill_name: string;
+  readonly source_type: string;
   readonly status: "success" | "failure";
   readonly started_at?: string;
   readonly completed_at?: string;
@@ -287,10 +285,8 @@ export interface LocalGraphReceipt {
     readonly kid: string;
     readonly public_key_sha256: string;
   };
-  readonly subject: {
-    readonly graph_name: string;
-    readonly owner?: string;
-  };
+  readonly graph_name: string;
+  readonly owner?: string;
   readonly status: "success" | "failure";
   readonly started_at?: string;
   readonly completed_at?: string;
@@ -399,10 +395,8 @@ export function buildLocalReceipt(options: BuildLocalReceiptOptions, keyPair: Lo
     schema_version: "runx.receipt.v1" as const,
     kind: "skill_execution" as const,
     issuer: localIssuer(keyPair),
-    subject: {
-      skill_name: options.skillName,
-      source_type: options.sourceType,
-    },
+    skill_name: options.skillName,
+    source_type: options.sourceType,
     status: options.execution.status,
     started_at: options.startedAt,
     completed_at: options.completedAt,
@@ -452,10 +446,8 @@ export function buildLocalGraphReceipt(
     id: options.graphId,
     kind: "graph_execution" as const,
     issuer: localIssuer(keyPair),
-    subject: {
-      graph_name: options.graphName,
-      owner: options.owner,
-    },
+    graph_name: options.graphName,
+    owner: options.owner,
     status: options.status,
     started_at: options.startedAt,
     completed_at: options.completedAt,

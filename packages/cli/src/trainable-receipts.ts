@@ -114,10 +114,10 @@ export function projectTrainableReceiptRow(options: {
     exported_at: options.exportedAt,
     receipt_id: receipt.id,
     receipt_kind: receipt.kind,
-    skill_name: receipt.kind === "skill_execution" ? receipt.subject.skill_name : null,
-    graph_name: receipt.kind === "graph_execution" ? receipt.subject.graph_name : null,
-    owner: receipt.kind === "graph_execution" ? receipt.subject.owner ?? null : null,
-    source_type: receipt.kind === "skill_execution" ? receipt.subject.source_type : null,
+    skill_name: receipt.kind === "skill_execution" ? receipt.skill_name : null,
+    graph_name: receipt.kind === "graph_execution" ? receipt.graph_name : null,
+    owner: receipt.kind === "graph_execution" ? receipt.owner ?? null : null,
+    source_type: receipt.kind === "skill_execution" ? receipt.source_type : null,
     status: receipt.status,
     disposition: receipt.disposition ?? null,
     effective_outcome_state: options.effectiveOutcomeState,
@@ -171,7 +171,7 @@ function parseTimestamp(value: string | undefined, label: string): number | unde
 }
 
 function sourceType(receipt: LocalReceipt): string | undefined {
-  return receipt.kind === "skill_execution" ? receipt.subject.source_type : undefined;
+  return receipt.kind === "skill_execution" ? receipt.source_type : undefined;
 }
 
 function runnerProvenance(receipt: LocalReceipt): TrainableReceiptRow["runner_provenance"] {

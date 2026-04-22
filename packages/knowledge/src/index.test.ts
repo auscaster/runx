@@ -163,6 +163,26 @@ describe("thread contract", () => {
     ).toThrow(/thread_locator/);
   });
 
+  it("rejects nested legacy subject payloads in the thread contract", () => {
+    expect(
+      () =>
+        validateThread({
+          kind: "runx.thread.v1",
+          adapter: {
+            type: "github",
+          },
+          subject: {
+            thread_kind: "work_item",
+            thread_locator: "github://example/repo/issues/123",
+          },
+          entries: [],
+          decisions: [],
+          outbox: [],
+          source_refs: [],
+        }),
+    ).toThrow(/thread_kind/);
+  });
+
   it("pushes and rehydrates through the file thread adapter", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-thread-file-"));
     const statePath = path.join(tempDir, "thread.json");

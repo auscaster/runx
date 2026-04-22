@@ -40,9 +40,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: draft-content
-            source_type: agent-step
+          skill_name: draft-content
+          source_type: agent-step
     - name: draft-content-packages-delivery
       runner: package
       inputs:
@@ -67,9 +66,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: draft-content
-            source_type: agent-step
+          skill_name: draft-content
+          source_type: agent-step
     - name: draft-content-explicit-external-handoff
       runner: handoff
       inputs:
@@ -103,9 +101,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: draft-content
-            source_type: agent-step
+          skill_name: draft-content
+          source_type: agent-step
 
 runners:
   agent:

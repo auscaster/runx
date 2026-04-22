@@ -54,9 +54,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: write-harness
-            source_type: agent-step
+          skill_name: write-harness
+          source_type: agent-step
     - name: write-harness-turns-review-into-regression-fixtures
       inputs:
         objective: Improve design-skill structured context handling
@@ -87,9 +86,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: write-harness
-            source_type: agent-step
+          skill_name: write-harness
+          source_type: agent-step
 
     - name: write-harness-honors-pass-verdict
       inputs:
@@ -123,9 +121,8 @@ harness:
         receipt:
           kind: skill_execution
           status: success
-          subject:
-            skill_name: write-harness
-            source_type: agent-step
+          skill_name: write-harness
+          source_type: agent-step
 
 runners:
   write-harness-agent:

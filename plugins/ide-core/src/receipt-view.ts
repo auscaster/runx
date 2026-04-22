@@ -94,7 +94,7 @@ export function buildReceiptViewModel(receipt: unknown): ReceiptViewModel {
   }
 
   return {
-    title: stringValue(receipt.subject && isRecord(receipt.subject) ? receipt.subject.graph_name ?? receipt.subject.skill_name : undefined) ?? id,
+    title: stringValue(receipt.graph_name ?? receipt.skill_name) ?? id,
     nodes,
     edges,
   };
