@@ -50,7 +50,7 @@ harness:
       expect:
         status: success
         receipt:
-          kind: chain_execution
+          kind: graph_execution
           status: success
 
     - name: moltbook-presence-minimal-inputs

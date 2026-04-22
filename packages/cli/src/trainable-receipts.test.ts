@@ -134,7 +134,7 @@ describe("trainable receipts export", () => {
         receipt_id: completeReceipt.id,
         receipt_kind: "skill_execution",
         skill_name: "github-triage",
-        chain_name: null,
+        graph_name: null,
         owner: null,
         source_type: "cli-tool",
         status: "success",

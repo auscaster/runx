@@ -149,7 +149,7 @@ describe("skill-publish CLI", () => {
       expect(report.publish.profile_digest).toMatch(/^[a-f0-9]{64}$/);
       expect(report.publish.harness).toMatchObject({
         status: "passed",
-        case_count: 1,
+        case_count: 2,
       });
       await expect(createFileRegistryStore(registryDir).getVersion("acme/sourcey", "1.0.0")).resolves.toMatchObject({
         markdown: await readFile(path.resolve("skills/sourcey/SKILL.md"), "utf8"),

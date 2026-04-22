@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { runLocalChain, type Caller } from "../packages/runner-local/src/index.js";
+import { runLocalGraph, type Caller } from "../packages/runner-local/src/index.js";
 
 const caller: Caller = {
   resolve: async () => undefined,
@@ -18,9 +18,9 @@ describe("chain receipt governance metadata", () => {
 
     try {
       await writeGovernedSkill(path.join(tempDir, "skills", "governed-echo"));
-      const chainPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "chain.yaml");
       await writeFile(
-        chainPath,
+        graphPath,
         `name: chain-receipt-governance
 steps:
   - id: echo
@@ -33,13 +33,13 @@ steps:
 `,
       );
 
-      const result = await runLocalChain({
-        chainPath,
+      const result = await runLocalGraph({
+        graphPath,
         caller,
         receiptDir,
         runxHome: path.join(tempDir, "home"),
         env: process.env,
-        chainGrant: {
+        graphGrant: {
           grant_id: "grant_repo",
           scopes: ["repo:*"],
         },
@@ -88,9 +88,9 @@ steps:
 
     try {
       await writeGovernedSkill(path.join(tempDir, "skills", "governed-echo"));
-      const chainPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "chain.yaml");
       await writeFile(
-        chainPath,
+        graphPath,
         `name: chain-receipt-denied
 steps:
   - id: deploy
@@ -103,13 +103,13 @@ steps:
 `,
       );
 
-      const result = await runLocalChain({
-        chainPath,
+      const result = await runLocalGraph({
+        graphPath,
         caller,
         receiptDir,
         runxHome: path.join(tempDir, "home"),
         env: process.env,
-        chainGrant: {
+        graphGrant: {
           grant_id: "grant_repo",
           scopes: ["repo:read"],
         },
@@ -134,7 +134,7 @@ steps:
                 requested_scopes: ["deployments:write"],
                 granted_scopes: ["repo:read"],
                 grant_id: "grant_repo",
-                reasons: ["step 'deploy' requested scope(s) outside chain grant: deployments:write"],
+                reasons: ["step 'deploy' requested scope(s) outside graph grant: deployments:write"],
               },
             },
           },

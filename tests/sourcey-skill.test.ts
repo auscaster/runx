@@ -136,7 +136,7 @@ describe("sourcey skill", () => {
       const receiptText = await readFile(path.join(receiptDir, `${result.receipt.id}.json`), "utf8");
       expect(receiptText).not.toContain(expectedProject);
       expect(receiptText).not.toContain("fixture_status");
-      expect(result.receipt.kind).toBe("chain_execution");
+      expect(result.receipt.kind).toBe("graph_execution");
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
@@ -354,7 +354,7 @@ describe("sourcey skill", () => {
         )
       ).join("\n");
       expect(generatedText).toContain("Why it matters");
-      expect(result.receipt.kind).toBe("chain_execution");
+      expect(result.receipt.kind).toBe("graph_execution");
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

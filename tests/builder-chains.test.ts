@@ -61,8 +61,8 @@ describe("builder skill objective-to-skill", () => {
       if (result.status !== "success") {
         return;
       }
-      expect(result.receipt.kind).toBe("chain_execution");
-      if (result.receipt.kind !== "chain_execution") {
+      expect(result.receipt.kind).toBe("graph_execution");
+      if (result.receipt.kind !== "graph_execution") {
         return;
       }
       expect(result.receipt.steps.map((step) => step.step_id)).toEqual(["decompose", "research", "author-harness"]);
@@ -107,8 +107,8 @@ describe("builder skill improve-skill", () => {
       if (result.status !== "success") {
         return;
       }
-      expect(result.receipt.kind).toBe("chain_execution");
-      if (result.receipt.kind !== "chain_execution") {
+      expect(result.receipt.kind).toBe("graph_execution");
+      if (result.receipt.kind !== "graph_execution") {
         return;
       }
       expect(result.receipt.steps.map((step) => step.step_id)).toEqual(["review-receipt", "author-update-harness"]);

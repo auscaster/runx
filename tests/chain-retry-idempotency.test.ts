@@ -5,7 +5,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import type { SkillAdapter } from "../packages/executor/src/index.js";
-import { runLocalChain, type Caller } from "../packages/runner-local/src/index.js";
+import { runLocalGraph, type Caller } from "../packages/runner-local/src/index.js";
 
 const nonInteractiveCaller: Caller = {
   resolve: async () => undefined,
@@ -18,8 +18,8 @@ describe("chain retry and idempotency", () => {
     const adapter = createFlakyAdapter();
 
     try {
-      const result = await runLocalChain({
-        chainPath: path.resolve("fixtures/chains/retry/read-only.yaml"),
+      const result = await runLocalGraph({
+        graphPath: path.resolve("fixtures/chains/retry/read-only.yaml"),
         caller: nonInteractiveCaller,
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
@@ -57,8 +57,8 @@ describe("chain retry and idempotency", () => {
     const adapter = createFlakyAdapter();
 
     try {
-      const result = await runLocalChain({
-        chainPath: path.resolve("fixtures/chains/retry/mutating-denied.yaml"),
+      const result = await runLocalGraph({
+        graphPath: path.resolve("fixtures/chains/retry/mutating-denied.yaml"),
         caller: nonInteractiveCaller,
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
@@ -77,13 +77,13 @@ describe("chain retry and idempotency", () => {
     }
   });
 
-  it("honors skill-level retry metadata when the chain step omits retry", async () => {
+  it("honors skill-level retry metadata when the graph step omits retry", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-retry-skill-"));
     const adapter = createFlakyAdapter();
 
     try {
-      const result = await runLocalChain({
-        chainPath: path.resolve("fixtures/chains/retry/skill-level.yaml"),
+      const result = await runLocalGraph({
+        graphPath: path.resolve("fixtures/chains/retry/skill-level.yaml"),
         caller: nonInteractiveCaller,
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
@@ -109,8 +109,8 @@ describe("chain retry and idempotency", () => {
     const adapter = createFlakyAdapter();
 
     try {
-      const result = await runLocalChain({
-        chainPath: path.resolve("fixtures/chains/retry/skill-mutating-denied.yaml"),
+      const result = await runLocalGraph({
+        graphPath: path.resolve("fixtures/chains/retry/skill-mutating-denied.yaml"),
         caller: nonInteractiveCaller,
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
@@ -135,8 +135,8 @@ describe("chain retry and idempotency", () => {
     const adapter = createFlakyAdapter();
 
     try {
-      const result = await runLocalChain({
-        chainPath: path.resolve("fixtures/chains/retry/mutating-idempotent.yaml"),
+      const result = await runLocalGraph({
+        graphPath: path.resolve("fixtures/chains/retry/mutating-idempotent.yaml"),
         caller: nonInteractiveCaller,
         receiptDir,
         runxHome: path.join(tempDir, "home"),

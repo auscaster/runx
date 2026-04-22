@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { CONTROL_SCHEMA_REFS, validateChainReceiptGovernance, validateScopeAdmission } from "../packages/receipts/src/index.js";
+import { CONTROL_SCHEMA_REFS, validateGraphReceiptGovernance, validateScopeAdmission } from "../packages/receipts/src/index.js";
 
 describe("receipt governance schema contracts", () => {
   it("exposes the published scope admission schema ref", () => {
@@ -26,7 +26,7 @@ describe("receipt governance schema contracts", () => {
   });
 
   it("normalizes governance wrappers around scope admission", () => {
-    expect(validateChainReceiptGovernance({
+    expect(validateGraphReceiptGovernance({
       scope_admission: {
         status: "deny",
         requested_scopes: ["deployments:write"],

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ChainParseError, ChainValidationError, parseChainYaml, validateChain } from "./chain.js";
+import { GraphParseError, GraphValidationError, parseGraphYaml, validateGraph } from "./graph.js";
 
 const validChain = `
 name: sequential-echo
@@ -22,22 +22,22 @@ steps:
       backoff_ms: 25
 `;
 
-describe("parseChainYaml", () => {
+describe("parseGraphYaml", () => {
   it("parses chain yaml into raw IR", () => {
-    const raw = parseChainYaml(validChain);
+    const raw = parseGraphYaml(validChain);
 
     expect(raw.document.name).toBe("sequential-echo");
     expect(raw.document.steps).toHaveLength(2);
   });
 
   it("fails when yaml is malformed", () => {
-    expect(() => parseChainYaml("name: [unterminated")).toThrow(ChainParseError);
+    expect(() => parseGraphYaml("name: [unterminated")).toThrow(GraphParseError);
   });
 });
 
-describe("validateChain", () => {
+describe("validateGraph", () => {
   it("validates a sequential chain with explicit context edges", () => {
-    const chain = validateChain(parseChainYaml(validChain));
+    const chain = validateGraph(parseGraphYaml(validChain));
 
     expect(chain.name).toBe("sequential-echo");
     expect(chain.owner).toBe("runx");
@@ -57,8 +57,8 @@ describe("validateChain", () => {
   });
 
   it("validates inline run steps without forcing them into skill files", () => {
-    const chain = validateChain(
-      parseChainYaml(`
+    const chain = validateGraph(
+      parseGraphYaml(`
 name: evolve-like
 steps:
   - id: preflight
@@ -99,8 +99,8 @@ steps:
   });
 
   it("validates tool steps and allowed tool declarations for agent steps", () => {
-    const chain = validateChain(
-      parseChainYaml(`
+    const chain = validateGraph(
+      parseGraphYaml(`
 name: tool-aware
 steps:
   - id: readme
@@ -130,8 +130,8 @@ steps:
   });
 
   it("validates mutating retry idempotency metadata", () => {
-    const chain = validateChain(
-      parseChainYaml(`
+    const chain = validateGraph(
+      parseGraphYaml(`
 name: retry-idempotency
 steps:
   - id: mutate
@@ -156,8 +156,8 @@ steps:
 
   it("rejects invalid retry and idempotency declarations", () => {
     expect(() =>
-      validateChain(
-        parseChainYaml(`
+      validateGraph(
+        parseGraphYaml(`
 name: bad-retry
 steps:
   - id: mutate
@@ -168,25 +168,25 @@ steps:
       max_attempts: 0
 `),
       ),
-    ).toThrow(ChainValidationError);
+    ).toThrow(GraphValidationError);
   });
 
   it("fails when a step id is missing", () => {
     expect(() =>
-      validateChain(
-        parseChainYaml(`
+      validateGraph(
+        parseGraphYaml(`
 name: bad
 steps:
   - skill: ../../skills/echo
 `),
       ),
-    ).toThrow(ChainValidationError);
+    ).toThrow(GraphValidationError);
   });
 
   it("fails when runner selector embeds a profile instead of a name", () => {
     expect(() =>
-      validateChain(
-        parseChainYaml(`
+      validateGraph(
+        parseGraphYaml(`
 name: bad-runner
 steps:
   - id: first
@@ -196,13 +196,13 @@ steps:
       command: node
 `),
       ),
-    ).toThrow(ChainValidationError);
+    ).toThrow(GraphValidationError);
   });
 
   it("fails when a context edge references an unknown step", () => {
     expect(() =>
-      validateChain(
-        parseChainYaml(`
+      validateGraph(
+        parseGraphYaml(`
 name: bad
 steps:
   - id: first
@@ -211,13 +211,13 @@ steps:
       message: missing.stdout
 `),
       ),
-    ).toThrow(ChainValidationError);
+    ).toThrow(GraphValidationError);
   });
 
   it("fails when a context edge references a later step", () => {
     expect(() =>
-      validateChain(
-        parseChainYaml(`
+      validateGraph(
+        parseGraphYaml(`
 name: bad
 steps:
   - id: first
@@ -228,12 +228,12 @@ steps:
     skill: ../../skills/echo
 `),
       ),
-    ).toThrow(ChainValidationError);
+    ).toThrow(GraphValidationError);
   });
 
   it("validates fanout groups with structured gates", () => {
-    const chain = validateChain(
-      parseChainYaml(`
+    const chain = validateGraph(
+      parseGraphYaml(`
 name: fanout
 fanout:
   groups:
@@ -292,8 +292,8 @@ steps:
 
   it("fails when fanout declaration is malformed", () => {
     expect(() =>
-      validateChain(
-        parseChainYaml(`
+      validateGraph(
+        parseGraphYaml(`
 name: fanout
 fanout: true
 steps:
@@ -301,13 +301,13 @@ steps:
     skill: ../../skills/echo
 `),
       ),
-    ).toThrow(ChainValidationError);
+    ).toThrow(GraphValidationError);
   });
 
   it("fails when fanout mode omits its group", () => {
     expect(() =>
-      validateChain(
-        parseChainYaml(`
+      validateGraph(
+        parseGraphYaml(`
 name: fanout
 fanout:
   groups:
@@ -319,13 +319,13 @@ steps:
     mode: fanout
 `),
       ),
-    ).toThrow(ChainValidationError);
+    ).toThrow(GraphValidationError);
   });
 
   it("fails when fanout policy tries to evaluate prose", () => {
     expect(() =>
-      validateChain(
-        parseChainYaml(`
+      validateGraph(
+        parseGraphYaml(`
 name: fanout
 fanout:
   groups:
@@ -343,6 +343,6 @@ steps:
     skill: ../../skills/echo
 `),
       ),
-    ).toThrow(ChainValidationError);
+    ).toThrow(GraphValidationError);
   });
 });

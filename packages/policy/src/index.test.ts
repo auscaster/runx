@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  admitChainStepScopes,
+  admitGraphStepScopes,
   admitLocalSkill,
   admitRetryPolicy,
   admitSandbox,
@@ -139,10 +139,10 @@ describe("admitRetryPolicy", () => {
   });
 });
 
-describe("admitChainStepScopes", () => {
+describe("admitGraphStepScopes", () => {
   it("allows exact grant matches", () => {
     expect(
-      admitChainStepScopes({
+      admitGraphStepScopes({
         stepId: "read",
         requestedScopes: ["repo:read"],
         grant: { grant_id: "grant_1", scopes: ["repo:read"] },
@@ -157,7 +157,7 @@ describe("admitChainStepScopes", () => {
 
   it("allows narrowed scopes from wildcard grants", () => {
     expect(
-      admitChainStepScopes({
+      admitGraphStepScopes({
         stepId: "checks",
         requestedScopes: ["checks:read"],
         grant: { scopes: ["checks:*", "repo:read"] },
@@ -167,27 +167,27 @@ describe("admitChainStepScopes", () => {
 
   it("allows empty step scopes", () => {
     expect(
-      admitChainStepScopes({
+      admitGraphStepScopes({
         stepId: "no-scope",
         requestedScopes: [],
         grant: { scopes: [] },
       }),
     ).toMatchObject({
       status: "allow",
-      reasons: ["chain step requested no scopes"],
+      reasons: ["graph step requested no scopes"],
     });
   });
 
   it("denies scopes outside the chain grant", () => {
     expect(
-      admitChainStepScopes({
+      admitGraphStepScopes({
         stepId: "deploy",
         requestedScopes: ["deployments:write"],
         grant: { grant_id: "grant_1", scopes: ["checks:read"] },
       }),
     ).toMatchObject({
       status: "deny",
-      reasons: ["step 'deploy' requested scope(s) outside chain grant: deployments:write"],
+      reasons: ["step 'deploy' requested scope(s) outside graph grant: deployments:write"],
       requestedScopes: ["deployments:write"],
       grantedScopes: ["checks:read"],
     });
@@ -195,7 +195,7 @@ describe("admitChainStepScopes", () => {
 
   it("deduplicates requested scopes before admission", () => {
     expect(
-      admitChainStepScopes({
+      admitGraphStepScopes({
         stepId: "read",
         requestedScopes: ["repo:read", "repo:read"],
         grant: { scopes: ["*"] },

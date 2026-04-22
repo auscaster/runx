@@ -48,9 +48,9 @@ expect:
 
     expect(result.status).toBe("success");
     expect(result.assertionErrors).toEqual([]);
-    expect(result.chainReceipt?.kind).toBe("chain_execution");
-    expect(result.chainReceipt?.steps.map((step) => step.step_id)).toEqual(["first", "second"]);
-    expect(result.chainReceipt?.steps[1]?.parent_receipt).toBe(result.chainReceipt?.steps[0]?.receipt_id);
+    expect(result.graphReceipt?.kind).toBe("graph_execution");
+    expect(result.graphReceipt?.steps.map((step) => step.step_id)).toEqual(["first", "second"]);
+    expect(result.graphReceipt?.steps[1]?.parent_receipt).toBe(result.graphReceipt?.steps[0]?.receipt_id);
   });
 
   it(
@@ -66,8 +66,8 @@ expect:
       expect(result.assertionErrors).toEqual([]);
       expect(result.cases.map((entry) => entry.fixture.name)).toEqual(["evolve-introspect", "evolve-plan-spec"]);
       expect(result.cases[0]?.status).toBe("success");
-      expect(result.cases[0]?.receipt?.kind).toBe("chain_execution");
-      expect(result.cases[1]?.receipt?.kind).toBe("chain_execution");
+      expect(result.cases[0]?.receipt?.kind).toBe("graph_execution");
+      expect(result.cases[1]?.receipt?.kind).toBe("graph_execution");
     },
     15_000,
   );

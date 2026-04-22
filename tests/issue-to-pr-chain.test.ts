@@ -303,11 +303,11 @@ describe("issue-to-PR composite skill", () => {
         throw new Error(JSON.stringify(result, null, 2));
       }
       expect(result.status).toBe("success");
-      expect(result.receipt.kind).toBe("chain_execution");
-      if (result.receipt.kind !== "chain_execution") {
+      expect(result.receipt.kind).toBe("graph_execution");
+      if (result.receipt.kind !== "graph_execution") {
         return;
       }
-      expect(result.receipt.subject.chain_name).toBe("issue-to-pr");
+      expect(result.receipt.subject.graph_name).toBe("issue-to-pr");
       expect(JSON.parse(result.execution.stdout)).toMatchObject({
         outbox_entry: {
           kind: "pull_request",

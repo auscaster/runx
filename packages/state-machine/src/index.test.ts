@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  createSequentialChainState,
+  createSequentialGraphState,
   evaluateFanoutSync,
-  planSequentialChainTransition,
-  transitionSequentialChain,
+  planSequentialGraphTransition,
+  transitionSequentialGraph,
   type FanoutGroupPolicy,
-  type SequentialChainStepDefinition,
+  type SequentialGraphStepDefinition,
 } from "./index.js";
 
-const steps: readonly SequentialChainStepDefinition[] = [
+const steps: readonly SequentialGraphStepDefinition[] = [
   { id: "first" },
   { id: "second", contextFrom: ["first"] },
   { id: "third", contextFrom: ["second"] },
@@ -17,28 +17,28 @@ const steps: readonly SequentialChainStepDefinition[] = [
 
 describe("sequential chain state machine", () => {
   it("plans sequential ordering from explicit context dependencies", () => {
-    let state = createSequentialChainState("cx_test", steps);
+    let state = createSequentialGraphState("gx_test", steps);
 
-    expect(planSequentialChainTransition(state, steps)).toEqual({
+    expect(planSequentialGraphTransition(state, steps)).toEqual({
       type: "run_step",
       stepId: "first",
       attempt: 1,
       contextFrom: [],
     });
 
-    state = transitionSequentialChain(state, { type: "start_step", stepId: "first", at: "2026-04-10T00:00:00.000Z" });
-    expect(planSequentialChainTransition(state, steps)).toMatchObject({
+    state = transitionSequentialGraph(state, { type: "start_step", stepId: "first", at: "2026-04-10T00:00:00.000Z" });
+    expect(planSequentialGraphTransition(state, steps)).toMatchObject({
       type: "blocked",
       stepId: "first",
     });
 
-    state = transitionSequentialChain(state, {
+    state = transitionSequentialGraph(state, {
       type: "step_succeeded",
       stepId: "first",
       at: "2026-04-10T00:00:01.000Z",
       receiptId: "rx_first",
     });
-    expect(planSequentialChainTransition(state, steps)).toEqual({
+    expect(planSequentialGraphTransition(state, steps)).toEqual({
       type: "run_step",
       stepId: "second",
       attempt: 1,
@@ -47,47 +47,47 @@ describe("sequential chain state machine", () => {
   });
 
   it("completes only after all steps succeed", () => {
-    let state = createSequentialChainState("cx_test", steps.slice(0, 1));
-    state = transitionSequentialChain(state, { type: "start_step", stepId: "first", at: "2026-04-10T00:00:00.000Z" });
-    state = transitionSequentialChain(state, {
+    let state = createSequentialGraphState("gx_test", steps.slice(0, 1));
+    state = transitionSequentialGraph(state, { type: "start_step", stepId: "first", at: "2026-04-10T00:00:00.000Z" });
+    state = transitionSequentialGraph(state, {
       type: "step_succeeded",
       stepId: "first",
       at: "2026-04-10T00:00:01.000Z",
       receiptId: "rx_first",
     });
 
-    expect(planSequentialChainTransition(state, steps.slice(0, 1))).toEqual({ type: "complete" });
-    expect(transitionSequentialChain(state, { type: "complete" }).status).toBe("succeeded");
+    expect(planSequentialGraphTransition(state, steps.slice(0, 1))).toEqual({ type: "complete" });
+    expect(transitionSequentialGraph(state, { type: "complete" }).status).toBe("succeeded");
   });
 
   it("reports failure when retry budget is exhausted", () => {
-    const retrySteps: readonly SequentialChainStepDefinition[] = [{ id: "first", retry: { maxAttempts: 2 } }];
-    let state = createSequentialChainState("cx_test", retrySteps);
+    const retrySteps: readonly SequentialGraphStepDefinition[] = [{ id: "first", retry: { maxAttempts: 2 } }];
+    let state = createSequentialGraphState("gx_test", retrySteps);
 
-    state = transitionSequentialChain(state, { type: "start_step", stepId: "first", at: "2026-04-10T00:00:00.000Z" });
-    state = transitionSequentialChain(state, {
+    state = transitionSequentialGraph(state, { type: "start_step", stepId: "first", at: "2026-04-10T00:00:00.000Z" });
+    state = transitionSequentialGraph(state, {
       type: "step_failed",
       stepId: "first",
       at: "2026-04-10T00:00:01.000Z",
       error: "boom",
     });
 
-    expect(planSequentialChainTransition(state, retrySteps)).toEqual({
+    expect(planSequentialGraphTransition(state, retrySteps)).toEqual({
       type: "run_step",
       stepId: "first",
       attempt: 2,
       contextFrom: [],
     });
 
-    state = transitionSequentialChain(state, { type: "start_step", stepId: "first", at: "2026-04-10T00:00:02.000Z" });
-    state = transitionSequentialChain(state, {
+    state = transitionSequentialGraph(state, { type: "start_step", stepId: "first", at: "2026-04-10T00:00:02.000Z" });
+    state = transitionSequentialGraph(state, {
       type: "step_failed",
       stepId: "first",
       at: "2026-04-10T00:00:03.000Z",
       error: "boom",
     });
 
-    expect(planSequentialChainTransition(state, retrySteps)).toEqual({
+    expect(planSequentialGraphTransition(state, retrySteps)).toEqual({
       type: "failed",
       stepId: "first",
       reason: "step failed and retry budget is exhausted",
@@ -95,14 +95,14 @@ describe("sequential chain state machine", () => {
   });
 
   it("is deterministic for the same chain state", () => {
-    const state = createSequentialChainState("cx_test", steps);
+    const state = createSequentialGraphState("gx_test", steps);
 
-    expect(planSequentialChainTransition(state, steps)).toEqual(planSequentialChainTransition(state, steps));
+    expect(planSequentialGraphTransition(state, steps)).toEqual(planSequentialGraphTransition(state, steps));
   });
 });
 
-describe("fanout sync chain policy", () => {
-  const fanoutSteps: readonly SequentialChainStepDefinition[] = [
+describe("fanout sync graph policy", () => {
+  const fanoutSteps: readonly SequentialGraphStepDefinition[] = [
     { id: "market", fanoutGroup: "advisors" },
     { id: "risk", fanoutGroup: "advisors" },
     { id: "finance", fanoutGroup: "advisors" },
@@ -119,9 +119,9 @@ describe("fanout sync chain policy", () => {
   };
 
   it("plans a deterministic fanout branch set", () => {
-    const state = createSequentialChainState("cx_test", fanoutSteps);
+    const state = createSequentialGraphState("gx_test", fanoutSteps);
 
-    expect(planSequentialChainTransition(state, fanoutSteps, { advisors: quorumPolicy })).toEqual({
+    expect(planSequentialGraphTransition(state, fanoutSteps, { advisors: quorumPolicy })).toEqual({
       type: "run_fanout",
       groupId: "advisors",
       stepIds: ["market", "risk", "finance"],
@@ -139,12 +139,12 @@ describe("fanout sync chain policy", () => {
   });
 
   it("proceeds when quorum succeeds with one failed branch", () => {
-    let state = createSequentialChainState("cx_test", fanoutSteps);
+    let state = createSequentialGraphState("gx_test", fanoutSteps);
     state = finishFanoutStep(state, "market", "succeeded", { recommendation: "go" });
     state = finishFanoutStep(state, "risk", "succeeded", { risk_score: 0.2 });
     state = finishFanoutStep(state, "finance", "failed");
 
-    expect(planSequentialChainTransition(state, fanoutSteps, { advisors: quorumPolicy })).toEqual({
+    expect(planSequentialGraphTransition(state, fanoutSteps, { advisors: quorumPolicy })).toEqual({
       type: "run_step",
       stepId: "synthesize",
       attempt: 1,
@@ -153,12 +153,12 @@ describe("fanout sync chain policy", () => {
   });
 
   it("halts when quorum is not met", () => {
-    let state = createSequentialChainState("cx_test", fanoutSteps.slice(0, 3));
+    let state = createSequentialGraphState("gx_test", fanoutSteps.slice(0, 3));
     state = finishFanoutStep(state, "market", "succeeded");
     state = finishFanoutStep(state, "risk", "failed");
     state = finishFanoutStep(state, "finance", "failed");
 
-    expect(planSequentialChainTransition(state, fanoutSteps.slice(0, 3), { advisors: quorumPolicy })).toMatchObject({
+    expect(planSequentialGraphTransition(state, fanoutSteps.slice(0, 3), { advisors: quorumPolicy })).toMatchObject({
       type: "failed",
       stepId: "market",
       syncDecision: {
@@ -267,22 +267,22 @@ describe("fanout sync chain policy", () => {
 });
 
 function finishFanoutStep(
-  state: ReturnType<typeof createSequentialChainState>,
+  state: ReturnType<typeof createSequentialGraphState>,
   stepId: string,
   status: "succeeded" | "failed",
   outputs: Readonly<Record<string, unknown>> = {},
-): ReturnType<typeof createSequentialChainState> {
-  let next = transitionSequentialChain(state, { type: "start_step", stepId, at: "2026-04-10T00:00:00.000Z" });
+): ReturnType<typeof createSequentialGraphState> {
+  let next = transitionSequentialGraph(state, { type: "start_step", stepId, at: "2026-04-10T00:00:00.000Z" });
   next =
     status === "succeeded"
-      ? transitionSequentialChain(next, {
+      ? transitionSequentialGraph(next, {
           type: "step_succeeded",
           stepId,
           at: "2026-04-10T00:00:01.000Z",
           receiptId: `rx_${stepId}`,
           outputs,
         })
-      : transitionSequentialChain(next, {
+      : transitionSequentialGraph(next, {
           type: "step_failed",
           stepId,
           at: "2026-04-10T00:00:01.000Z",

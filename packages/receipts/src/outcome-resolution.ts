@@ -188,7 +188,7 @@ function uniqueOutcomeResolutionId(): string {
 }
 
 function assertReceiptLikeId(id: string): void {
-  if (!/^(rx|cx)_[A-Za-z0-9_-]+$/.test(id)) {
+  if (!/^(rx|gx)_[A-Za-z0-9_-]+$/.test(id)) {
     throw new Error(`Invalid receipt id '${id}'.`);
   }
 }

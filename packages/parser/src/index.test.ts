@@ -542,7 +542,7 @@ harness:
       expect:
         status: success
         receipt:
-          kind: chain_execution
+          kind: graph_execution
 `),
     );
 
@@ -560,7 +560,7 @@ harness:
         expect: {
           status: "success",
           receipt: {
-            kind: "chain_execution",
+            kind: "graph_execution",
           },
         },
       },

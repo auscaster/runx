@@ -5,8 +5,8 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { parseChainYaml, validateChain } from "../packages/parser/src/index.js";
-import { runLocalChain, type Caller } from "../packages/runner-local/src/index.js";
+import { parseGraphYaml, validateGraph } from "../packages/parser/src/index.js";
+import { runLocalGraph, type Caller } from "../packages/runner-local/src/index.js";
 
 describe("tool steps", () => {
   it("resolves builtin tool manifests and carries allowed_tools into agent steps", async () => {
@@ -15,8 +15,8 @@ describe("tool steps", () => {
     const notePath = path.join(tempDir, "note.txt");
     await writeFile(notePath, "tool output");
 
-    const chain = validateChain(
-      parseChainYaml(`
+    const chain = validateGraph(
+      parseGraphYaml(`
 name: tool-aware
 steps:
   - id: read_note
@@ -70,9 +70,9 @@ steps:
     };
 
     try {
-      const result = await runLocalChain({
-        chain,
-        chainDirectory: tempDir,
+      const result = await runLocalGraph({
+        graph: chain,
+        graphDirectory: tempDir,
         caller,
         env: { ...process.env, RUNX_CWD: tempDir },
         receiptDir,
@@ -119,8 +119,8 @@ runx:
 `,
     );
 
-    const chain = validateChain(
-      parseChainYaml(`
+    const chain = validateGraph(
+      parseGraphYaml(`
 name: local-tool
 steps:
   - id: echo
@@ -136,9 +136,9 @@ steps:
     };
 
     try {
-      const result = await runLocalChain({
-        chain,
-        chainDirectory: tempDir,
+      const result = await runLocalGraph({
+        graph: chain,
+        graphDirectory: tempDir,
         caller,
         env: { ...process.env, RUNX_CWD: tempDir },
         receiptDir,
@@ -161,8 +161,8 @@ steps:
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-write-json-tool-"));
     const receiptDir = path.join(tempDir, "receipts");
 
-    const chain = validateChain(
-      parseChainYaml(`
+    const chain = validateGraph(
+      parseGraphYaml(`
 name: write-json
 steps:
   - id: write_config
@@ -186,9 +186,9 @@ steps:
     };
 
     try {
-      const result = await runLocalChain({
-        chain,
-        chainDirectory: tempDir,
+      const result = await runLocalGraph({
+        graph: chain,
+        graphDirectory: tempDir,
         caller,
         env: { ...process.env, RUNX_CWD: tempDir },
         receiptDir,
@@ -210,8 +210,8 @@ steps:
     const receiptDir = path.join(tempDir, "receipts");
     await writeFile(path.join(tempDir, "stale.txt"), "remove me\n");
 
-    const chain = validateChain(
-      parseChainYaml(`
+    const chain = validateGraph(
+      parseGraphYaml(`
 name: delete-file
 steps:
   - id: delete_stale
@@ -228,9 +228,9 @@ steps:
     };
 
     try {
-      const result = await runLocalChain({
-        chain,
-        chainDirectory: tempDir,
+      const result = await runLocalGraph({
+        graph: chain,
+        graphDirectory: tempDir,
         caller,
         env: { ...process.env, RUNX_CWD: tempDir },
         receiptDir,
@@ -278,8 +278,8 @@ steps:
       git(["commit", "-m", "init"]);
       await writeFile(path.join(tempDir, "tracked.txt"), "changed\n");
 
-      const chain = validateChain(
-        parseChainYaml(`
+      const chain = validateGraph(
+        parseGraphYaml(`
 name: git-tools
 steps:
   - id: branch
@@ -294,9 +294,9 @@ steps:
 `),
       );
 
-      const result = await runLocalChain({
-        chain,
-        chainDirectory: tempDir,
+      const result = await runLocalGraph({
+        graph: chain,
+        graphDirectory: tempDir,
         caller,
         env: { ...process.env, RUNX_CWD: tempDir },
         receiptDir,
@@ -322,8 +322,8 @@ steps:
       report: () => undefined,
     };
 
-    const chain = validateChain(
-      parseChainYaml(`
+    const chain = validateGraph(
+      parseGraphYaml(`
 name: capture-help
 steps:
   - id: help
@@ -334,9 +334,9 @@ steps:
     );
 
     try {
-      const result = await runLocalChain({
-        chain,
-        chainDirectory: tempDir,
+      const result = await runLocalGraph({
+        graph: chain,
+        graphDirectory: tempDir,
         caller,
         env: { ...process.env, RUNX_CWD: tempDir },
         receiptDir,
@@ -385,8 +385,8 @@ phases:
 `,
     );
 
-    const chain = validateChain(
-      parseChainYaml(`
+    const chain = validateGraph(
+      parseGraphYaml(`
 name: read-declared-files
 steps:
   - id: read_spec
@@ -409,9 +409,9 @@ steps:
     };
 
     try {
-      const result = await runLocalChain({
-        chain,
-        chainDirectory: tempDir,
+      const result = await runLocalGraph({
+        graph: chain,
+        graphDirectory: tempDir,
         caller,
         env: { ...process.env, RUNX_CWD: tempDir },
         receiptDir,

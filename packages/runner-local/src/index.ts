@@ -40,19 +40,19 @@ import {
 import { createFileJournalStore } from "../../memory/src/index.js";
 import { resolveLocalSkillProfile } from "../../config/src/index.js";
 import {
-  parseChainYaml,
+  parseGraphYaml,
   parseRunnerManifestYaml,
   parseSkillMarkdown,
   parseToolManifestYaml,
-  validateChain,
+  validateGraph,
   validateSkillArtifactContract,
   validateRunnerManifest,
   validateSkillSource,
   validateSkill,
   validateToolManifest,
-  type ChainDefinition,
-  type ChainPolicy,
-  type ChainStep,
+  type ExecutionGraph,
+  type GraphPolicy,
+  type GraphStep,
   type SkillInput,
   type SkillRunnerDefinition,
   type SkillSandbox,
@@ -60,11 +60,11 @@ import {
   type ValidatedSkill,
 } from "../../parser/src/index.js";
 import {
-  admitChainStepScopes,
+  admitGraphStepScopes,
   admitLocalSkill,
   admitRetryPolicy,
   sandboxRequiresApproval,
-  type ChainScopeGrant,
+  type GraphScopeGrant,
   type LocalAdmissionGrant,
 } from "../../policy/src/index.js";
 import {
@@ -74,13 +74,13 @@ import {
   listVerifiedLocalReceipts,
   readVerifiedLocalReceipt,
   uniqueReceiptId,
-  writeLocalChainReceipt,
+  writeLocalGraphReceipt,
   writeLocalReceipt,
-  type ChainReceiptStep,
-  type ChainReceiptSyncPoint,
+  type GraphReceiptStep,
+  type GraphReceiptSyncPoint,
   type ExecutionSemantics,
   type GovernedDisposition,
-  type LocalChainReceipt,
+  type LocalGraphReceipt,
   type LocalReceipt,
   type LocalSkillReceipt,
   type OutcomeState,
@@ -91,14 +91,14 @@ import {
 } from "../../receipts/src/index.js";
 import {
   createSingleStepState,
-  createSequentialChainState,
+  createSequentialGraphState,
   evaluateFanoutSync,
-  planSequentialChainTransition,
-  transitionSequentialChain,
+  planSequentialGraphTransition,
+  transitionSequentialGraph,
   transitionSingleStep,
   type FanoutSyncDecision,
-  type SequentialChainPlan,
-  type SequentialChainState,
+  type SequentialGraphPlan,
+  type SequentialGraphState,
   type SingleStepState,
 } from "../../state-machine/src/index.js";
 import type { RegistryStore } from "../../registry/src/index.js";
@@ -234,11 +234,11 @@ interface ResolvedToolReference {
   readonly toolDirectory: string;
 }
 
-function chainStepExecutionDirectory(step: ChainStep, stepExecutablePath: string, chainDirectory: string): string {
-  return step.skill || step.tool ? path.dirname(stepExecutablePath) : chainDirectory;
+function graphStepExecutionDirectory(step: GraphStep, stepExecutablePath: string, graphDirectory: string): string {
+  return step.skill || step.tool ? path.dirname(stepExecutablePath) : graphDirectory;
 }
 
-async function reportChainStepStarted(caller: Caller, step: ChainStep, reference: string): Promise<void> {
+async function reportGraphStepStarted(caller: Caller, step: GraphStep, reference: string): Promise<void> {
   await caller.report({
     type: "step_started",
     message: `Starting step ${step.id}.`,
@@ -246,14 +246,14 @@ async function reportChainStepStarted(caller: Caller, step: ChainStep, reference
       stepId: step.id,
       stepLabel: step.label,
       skill: reference,
-      runner: chainStepRunner(step) ?? "default",
+      runner: graphStepRunner(step) ?? "default",
     },
   });
 }
 
-async function reportChainStepWaitingResolution(
+async function reportGraphStepWaitingResolution(
   caller: Caller,
-  step: ChainStep,
+  step: GraphStep,
   reference: string,
   requests: readonly ResolutionRequest[],
 ): Promise<void> {
@@ -264,7 +264,7 @@ async function reportChainStepWaitingResolution(
       stepId: step.id,
       stepLabel: step.label,
       skill: reference,
-      runner: chainStepRunner(step) ?? "default",
+      runner: graphStepRunner(step) ?? "default",
       kinds: Array.from(new Set(requests.map((request) => request.kind))),
       requestIds: requests.map((request) => request.id),
       resolutionSkills: Array.from(
@@ -285,9 +285,9 @@ async function reportChainStepWaitingResolution(
   });
 }
 
-async function reportChainStepCompleted(
+async function reportGraphStepCompleted(
   caller: Caller,
-  step: ChainStep,
+  step: GraphStep,
   reference: string,
   status: "success" | "failure",
   detail?: Readonly<Record<string, unknown>>,
@@ -299,7 +299,7 @@ async function reportChainStepCompleted(
       stepId: step.id,
       stepLabel: step.label,
       skill: reference,
-      runner: chainStepRunner(step) ?? "default",
+      runner: graphStepRunner(step) ?? "default",
       status,
       ...detail,
     },
@@ -333,10 +333,10 @@ export type RunLocalSkillResult =
       readonly receipt: LocalReceipt;
     };
 
-export interface RunLocalChainOptions {
-  readonly chainPath?: string;
-  readonly chain?: ChainDefinition;
-  readonly chainDirectory?: string;
+export interface RunLocalGraphOptions {
+  readonly graphPath?: string;
+  readonly graph?: ExecutionGraph;
+  readonly graphDirectory?: string;
   readonly inputs?: Readonly<Record<string, unknown>>;
   readonly caller: Caller;
   readonly env?: NodeJS.ProcessEnv;
@@ -345,7 +345,7 @@ export interface RunLocalChainOptions {
   readonly adapters?: readonly SkillAdapter[];
   readonly allowedSourceTypes?: readonly string[];
   readonly authResolver?: AuthResolver;
-  readonly chainGrant?: ChainScopeGrant;
+  readonly graphGrant?: GraphScopeGrant;
   readonly runId?: string;
   readonly skillEnvironment?: {
     readonly name: string;
@@ -360,7 +360,7 @@ export interface RunLocalChainOptions {
   readonly projectConventions?: ProjectConventions;
 }
 
-export interface ChainStepRun {
+export interface GraphStepRun {
   readonly stepId: string;
   readonly skill: string;
   readonly skillPath: string;
@@ -379,7 +379,7 @@ export interface ChainStepRun {
     readonly output: string;
     readonly receiptId?: string;
   }[];
-  readonly governance?: ChainStepGovernance;
+  readonly governance?: GraphStepGovernance;
   readonly artifactIds?: readonly string[];
   readonly disposition?: GovernedDisposition;
   readonly inputContext?: ReceiptInputContext;
@@ -501,7 +501,7 @@ function isSensitiveInputContextKey(key: string): boolean {
   );
 }
 
-interface ChainStepGovernance {
+interface GraphStepGovernance {
   readonly scopeAdmission: {
     readonly status: "allow" | "deny";
     readonly requestedScopes: readonly string[];
@@ -518,39 +518,39 @@ interface RetryReceiptContext {
   readonly idempotencyKeyHash?: string;
 }
 
-export type RunLocalChainResult =
+export type RunLocalGraphResult =
   | {
       readonly status: "needs_resolution";
-      readonly chain: ChainDefinition;
+      readonly graph: ExecutionGraph;
       readonly skillPath: string;
       readonly stepIds: readonly string[];
       readonly requests: readonly ResolutionRequest[];
       readonly skill: ValidatedSkill;
-      readonly state: SequentialChainState;
+      readonly state: SequentialGraphState;
       readonly runId: string;
       readonly stepLabels?: readonly string[];
     }
   | {
       readonly status: "policy_denied";
-      readonly chain: ChainDefinition;
+      readonly graph: ExecutionGraph;
       readonly stepId: string;
       readonly skill: ValidatedSkill;
       readonly reasons: readonly string[];
-      readonly state: SequentialChainState;
-      readonly receipt?: LocalChainReceipt;
+      readonly state: SequentialGraphState;
+      readonly receipt?: LocalGraphReceipt;
     }
   | {
       readonly status: "success" | "failure";
-      readonly chain: ChainDefinition;
-      readonly state: SequentialChainState;
-      readonly steps: readonly ChainStepRun[];
-      readonly receipt: LocalChainReceipt;
+      readonly graph: ExecutionGraph;
+      readonly state: SequentialGraphState;
+      readonly steps: readonly GraphStepRun[];
+      readonly receipt: LocalGraphReceipt;
       readonly output: string;
       readonly errorMessage?: string;
     };
 
-export interface InspectLocalChainOptions {
-  readonly chainId: string;
+export interface InspectLocalGraphOptions {
+  readonly graphId: string;
   readonly receiptDir?: string;
   readonly runxHome?: string;
   readonly env?: NodeJS.ProcessEnv;
@@ -597,8 +597,8 @@ export interface LocalReceiptSummary {
   readonly completedAt?: string;
 }
 
-export interface InspectLocalChainResult {
-  readonly receipt: LocalChainReceipt;
+export interface InspectLocalGraphResult {
+  readonly receipt: LocalGraphReceipt;
   readonly verification: ReceiptVerification;
   readonly summary: {
     readonly id: string;
@@ -1017,12 +1017,12 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
   if (skill.source.type === "chain" && skill.source.chain) {
     await options.caller.report({
       type: "executing",
-      message: "Executing chain skill source.",
+      message: "Executing graph skill source.",
     });
 
-    const chainResult = await runLocalChain({
-      chain: materializeInlineChain(skill),
-      chainDirectory: options.skillDirectory,
+    const graphResult = await runLocalGraph({
+      graph: materializeInlineGraph(skill),
+      graphDirectory: options.skillDirectory,
       inputs: options.inputs,
       caller: options.caller,
       env: options.env,
@@ -1031,7 +1031,7 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
       adapters: options.adapters,
       allowedSourceTypes: options.allowedSourceTypes,
       authResolver: options.authResolver,
-      runId: options.resumeFromRunId ?? uniqueReceiptId("cx"),
+      runId: options.resumeFromRunId ?? uniqueReceiptId("gx"),
       skillEnvironment: {
         name: skill.name,
         body: skill.body,
@@ -1045,72 +1045,72 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
       projectConventions,
     });
 
-    if (chainResult.status === "needs_resolution") {
+    if (graphResult.status === "needs_resolution") {
       return {
         status: "needs_resolution",
         skill,
         skillPath: options.skillPathForMissingContext ?? options.skillDirectory,
         inputs: options.inputs,
-        runId: chainResult.runId,
-        requests: chainResult.requests,
-        stepIds: chainResult.stepIds,
-        stepLabels: chainResult.stepLabels,
+        runId: graphResult.runId,
+        requests: graphResult.requests,
+        stepIds: graphResult.stepIds,
+        stepLabels: graphResult.stepLabels,
       };
     }
 
-    if (chainResult.status === "policy_denied") {
+    if (graphResult.status === "policy_denied") {
       return {
         status: "policy_denied",
         skill,
-        reasons: chainResult.reasons,
+        reasons: graphResult.reasons,
       };
     }
 
     let state = createSingleStepState(skill.name);
     state = transitionSingleStep(state, { type: "admit" });
-    state = transitionSingleStep(state, { type: "start", at: chainResult.receipt.started_at ?? new Date().toISOString() });
-    if (chainResult.status === "success") {
+    state = transitionSingleStep(state, { type: "start", at: graphResult.receipt.started_at ?? new Date().toISOString() });
+    if (graphResult.status === "success") {
       state = transitionSingleStep(state, {
         type: "succeed",
-        at: chainResult.receipt.completed_at ?? new Date().toISOString(),
+        at: graphResult.receipt.completed_at ?? new Date().toISOString(),
       });
     } else {
       state = transitionSingleStep(state, {
         type: "fail",
-        at: chainResult.receipt.completed_at ?? new Date().toISOString(),
-        error: chainResult.errorMessage ?? "chain execution failed",
+        at: graphResult.receipt.completed_at ?? new Date().toISOString(),
+        error: graphResult.errorMessage ?? "graph execution failed",
       });
     }
 
     await options.caller.report({
       type: "completed",
-      message: `Skill execution ${chainResult.status}.`,
+      message: `Skill execution ${graphResult.status}.`,
       data: {
-        receiptId: chainResult.receipt.id,
+        receiptId: graphResult.receipt.id,
       },
     });
 
     return {
-      status: chainResult.status,
+      status: graphResult.status,
       skill,
       inputs: options.inputs,
       execution: {
-        status: chainResult.status,
-        stdout: chainResult.output,
-        stderr: chainResult.errorMessage ?? "",
-        exitCode: chainResult.status === "success" ? 0 : 1,
+        status: graphResult.status,
+        stdout: graphResult.output,
+        stderr: graphResult.errorMessage ?? "",
+        exitCode: graphResult.status === "success" ? 0 : 1,
         signal: null,
-        durationMs: chainResult.receipt.duration_ms,
-        errorMessage: chainResult.errorMessage,
+        durationMs: graphResult.receipt.duration_ms,
+        errorMessage: graphResult.errorMessage,
         metadata: {
           composite: {
-            chain_receipt_id: chainResult.receipt.id,
+            graph_receipt_id: graphResult.receipt.id,
             top_level_skill: skill.name,
           },
         },
       },
       state,
-      receipt: chainResult.receipt,
+      receipt: graphResult.receipt,
     };
   }
 
@@ -1601,7 +1601,7 @@ async function pathExists(candidatePath: string): Promise<boolean> {
   }
 }
 
-function materializeInlineChain(skill: ValidatedSkill): ChainDefinition {
+function materializeInlineGraph(skill: ValidatedSkill): ExecutionGraph {
   if (!skill.source.chain) {
     throw new Error(`Skill '${skill.name}' does not declare an inline chain.`);
   }
@@ -1611,25 +1611,25 @@ function materializeInlineChain(skill: ValidatedSkill): ChainDefinition {
   };
 }
 
-async function resolveChainExecution(options: RunLocalChainOptions): Promise<{
-  readonly chain: ChainDefinition;
-  readonly chainDirectory: string;
-  readonly resolvedChainPath?: string;
+async function resolveGraphExecution(options: RunLocalGraphOptions): Promise<{
+  readonly graph: ExecutionGraph;
+  readonly graphDirectory: string;
+  readonly resolvedGraphPath?: string;
 }> {
-  if (options.chain) {
+  if (options.graph) {
     return {
-      chain: options.chain,
-      chainDirectory: path.resolve(options.chainDirectory ?? process.cwd()),
+      graph: options.graph,
+      graphDirectory: path.resolve(options.graphDirectory ?? process.cwd()),
     };
   }
-  if (!options.chainPath) {
-    throw new Error("runLocalChain requires chainPath or chain.");
+  if (!options.graphPath) {
+    throw new Error("runLocalGraph requires graphPath or graph.");
   }
-  const resolvedChainPath = path.resolve(options.chainPath);
+  const resolvedGraphPath = path.resolve(options.graphPath);
   return {
-    chain: validateChain(parseChainYaml(await readFile(resolvedChainPath, "utf8"))),
-    chainDirectory: path.dirname(resolvedChainPath),
-    resolvedChainPath,
+    graph: validateGraph(parseGraphYaml(await readFile(resolvedGraphPath, "utf8"))),
+    graphDirectory: path.dirname(resolvedGraphPath),
+    resolvedGraphPath,
   };
 }
 
@@ -1727,7 +1727,7 @@ async function appendPendingSkillJournalEntries(options: {
   });
 }
 
-async function appendChainJournalEntries(options: {
+async function appendGraphJournalEntries(options: {
   readonly receiptDir: string;
   readonly runId: string;
   readonly topLevelSkillName: string;
@@ -1741,7 +1741,7 @@ async function appendChainJournalEntries(options: {
 }): Promise<void> {
   const producer = {
     skill: options.topLevelSkillName,
-    runner: "chain",
+    runner: "graph",
   };
   await appendJournalEntries({
     receiptDir: options.receiptDir,
@@ -1775,7 +1775,7 @@ async function appendChainJournalEntries(options: {
   });
 }
 
-async function appendPendingChainJournalEntry(options: {
+async function appendPendingGraphJournalEntry(options: {
   readonly receiptDir: string;
   readonly runId: string;
   readonly topLevelSkillName: string;
@@ -1793,7 +1793,7 @@ async function appendPendingChainJournalEntry(options: {
         stepId: options.stepId,
         producer: {
           skill: options.topLevelSkillName,
-          runner: "chain",
+          runner: "graph",
         },
         kind: options.kind,
         status: "waiting",
@@ -1804,11 +1804,11 @@ async function appendPendingChainJournalEntry(options: {
   });
 }
 
-async function appendChainStepStartedJournalEntry(options: {
+async function appendGraphStepStartedJournalEntry(options: {
   readonly receiptDir: string;
   readonly runId: string;
   readonly topLevelSkillName: string;
-  readonly step: ChainStep;
+  readonly step: GraphStep;
   readonly reference: string;
   readonly createdAt: string;
 }): Promise<void> {
@@ -1821,13 +1821,13 @@ async function appendChainStepStartedJournalEntry(options: {
         stepId: options.step.id,
         producer: {
           skill: options.topLevelSkillName,
-          runner: "chain",
+          runner: "graph",
         },
         kind: "step_started",
         status: "started",
         detail: {
           skill: options.reference,
-          runner: chainStepRunner(options.step) ?? "default",
+          runner: graphStepRunner(options.step) ?? "default",
         },
         createdAt: options.createdAt,
       }),
@@ -1835,10 +1835,10 @@ async function appendChainStepStartedJournalEntry(options: {
   });
 }
 
-function admitChainTransition(
-  policy: ChainPolicy | undefined,
+function admitGraphTransition(
+  policy: GraphPolicy | undefined,
   stepId: string,
-  outputs: ReadonlyMap<string, ChainStepOutput>,
+  outputs: ReadonlyMap<string, GraphStepOutput>,
 ): { readonly status: "allow" } | { readonly status: "deny"; readonly reason: string } {
   const gates = policy?.transitions.filter((gate) => gate.to === stepId) ?? [];
   for (const gate of gates) {
@@ -1868,7 +1868,7 @@ function admitChainTransition(
 }
 
 function resolveTransitionGateValue(
-  outputs: ReadonlyMap<string, ChainStepOutput>,
+  outputs: ReadonlyMap<string, GraphStepOutput>,
   field: string,
 ): unknown {
   const dotIndex = field.indexOf(".");
@@ -1884,26 +1884,26 @@ function resolveTransitionGateValue(
   return resolveOutputPath(output, outputPath);
 }
 
-function hydrateChainFromJournal(options: {
+function hydrateGraphFromJournal(options: {
   readonly entries: readonly ArtifactEnvelope[];
-  readonly chain: ChainDefinition;
-  readonly chainStepCache: ReadonlyMap<string, ValidatedSkill>;
+  readonly graph: ExecutionGraph;
+  readonly graphStepCache: ReadonlyMap<string, ValidatedSkill>;
   readonly skillEnvironment?: {
     readonly name: string;
     readonly body: string;
   };
-  readonly chainSteps: readonly {
+  readonly graphSteps: readonly {
     readonly id: string;
     readonly contextFrom: readonly string[];
-    readonly retry?: ChainStep["retry"];
+    readonly retry?: GraphStep["retry"];
     readonly fanoutGroup?: string;
   }[];
-  readonly stepRuns: ChainStepRun[];
-  readonly outputs: Map<string, ChainStepOutput>;
-  readonly syncPoints: ChainReceiptSyncPoint[];
+  readonly stepRuns: GraphStepRun[];
+  readonly outputs: Map<string, GraphStepOutput>;
+  readonly syncPoints: GraphReceiptSyncPoint[];
   readonly stateRef: {
-    get value(): SequentialChainState;
-    set value(next: SequentialChainState);
+    get value(): SequentialGraphState;
+    set value(next: SequentialGraphState);
   };
   readonly lastReceiptRef: {
     get value(): string | undefined;
@@ -1913,11 +1913,11 @@ function hydrateChainFromJournal(options: {
   if (options.entries.length === 0) {
     return;
   }
-  if (options.chain.steps.some((step) => step.fanoutGroup)) {
+  if (options.graph.steps.some((step) => step.fanoutGroup)) {
     throw new Error("resumeFromRunId currently supports sequential chains only.");
   }
 
-  const stepsById = new Map(options.chain.steps.map((step) => [step.id, step]));
+  const stepsById = new Map(options.graph.steps.map((step) => [step.id, step]));
   const latestEvents = new Map<string, ArtifactEnvelope>();
   const artifactsByStep = new Map<string, ArtifactEnvelope[]>();
   const receiptLinks = new Map<string, string>();
@@ -1944,11 +1944,11 @@ function hydrateChainFromJournal(options: {
   }
 
   let state = options.stateRef.value;
-  for (const chainStep of options.chainSteps) {
+  for (const chainStep of options.graphSteps) {
     const step = stepsById.get(chainStep.id);
     const stepSkill =
-      options.chainStepCache.get(chainStep.id)
-      ?? (step?.run ? buildInlineChainStepSkill(step, options.skillEnvironment) : undefined);
+      options.graphStepCache.get(chainStep.id)
+      ?? (step?.run ? buildInlineGraphStepSkill(step, options.skillEnvironment) : undefined);
     const event = latestEvents.get(chainStep.id);
     if (!step || !stepSkill || !event) {
       break;
@@ -1957,7 +1957,7 @@ function hydrateChainFromJournal(options: {
     const stepFields = reconstructStepFields(stepArtifacts, stepSkill.artifacts);
     const receiptId = receiptLinksForStep(stepArtifacts, receiptLinks)[0];
     if (event.data.kind === "step_started") {
-      state = transitionSequentialChain(state, {
+      state = transitionSequentialGraph(state, {
         type: "start_step",
         stepId: chainStep.id,
         at: entryTimestamp(event),
@@ -1965,12 +1965,12 @@ function hydrateChainFromJournal(options: {
       break;
     }
     if (event.data.kind === "step_succeeded") {
-      state = transitionSequentialChain(state, {
+      state = transitionSequentialGraph(state, {
         type: "start_step",
         stepId: chainStep.id,
         at: entryTimestamp(event),
       });
-      state = transitionSequentialChain(state, {
+      state = transitionSequentialGraph(state, {
         type: "step_succeeded",
         stepId: chainStep.id,
         at: entryTimestamp(event),
@@ -1988,7 +1988,7 @@ function hydrateChainFromJournal(options: {
       });
       options.stepRuns.push({
         stepId: chainStep.id,
-        skill: chainStepReference(step),
+        skill: graphStepReference(step),
         skillPath: step.skill ? step.skill : `inline:${chainStep.id}`,
         runner: step.runner,
         attempt: 1,
@@ -2003,12 +2003,12 @@ function hydrateChainFromJournal(options: {
       continue;
     }
     if (event.data.kind === "step_failed") {
-      state = transitionSequentialChain(state, {
+      state = transitionSequentialGraph(state, {
         type: "start_step",
         stepId: chainStep.id,
         at: entryTimestamp(event),
       });
-      state = transitionSequentialChain(state, {
+      state = transitionSequentialGraph(state, {
         type: "step_failed",
         stepId: chainStep.id,
         at: entryTimestamp(event),
@@ -2095,56 +2095,56 @@ function isDeepEqual(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-export async function runLocalChain(options: RunLocalChainOptions): Promise<RunLocalChainResult> {
-  const chainResolution = await resolveChainExecution(options);
+export async function runLocalGraph(options: RunLocalGraphOptions): Promise<RunLocalGraphResult> {
+  const graphResolution = await resolveGraphExecution(options);
   const receiptDir = options.receiptDir ?? defaultReceiptDir(options.env);
   const startedAt = new Date().toISOString();
   const startedAtMs = Date.now();
   const executionSemantics = normalizeExecutionSemantics(options.executionSemantics, options.inputs ?? {});
-  const chain = chainResolution.chain;
-  const chainDirectory = chainResolution.chainDirectory;
+  const graph = graphResolution.graph;
+  const graphDirectory = graphResolution.graphDirectory;
   const projectMemory =
     options.projectMemory
     ?? (await loadProjectMemory({
       inputs: options.inputs ?? {},
       env: options.env,
-      fallbackStart: chainDirectory,
+      fallbackStart: graphDirectory,
     }));
   const projectConventions =
     options.projectConventions
     ?? (await loadProjectConventions({
       inputs: options.inputs ?? {},
       env: options.env,
-      fallbackStart: chainDirectory,
+      fallbackStart: graphDirectory,
     }));
   const inheritedReceiptMetadata = mergeMetadata(
     projectMemoryReceiptMetadata(projectMemory),
     projectConventionsReceiptMetadata(projectConventions),
     options.receiptMetadata,
   );
-  const chainId = options.runId ?? options.resumeFromRunId ?? uniqueReceiptId("cx");
-  const chainStepCache = await loadChainStepExecutables(chain, chainDirectory, options.registryStore, options.skillCacheDir);
-  const chainGrant = options.chainGrant ?? defaultLocalChainGrant();
-  const chainSteps = chain.steps.map((step) => ({
+  const graphId = options.runId ?? options.resumeFromRunId ?? uniqueReceiptId("gx");
+  const graphStepCache = await loadGraphStepExecutables(graph, graphDirectory, options.registryStore, options.skillCacheDir);
+  const graphGrant = options.graphGrant ?? defaultLocalGraphGrant();
+  const graphSteps = graph.steps.map((step) => ({
     id: step.id,
     contextFrom: unique(step.contextEdges.map((edge) => edge.fromStep)),
-    retry: step.retry ?? chainStepCache.get(step.id)?.retry,
+    retry: step.retry ?? graphStepCache.get(step.id)?.retry,
     fanoutGroup: step.fanoutGroup,
   }));
-  let state = createSequentialChainState(chainId, chainSteps);
-  const stepRuns: ChainStepRun[] = [];
-  const syncPoints: ChainReceiptSyncPoint[] = [];
-  const outputs = new Map<string, ChainStepOutput>();
+  let state = createSequentialGraphState(graphId, graphSteps);
+  const stepRuns: GraphStepRun[] = [];
+  const syncPoints: GraphReceiptSyncPoint[] = [];
+  const outputs = new Map<string, GraphStepOutput>();
   let lastReceiptId: string | undefined;
   let finalOutput = "";
   let finalError: string | undefined;
   if (options.resumeFromRunId) {
-    hydrateChainFromJournal({
+    hydrateGraphFromJournal({
       entries: await readJournalEntries(receiptDir, options.resumeFromRunId),
-      chain,
-      chainStepCache,
+      graph,
+      graphStepCache,
       skillEnvironment: options.skillEnvironment,
-      chainSteps,
+      graphSteps,
       stepRuns,
       outputs,
       syncPoints,
@@ -2152,7 +2152,7 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
         get value() {
           return state;
         },
-        set value(next: SequentialChainState) {
+        set value(next: SequentialGraphState) {
           state = next;
         },
       },
@@ -2169,32 +2169,32 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
 
   await options.caller.report({
     type: "skill_loaded",
-    message: `Loaded chain ${chain.name}.`,
-    data: { chainPath: chainResolution.resolvedChainPath, chainId },
+    message: `Loaded graph ${graph.name}.`,
+    data: { graphPath: graphResolution.resolvedGraphPath, graphId },
   });
 
   while (true) {
-    const plan = planSequentialChainTransition(state, chainSteps, chain.fanoutGroups);
+    const plan = planSequentialGraphTransition(state, graphSteps, graph.fanoutGroups);
     if (plan.type === "complete") {
-      state = transitionSequentialChain(state, { type: "complete" });
+      state = transitionSequentialGraph(state, { type: "complete" });
       break;
     }
 
     if (plan.type === "failed") {
-      finalError = resolveSequentialChainFailureReason(plan, state, stepRuns);
+      finalError = resolveSequentialGraphFailureReason(plan, state, stepRuns);
       if (plan.syncDecision) {
-        syncPoints.push(toChainReceiptSyncPoint(plan.syncDecision, latestFanoutReceiptIds(stepRuns, plan.syncDecision.groupId)));
+        syncPoints.push(toGraphReceiptSyncPoint(plan.syncDecision, latestFanoutReceiptIds(stepRuns, plan.syncDecision.groupId)));
       }
-      state = transitionSequentialChain(state, { type: "fail_chain", error: finalError });
+      state = transitionSequentialGraph(state, { type: "fail_graph", error: finalError });
       break;
     }
 
     if (plan.type === "blocked") {
       finalError = plan.reason;
       if (plan.syncDecision) {
-        syncPoints.push(toChainReceiptSyncPoint(plan.syncDecision, latestFanoutReceiptIds(stepRuns, plan.syncDecision.groupId)));
+        syncPoints.push(toGraphReceiptSyncPoint(plan.syncDecision, latestFanoutReceiptIds(stepRuns, plan.syncDecision.groupId)));
       }
-      state = transitionSequentialChain(state, { type: "fail_chain", error: plan.reason });
+      state = transitionSequentialGraph(state, { type: "fail_graph", error: plan.reason });
       break;
     }
 
@@ -2203,27 +2203,27 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
 
       // Pre-flight: admission and retry checks (synchronous, before parallel execution)
       const branchPreps: Array<{
-        step: ChainStep;
+        step: GraphStep;
         stepSkillPath: string;
         stepSkill: ValidatedSkill;
         stepReference: string;
         stepInputs: Readonly<Record<string, unknown>>;
         context: ReturnType<typeof materializeContext>;
         contextFromReceiptIds: string[];
-        governance: ReturnType<typeof buildChainStepGovernance>;
+        governance: ReturnType<typeof buildGraphStepGovernance>;
         retryContext: ReturnType<typeof buildRetryReceiptContext>;
       }> = [];
 
       for (const stepId of plan.stepIds) {
-        const step = findChainStep(chain, stepId);
+        const step = findGraphStep(graph, stepId);
         const context = materializeContext(step, outputs);
         const contextFromReceiptIds = context
           .map((edge) => edge.receiptId)
           .filter((receiptId): receiptId is string => typeof receiptId === "string");
-        const resolvedStep = await resolveChainStepExecution({
+        const resolvedStep = await resolveGraphStepExecution({
           step,
-          chainDirectory,
-          chainStepCache,
+          graphDirectory,
+          graphStepCache,
           skillEnvironment: options.skillEnvironment,
           registryStore: options.registryStore,
           skillCacheDir: options.skillCacheDir,
@@ -2235,28 +2235,28 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
           ...step.inputs,
           ...Object.fromEntries(context.map((edge) => [edge.input, edge.value])),
         });
-        const governance = buildChainStepGovernance(step, chainGrant);
+        const governance = buildGraphStepGovernance(step, graphGrant);
 
         if (governance.scopeAdmission.status === "deny") {
-          const deniedRun = buildDeniedChainStepRun({
+          const deniedRun = buildDeniedGraphStepRun({
             step, stepSkillPath,
             attempt: plan.attempts[step.id] ?? 1,
             parentReceipt: fanoutParentReceipt,
             fanoutGroup: plan.groupId,
             governance, context,
           });
-          const receipt = await writePolicyDeniedChainReceipt({
+          const receipt = await writePolicyDeniedGraphReceipt({
             receiptDir,
             runxHome: options.runxHome ?? options.env?.RUNX_HOME,
-            chain, chainId, startedAt, startedAtMs,
+            graph, graphId, startedAt, startedAtMs,
             inputs: options.inputs ?? {},
             stepRuns: [...stepRuns, deniedRun],
-            errorMessage: governance.scopeAdmission.reasons?.join("; ") ?? "chain step scope denied",
+            errorMessage: governance.scopeAdmission.reasons?.join("; ") ?? "graph step scope denied",
             executionSemantics,
             receiptMetadata: inheritedReceiptMetadata,
           });
           return {
-            status: "policy_denied", chain, stepId: step.id,
+            status: "policy_denied", graph, stepId: step.id,
             skill: stepSkill,
             reasons: governance.scopeAdmission.reasons ?? [],
             state, receipt,
@@ -2272,7 +2272,7 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
         });
         if (retryAdmission.status === "deny") {
           return {
-            status: "policy_denied", chain, stepId: step.id,
+            status: "policy_denied", graph, stepId: step.id,
             skill: stepSkill, reasons: retryAdmission.reasons, state,
           };
         }
@@ -2292,16 +2292,16 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
 
       for (const prep of branchPreps) {
         const stepStartedAt = new Date().toISOString();
-        state = transitionSequentialChain(state, {
+        state = transitionSequentialGraph(state, {
           type: "start_step",
           stepId: prep.step.id,
           at: stepStartedAt,
         });
-        await reportChainStepStarted(options.caller, prep.step, prep.stepReference);
-        await appendChainStepStartedJournalEntry({
+        await reportGraphStepStarted(options.caller, prep.step, prep.stepReference);
+        await appendGraphStepStartedJournalEntry({
           receiptDir,
-          runId: chainId,
-          topLevelSkillName: chainProducerSkillName(options, chain),
+          runId: graphId,
+          topLevelSkillName: graphProducerSkillName(options, graph),
           step: prep.step,
           reference: prep.stepReference,
           createdAt: stepStartedAt,
@@ -2314,7 +2314,7 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
         fn: async (_signal: AbortSignal) => {
           return await runResolvedSkill({
             skill: prep.stepSkill,
-            skillDirectory: chainStepExecutionDirectory(prep.step, prep.stepSkillPath, chainDirectory),
+            skillDirectory: graphStepExecutionDirectory(prep.step, prep.stepSkillPath, graphDirectory),
             inputs: prep.stepInputs,
             caller: options.caller,
             env: options.env,
@@ -2330,7 +2330,7 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
               prep.retryContext.receiptMetadata,
               governanceReceiptMetadata(prep.step, prep.governance),
             ),
-            orchestrationRunId: chainId,
+            orchestrationRunId: graphId,
             orchestrationStepId: prep.step.id,
             currentContext: prep.context,
             registryStore: options.registryStore,
@@ -2352,7 +2352,7 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
         const result = fanoutResults[i];
 
         if (result.status === "aborted" || !result.value) {
-          state = transitionSequentialChain(state, {
+          state = transitionSequentialGraph(state, {
             type: "step_failed", stepId: prep.step.id,
             at: new Date().toISOString(),
             error: result.error ?? "fanout branch aborted",
@@ -2366,22 +2366,22 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
           pendingResolutionRequests.push(...stepResult.requests);
           pendingStepIds.push(prep.step.id);
           pendingStepLabels.push(prep.step.label ?? prep.step.id);
-          await reportChainStepWaitingResolution(
+          await reportGraphStepWaitingResolution(
             options.caller,
             prep.step,
             prep.stepReference,
             stepResult.requests,
           );
-          await appendPendingChainJournalEntry({
+          await appendPendingGraphJournalEntry({
             receiptDir,
-            runId: chainId,
-            topLevelSkillName: chainProducerSkillName(options, chain),
+            runId: graphId,
+            topLevelSkillName: graphProducerSkillName(options, graph),
             stepId: prep.step.id,
             kind: "step_waiting_resolution",
             detail: {
               request_ids: stepResult.requests.map((request) => request.id),
               resolution_kinds: Array.from(new Set(stepResult.requests.map((request) => request.kind))),
-              runner: chainStepRunner(prep.step) ?? "default",
+              runner: graphStepRunner(prep.step) ?? "default",
               step_label: prep.step.label,
             },
             createdAt: new Date().toISOString(),
@@ -2389,9 +2389,9 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
           continue;
         }
 
-        // In fanout, policy_denied is a branch failure, not a chain halt.
+        // In fanout, policy_denied is a branch failure, not a graph halt.
         if (stepResult.status === "policy_denied") {
-          await reportChainStepCompleted(
+          await reportGraphStepCompleted(
             options.caller,
             prep.step,
             prep.stepReference,
@@ -2402,14 +2402,14 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
           );
           await appendJournalEntries({
             receiptDir,
-            runId: chainId,
+            runId: graphId,
             entries: [
               createRunEventEntry({
-                runId: chainId,
+                runId: graphId,
                 stepId: prep.step.id,
                 producer: {
-                  skill: chainProducerSkillName(options, chain),
-                  runner: "chain",
+                  skill: graphProducerSkillName(options, graph),
+                  runner: "graph",
                 },
                 kind: "step_failed",
                 status: "failure",
@@ -2419,7 +2419,7 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
               }),
             ],
           });
-          state = transitionSequentialChain(state, {
+          state = transitionSequentialGraph(state, {
             type: "step_failed", stepId: prep.step.id,
             at: new Date().toISOString(),
             error: `policy denied: ${stepResult.reasons.join("; ")}`,
@@ -2431,7 +2431,7 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
         const artifactResult = materializeArtifacts({
           stdout: stepResult.execution.stdout,
           contract: stepResult.skill.artifacts,
-          runId: chainId,
+          runId: graphId,
           stepId: prep.step.id,
           producer: {
             skill: stepResult.skill.name,
@@ -2439,11 +2439,11 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
           },
           createdAt: stepCompletedAt,
         });
-        const stepRun: ChainStepRun = {
+        const stepRun: GraphStepRun = {
           stepId: prep.step.id,
           skill: prep.stepReference,
           skillPath: prep.stepSkillPath,
-          runner: chainStepRunner(prep.step),
+          runner: graphStepRunner(prep.step),
           attempt: plan.attempts[prep.step.id] ?? 1,
           status: stepResult.status,
           receiptId: stepResult.receipt.id,
@@ -2476,33 +2476,33 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
           artifacts: artifactResult.envelopes,
         });
         finalOutput = stepResult.execution.stdout;
-        await appendChainJournalEntries({
+        await appendGraphJournalEntries({
           receiptDir,
-          runId: chainId,
-          topLevelSkillName: chainProducerSkillName(options, chain),
+          runId: graphId,
+          topLevelSkillName: graphProducerSkillName(options, graph),
           stepId: prep.step.id,
           skill: stepResult.skill,
           artifactEnvelopes: artifactResult.envelopes,
           receiptId: stepResult.receipt.id,
           status: stepResult.status,
           detail: {
-            runner: chainStepRunner(prep.step) ?? "default",
+            runner: graphStepRunner(prep.step) ?? "default",
           },
           createdAt: stepCompletedAt,
         });
 
         state = stepResult.status === "success"
-          ? transitionSequentialChain(state, {
+          ? transitionSequentialGraph(state, {
               type: "step_succeeded", stepId: prep.step.id,
               at: stepCompletedAt, receiptId: stepResult.receipt.id,
               outputs: artifactResult.fields,
             })
-          : transitionSequentialChain(state, {
+          : transitionSequentialGraph(state, {
               type: "step_failed", stepId: prep.step.id,
               at: stepCompletedAt,
               error: stepResult.execution.errorMessage ?? stepResult.execution.stderr,
             });
-        await reportChainStepCompleted(
+        await reportGraphStepCompleted(
           options.caller,
           prep.step,
           prep.stepReference,
@@ -2516,36 +2516,36 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
       if (pendingResolutionRequests.length > 0) {
         return {
           status: "needs_resolution",
-          chain,
+          graph,
           stepIds: pendingStepIds,
           stepLabels: pendingStepLabels,
-          skillPath: branchPreps.find((prep) => pendingStepIds.includes(prep.step.id))?.stepSkillPath ?? chainDirectory,
+          skillPath: branchPreps.find((prep) => pendingStepIds.includes(prep.step.id))?.stepSkillPath ?? graphDirectory,
           skill: branchPreps.find((prep) => pendingStepIds.includes(prep.step.id))?.stepSkill ?? branchPreps[0]!.stepSkill,
           requests: pendingResolutionRequests,
           state,
-          runId: chainId,
+          runId: graphId,
         };
       }
 
-      const followUpPlan = planSequentialChainTransition(state, chainSteps, chain.fanoutGroups);
+      const followUpPlan = planSequentialGraphTransition(state, graphSteps, graph.fanoutGroups);
       if (followUpPlan.type === "run_fanout" && followUpPlan.groupId === plan.groupId) {
         continue;
       }
       if ((followUpPlan.type === "failed" || followUpPlan.type === "blocked") && followUpPlan.syncDecision?.groupId === plan.groupId) {
         finalError =
           followUpPlan.type === "failed"
-            ? resolveSequentialChainFailureReason(followUpPlan, state, stepRuns)
+            ? resolveSequentialGraphFailureReason(followUpPlan, state, stepRuns)
             : followUpPlan.reason;
-        syncPoints.push(toChainReceiptSyncPoint(followUpPlan.syncDecision, latestFanoutReceiptIds(stepRuns, plan.groupId)));
-        state = transitionSequentialChain(state, { type: "fail_chain", error: finalError });
+        syncPoints.push(toGraphReceiptSyncPoint(followUpPlan.syncDecision, latestFanoutReceiptIds(stepRuns, plan.groupId)));
+        state = transitionSequentialGraph(state, { type: "fail_graph", error: finalError });
         break;
       }
 
-      const policy = chain.fanoutGroups[plan.groupId];
+      const policy = graph.fanoutGroups[plan.groupId];
       if (policy) {
         const decision = evaluateFanoutSync(
           policy,
-          chainSteps
+          graphSteps
             .filter((step) => step.fanoutGroup === plan.groupId)
             .map((step) => {
               const stepState = state.steps.find((candidate) => candidate.stepId === step.id);
@@ -2556,7 +2556,7 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
               };
             }),
         );
-        syncPoints.push(toChainReceiptSyncPoint(decision, latestFanoutReceiptIds(stepRuns, plan.groupId)));
+        syncPoints.push(toGraphReceiptSyncPoint(decision, latestFanoutReceiptIds(stepRuns, plan.groupId)));
       }
 
       const groupReceiptIds = latestFanoutReceiptIds(stepRuns, plan.groupId);
@@ -2564,15 +2564,15 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
       continue;
     }
 
-    const step = findChainStep(chain, plan.stepId);
+    const step = findGraphStep(graph, plan.stepId);
     const context = materializeContext(step, outputs);
     const contextFromReceiptIds = context
       .map((edge) => edge.receiptId)
       .filter((receiptId): receiptId is string => typeof receiptId === "string");
-    const resolvedStep = await resolveChainStepExecution({
+    const resolvedStep = await resolveGraphStepExecution({
       step,
-      chainDirectory,
-      chainStepCache,
+      graphDirectory,
+      graphStepCache,
       skillEnvironment: options.skillEnvironment,
       registryStore: options.registryStore,
       skillCacheDir: options.skillCacheDir,
@@ -2584,10 +2584,10 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
       ...step.inputs,
       ...Object.fromEntries(context.map((edge) => [edge.input, edge.value])),
     });
-    const governance = buildChainStepGovernance(step, chainGrant);
-    const transitionGate = admitChainTransition(chain.policy, step.id, outputs);
+    const governance = buildGraphStepGovernance(step, graphGrant);
+    const transitionGate = admitGraphTransition(graph.policy, step.id, outputs);
     if (transitionGate.status === "deny") {
-      const deniedRun = buildDeniedChainStepRun({
+      const deniedRun = buildDeniedGraphStepRun({
         step,
         stepSkillPath,
         attempt: plan.attempt,
@@ -2596,11 +2596,11 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
         context,
         stderr: transitionGate.reason,
       });
-      const receipt = await writePolicyDeniedChainReceipt({
+      const receipt = await writePolicyDeniedGraphReceipt({
         receiptDir,
         runxHome: options.runxHome ?? options.env?.RUNX_HOME,
-        chain,
-        chainId,
+        graph,
+        graphId,
         startedAt,
         startedAtMs,
         inputs: options.inputs ?? {},
@@ -2611,7 +2611,7 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
       });
       return {
         status: "policy_denied",
-        chain,
+        graph,
         stepId: step.id,
         skill: stepSkill,
         reasons: [transitionGate.reason],
@@ -2620,7 +2620,7 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
       };
     }
     if (governance.scopeAdmission.status === "deny") {
-      const deniedRun = buildDeniedChainStepRun({
+      const deniedRun = buildDeniedGraphStepRun({
         step,
         stepSkillPath,
         attempt: plan.attempt,
@@ -2628,22 +2628,22 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
         governance,
         context,
       });
-      const receipt = await writePolicyDeniedChainReceipt({
+      const receipt = await writePolicyDeniedGraphReceipt({
         receiptDir,
         runxHome: options.runxHome ?? options.env?.RUNX_HOME,
-        chain,
-        chainId,
+        graph,
+        graphId,
         startedAt,
         startedAtMs,
         inputs: options.inputs ?? {},
         stepRuns: [...stepRuns, deniedRun],
-        errorMessage: governance.scopeAdmission.reasons?.join("; ") ?? "chain step scope denied",
+        errorMessage: governance.scopeAdmission.reasons?.join("; ") ?? "graph step scope denied",
         executionSemantics,
         receiptMetadata: inheritedReceiptMetadata,
       });
       return {
         status: "policy_denied",
-        chain,
+        graph,
         stepId: step.id,
         skill: stepSkill,
         reasons: governance.scopeAdmission.reasons ?? [],
@@ -2662,7 +2662,7 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
     if (retryAdmission.status === "deny") {
       return {
         status: "policy_denied",
-        chain,
+        graph,
         stepId: step.id,
         skill: stepSkill,
         reasons: retryAdmission.reasons,
@@ -2671,16 +2671,16 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
     }
 
     const stepStartedAt = new Date().toISOString();
-    state = transitionSequentialChain(state, {
+    state = transitionSequentialGraph(state, {
       type: "start_step",
       stepId: step.id,
       at: stepStartedAt,
     });
-    await reportChainStepStarted(options.caller, step, resolvedStep.reference);
-    await appendChainStepStartedJournalEntry({
+    await reportGraphStepStarted(options.caller, step, resolvedStep.reference);
+    await appendGraphStepStartedJournalEntry({
       receiptDir,
-      runId: chainId,
-      topLevelSkillName: chainProducerSkillName(options, chain),
+      runId: graphId,
+      topLevelSkillName: graphProducerSkillName(options, graph),
       step,
       reference: resolvedStep.reference,
       createdAt: stepStartedAt,
@@ -2688,7 +2688,7 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
 
     const stepResult = await runResolvedSkill({
       skill: stepSkill,
-      skillDirectory: chainStepExecutionDirectory(step, stepSkillPath, chainDirectory),
+      skillDirectory: graphStepExecutionDirectory(step, stepSkillPath, graphDirectory),
       inputs: stepInputs,
       caller: options.caller,
       env: options.env,
@@ -2704,7 +2704,7 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
         retryContext.receiptMetadata,
         governanceReceiptMetadata(step, governance),
       ),
-      orchestrationRunId: chainId,
+      orchestrationRunId: graphId,
       orchestrationStepId: step.id,
       currentContext: context,
       registryStore: options.registryStore,
@@ -2714,53 +2714,53 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
     });
 
     if (stepResult.status === "needs_resolution") {
-      await reportChainStepWaitingResolution(
+      await reportGraphStepWaitingResolution(
         options.caller,
         step,
         resolvedStep.reference,
         stepResult.requests,
       );
-      await appendPendingChainJournalEntry({
+      await appendPendingGraphJournalEntry({
         receiptDir,
-        runId: chainId,
-        topLevelSkillName: chainProducerSkillName(options, chain),
+        runId: graphId,
+        topLevelSkillName: graphProducerSkillName(options, graph),
         stepId: step.id,
         kind: "step_waiting_resolution",
         detail: {
           request_ids: stepResult.requests.map((request) => request.id),
           resolution_kinds: Array.from(new Set(stepResult.requests.map((request) => request.kind))),
-          runner: chainStepRunner(step) ?? "default",
+          runner: graphStepRunner(step) ?? "default",
           step_label: step.label,
         },
         createdAt: new Date().toISOString(),
       });
       return {
         status: "needs_resolution",
-        chain,
+        graph,
         stepIds: [step.id],
         stepLabels: [step.label ?? step.id],
         skillPath: stepSkillPath,
         skill: stepSkill,
         requests: stepResult.requests,
         state,
-        runId: chainId,
+        runId: graphId,
       };
     }
 
     if (stepResult.status === "policy_denied") {
-      await reportChainStepCompleted(options.caller, step, resolvedStep.reference, "failure", {
+      await reportGraphStepCompleted(options.caller, step, resolvedStep.reference, "failure", {
         reason: `policy denied: ${stepResult.reasons.join("; ")}`,
       });
       await appendJournalEntries({
         receiptDir,
-        runId: chainId,
+        runId: graphId,
         entries: [
           createRunEventEntry({
-            runId: chainId,
+            runId: graphId,
             stepId: step.id,
             producer: {
-              skill: chainProducerSkillName(options, chain),
-              runner: "chain",
+              skill: graphProducerSkillName(options, graph),
+              runner: "graph",
             },
             kind: "step_failed",
             status: "failure",
@@ -2772,11 +2772,11 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
       });
       return {
         status: "policy_denied",
-        chain,
+        graph,
         stepId: step.id,
         skill: stepResult.skill,
         reasons: stepResult.reasons,
-        state: transitionSequentialChain(state, {
+        state: transitionSequentialGraph(state, {
           type: "step_failed",
           stepId: step.id,
           at: new Date().toISOString(),
@@ -2789,7 +2789,7 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
     const artifactResult = materializeArtifacts({
       stdout: stepResult.execution.stdout,
       contract: stepResult.skill.artifacts,
-      runId: chainId,
+      runId: graphId,
       stepId: step.id,
       producer: {
         skill: stepResult.skill.name,
@@ -2797,11 +2797,11 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
       },
       createdAt: stepCompletedAt,
     });
-    const stepRun: ChainStepRun = {
+    const stepRun: GraphStepRun = {
       stepId: step.id,
       skill: resolvedStep.reference,
       skillPath: stepSkillPath,
-      runner: chainStepRunner(step),
+      runner: graphStepRunner(step),
       attempt: plan.attempt,
       status: stepResult.status,
       receiptId: stepResult.receipt.id,
@@ -2836,52 +2836,52 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
     });
     lastReceiptId = stepResult.receipt.id;
     finalOutput = stepResult.execution.stdout;
-    await appendChainJournalEntries({
+    await appendGraphJournalEntries({
       receiptDir,
-      runId: chainId,
-      topLevelSkillName: chainProducerSkillName(options, chain),
+      runId: graphId,
+      topLevelSkillName: graphProducerSkillName(options, graph),
       stepId: step.id,
       skill: stepResult.skill,
       artifactEnvelopes: artifactResult.envelopes,
       receiptId: stepResult.receipt.id,
       status: stepResult.status,
       detail: {
-        runner: chainStepRunner(step) ?? "default",
+        runner: graphStepRunner(step) ?? "default",
       },
       createdAt: stepCompletedAt,
     });
 
     state =
       stepResult.status === "success"
-        ? transitionSequentialChain(state, {
+        ? transitionSequentialGraph(state, {
             type: "step_succeeded",
             stepId: step.id,
             at: stepCompletedAt,
             receiptId: stepResult.receipt.id,
             outputs: artifactResult.fields,
           })
-        : transitionSequentialChain(state, {
+        : transitionSequentialGraph(state, {
             type: "step_failed",
             stepId: step.id,
             at: stepCompletedAt,
             error: stepResult.execution.errorMessage ?? stepResult.execution.stderr,
           });
-    await reportChainStepCompleted(options.caller, step, resolvedStep.reference, stepResult.status, {
+    await reportGraphStepCompleted(options.caller, step, resolvedStep.reference, stepResult.status, {
       receiptId: stepResult.receipt.id,
     });
   }
 
   const completedAt = new Date().toISOString();
-  const receipt = await writeLocalChainReceipt({
+  const receipt = await writeLocalGraphReceipt({
     receiptDir,
     runxHome: options.runxHome ?? options.env?.RUNX_HOME,
-    chainId,
-    chainName: chain.name,
-    owner: chain.owner,
+    graphId,
+    graphName: graph.name,
+    owner: graph.owner,
     status: state.status === "succeeded" ? "success" : "failure",
     inputs: options.inputs ?? {},
     output: finalOutput,
-    steps: stepRuns.map(toChainReceiptStep),
+    steps: stepRuns.map(toGraphReceiptStep),
     syncPoints,
     startedAt,
     completedAt,
@@ -2897,13 +2897,13 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
   });
   await appendJournalEntries({
     receiptDir,
-    runId: chainId,
+    runId: graphId,
     entries: [
       createRunEventEntry({
-        runId: chainId,
+        runId: graphId,
         producer: {
-          skill: chainProducerSkillName(options, chain),
-          runner: "chain",
+          skill: graphProducerSkillName(options, graph),
+          runner: "graph",
         },
         kind: "chain_completed",
         status: receipt.status,
@@ -2918,7 +2918,7 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
 
   return {
     status: receipt.status,
-    chain,
+    graph,
     state,
     steps: stepRuns,
     receipt,
@@ -2927,10 +2927,10 @@ export async function runLocalChain(options: RunLocalChainOptions): Promise<RunL
   };
 }
 
-function resolveSequentialChainFailureReason(
-  plan: Extract<SequentialChainPlan, { type: "failed" }>,
-  state: SequentialChainState,
-  stepRuns: readonly ChainStepRun[],
+function resolveSequentialGraphFailureReason(
+  plan: Extract<SequentialGraphPlan, { type: "failed" }>,
+  state: SequentialGraphState,
+  stepRuns: readonly GraphStepRun[],
 ): string {
   const stepState = state.steps.find((candidate) => candidate.stepId === plan.stepId);
   const stateError = stepState?.error?.trim();
@@ -2949,14 +2949,14 @@ function resolveSequentialChainFailureReason(
   return plan.reason;
 }
 
-export async function inspectLocalChain(options: InspectLocalChainOptions): Promise<InspectLocalChainResult> {
+export async function inspectLocalGraph(options: InspectLocalGraphOptions): Promise<InspectLocalGraphResult> {
   const { receipt, verification } = await readVerifiedLocalReceipt(
     options.receiptDir ?? defaultReceiptDir(options.env),
-    options.chainId,
+    options.graphId,
     options.runxHome ?? options.env?.RUNX_HOME,
   );
-  if (receipt.kind !== "chain_execution") {
-    throw new Error(`Receipt ${options.chainId} is not a chain execution receipt.`);
+  if (receipt.kind !== "graph_execution") {
+    throw new Error(`Receipt ${options.graphId} is not a graph execution receipt.`);
   }
 
   return {
@@ -2964,7 +2964,7 @@ export async function inspectLocalChain(options: InspectLocalChainOptions): Prom
     verification,
     summary: {
       id: receipt.id,
-      name: receipt.subject.chain_name,
+      name: receipt.subject.graph_name,
       status: receipt.status,
       verification,
       steps: receipt.steps.map((step) => ({
@@ -3080,13 +3080,13 @@ function summarizeLocalReceipt(receipt: LocalReceipt, verification: ReceiptVerif
     kind: receipt.kind,
     status: receipt.status,
     verification,
-    name: receipt.subject.chain_name,
+    name: receipt.subject.graph_name,
     startedAt: receipt.started_at,
     completedAt: receipt.completed_at,
   };
 }
 
-interface ChainStepOutput {
+interface GraphStepOutput {
   readonly status: "success" | "failure";
   readonly stdout: string;
   readonly stderr: string;
@@ -3105,32 +3105,32 @@ interface MaterializedContextEdge {
   readonly value: unknown;
 }
 
-function findChainStep(chain: ChainDefinition, stepId: string): ChainStep {
-  const step = chain.steps.find((candidate) => candidate.id === stepId);
+function findGraphStep(graph: ExecutionGraph, stepId: string): GraphStep {
+  const step = graph.steps.find((candidate) => candidate.id === stepId);
   if (!step) {
     throw new Error(`Chain step '${stepId}' is missing.`);
   }
   return step;
 }
 
-function chainStepReference(step: ChainStep): string {
+function graphStepReference(step: GraphStep): string {
   return step.skill ?? step.tool ?? `run:${String(step.run?.type ?? "unknown")}`;
 }
 
-function chainStepRunner(step: ChainStep): string | undefined {
+function graphStepRunner(step: GraphStep): string | undefined {
   if (step.tool) {
     return "tool";
   }
   return typeof step.run?.type === "string" ? step.run.type : step.runner;
 }
 
-function chainProducerSkillName(options: RunLocalChainOptions, chain: ChainDefinition): string {
-  return options.skillEnvironment?.name ?? chain.name;
+function graphProducerSkillName(options: RunLocalGraphOptions, graph: ExecutionGraph): string {
+  return options.skillEnvironment?.name ?? graph.name;
 }
 
 function materializeContext(
-  step: ChainStep,
-  outputs: ReadonlyMap<string, ChainStepOutput>,
+  step: GraphStep,
+  outputs: ReadonlyMap<string, GraphStepOutput>,
 ): readonly MaterializedContextEdge[] {
   return step.contextEdges.map((edge) => {
     const sourceOutput = outputs.get(edge.fromStep);
@@ -3149,7 +3149,7 @@ function materializeContext(
   });
 }
 
-function resolveOutputArtifact(output: ChainStepOutput, outputPath: string): ArtifactEnvelope | undefined {
+function resolveOutputArtifact(output: GraphStepOutput, outputPath: string): ArtifactEnvelope | undefined {
   const [field] = outputPath.split(".", 1);
   if (!field) {
     return undefined;
@@ -3158,7 +3158,7 @@ function resolveOutputArtifact(output: ChainStepOutput, outputPath: string): Art
   return isArtifactEnvelopeValue(candidate) ? candidate : undefined;
 }
 
-function resolveOutputPath(output: ChainStepOutput, outputPath: string): unknown {
+function resolveOutputPath(output: GraphStepOutput, outputPath: string): unknown {
   const record: Record<string, unknown> = {
     ...output.fields,
     status: output.status,
@@ -3482,18 +3482,18 @@ async function prepareAgentContext(options: {
   };
 }
 
-function defaultLocalChainGrant(): ChainScopeGrant {
+function defaultLocalGraphGrant(): GraphScopeGrant {
   return {
     grant_id: "local-default",
     scopes: ["*"],
   };
 }
 
-function buildChainStepGovernance(step: ChainStep, chainGrant: ChainScopeGrant): ChainStepGovernance {
-  const decision = admitChainStepScopes({
+function buildGraphStepGovernance(step: GraphStep, graphGrant: GraphScopeGrant): GraphStepGovernance {
+  const decision = admitGraphStepScopes({
     stepId: step.id,
     requestedScopes: step.scopes,
-    grant: chainGrant,
+    grant: graphGrant,
   });
   return {
     scopeAdmission: {
@@ -3507,13 +3507,13 @@ function buildChainStepGovernance(step: ChainStep, chainGrant: ChainScopeGrant):
 }
 
 function governanceReceiptMetadata(
-  step: ChainStep,
-  governance: ChainStepGovernance,
+  step: GraphStep,
+  governance: GraphStepGovernance,
 ): Readonly<Record<string, unknown>> {
   return {
     chain_governance: {
       step_id: step.id,
-      selected_runner: chainStepRunner(step) ?? "default",
+      selected_runner: graphStepRunner(step) ?? "default",
       scope_admission: {
         status: governance.scopeAdmission.status,
         requested_scopes: governance.scopeAdmission.requestedScopes,
@@ -3525,25 +3525,25 @@ function governanceReceiptMetadata(
   };
 }
 
-function buildDeniedChainStepRun(options: {
-  readonly step: ChainStep;
+function buildDeniedGraphStepRun(options: {
+  readonly step: GraphStep;
   readonly stepSkillPath: string;
   readonly attempt: number;
   readonly parentReceipt?: string;
   readonly fanoutGroup?: string;
-  readonly governance: ChainStepGovernance;
+  readonly governance: GraphStepGovernance;
   readonly context: readonly MaterializedContextEdge[];
   readonly stderr?: string;
-}): ChainStepRun {
+}): GraphStepRun {
   return {
     stepId: options.step.id,
-    skill: chainStepReference(options.step),
+    skill: graphStepReference(options.step),
     skillPath: options.stepSkillPath,
-    runner: chainStepRunner(options.step),
+    runner: graphStepRunner(options.step),
     attempt: options.attempt,
     status: "failure",
     stdout: "",
-    stderr: options.stderr ?? options.governance.scopeAdmission.reasons?.join("; ") ?? "chain step scope denied",
+    stderr: options.stderr ?? options.governance.scopeAdmission.reasons?.join("; ") ?? "graph step scope denied",
     parentReceipt: options.parentReceipt,
     fanoutGroup: options.fanoutGroup,
     governance: options.governance,
@@ -3559,29 +3559,29 @@ function buildDeniedChainStepRun(options: {
   };
 }
 
-async function writePolicyDeniedChainReceipt(options: {
+async function writePolicyDeniedGraphReceipt(options: {
   readonly receiptDir: string;
   readonly runxHome?: string;
-  readonly chain: ChainDefinition;
-  readonly chainId: string;
+  readonly graph: ExecutionGraph;
+  readonly graphId: string;
   readonly startedAt: string;
   readonly startedAtMs: number;
   readonly inputs: Readonly<Record<string, unknown>>;
-  readonly stepRuns: readonly ChainStepRun[];
+  readonly stepRuns: readonly GraphStepRun[];
   readonly errorMessage: string;
   readonly executionSemantics: NormalizedExecutionSemantics;
   readonly receiptMetadata?: Readonly<Record<string, unknown>>;
-}): Promise<LocalChainReceipt> {
-  return await writeLocalChainReceipt({
+}): Promise<LocalGraphReceipt> {
+  return await writeLocalGraphReceipt({
     receiptDir: options.receiptDir,
     runxHome: options.runxHome,
-    chainId: options.chainId,
-    chainName: options.chain.name,
-    owner: options.chain.owner,
+    graphId: options.graphId,
+    graphName: options.graph.name,
+    owner: options.graph.owner,
     status: "failure",
     inputs: options.inputs,
     output: "",
-    steps: options.stepRuns.map(toChainReceiptStep),
+    steps: options.stepRuns.map(toGraphReceiptStep),
     startedAt: options.startedAt,
     completedAt: new Date().toISOString(),
     durationMs: Date.now() - options.startedAtMs,
@@ -3596,7 +3596,7 @@ async function writePolicyDeniedChainReceipt(options: {
   });
 }
 
-function toChainReceiptStep(step: ChainStepRun): ChainReceiptStep {
+function toGraphReceiptStep(step: GraphStepRun): GraphReceiptStep {
   return {
     step_id: step.stepId,
     attempt: step.attempt,
@@ -3631,7 +3631,7 @@ function toChainReceiptStep(step: ChainStepRun): ChainReceiptStep {
   };
 }
 
-function toReceiptGovernance(governance: ChainStepGovernance): ChainReceiptStep["governance"] {
+function toReceiptGovernance(governance: GraphStepGovernance): GraphReceiptStep["governance"] {
   return {
     scope_admission: {
       status: governance.scopeAdmission.status,
@@ -3643,10 +3643,10 @@ function toReceiptGovernance(governance: ChainStepGovernance): ChainReceiptStep[
   };
 }
 
-function toChainReceiptSyncPoint(
+function toGraphReceiptSyncPoint(
   decision: FanoutSyncDecision,
   branchReceipts: readonly string[],
-): ChainReceiptSyncPoint {
+): GraphReceiptSyncPoint {
   return {
     group_id: decision.groupId,
     strategy: decision.strategy,
@@ -3662,7 +3662,7 @@ function toChainReceiptSyncPoint(
   };
 }
 
-function latestFanoutReceiptIds(stepRuns: readonly ChainStepRun[], groupId: string): readonly string[] {
+function latestFanoutReceiptIds(stepRuns: readonly GraphStepRun[], groupId: string): readonly string[] {
   const latest = new Map<string, string>();
   for (const stepRun of stepRuns) {
     if (stepRun.fanoutGroup === groupId && stepRun.receiptId) {
@@ -3721,16 +3721,16 @@ function validatedToolToExecutableSkill(tool: ValidatedTool): ValidatedSkill {
   };
 }
 
-async function resolveChainStepSkillPath(
+async function resolveGraphStepSkillPath(
   stepSkill: string,
-  chainDirectory: string,
+  graphDirectory: string,
   registryStore: RegistryStore | undefined,
   skillCacheDir: string | undefined,
 ): Promise<string> {
   if (isRegistryRef(stepSkill)) {
     if (!registryStore) {
       throw new Error(
-        `Registry ref '${stepSkill}' used in chain step, but no registry store is configured. Pass registryStore to runLocalChain, or set RUNX_REGISTRY_URL / RUNX_REGISTRY_DIR to a local registry path.`,
+        `Registry ref '${stepSkill}' used in graph step, but no registry store is configured. Pass registryStore to runLocalGraph, or set RUNX_REGISTRY_URL / RUNX_REGISTRY_DIR to a local registry path.`,
       );
     }
     const materialized = await materializeRegistrySkill({
@@ -3740,33 +3740,33 @@ async function resolveChainStepSkillPath(
     });
     return materialized.skillDirectory;
   }
-  return path.resolve(chainDirectory, stepSkill);
+  return path.resolve(graphDirectory, stepSkill);
 }
 
-async function loadChainStepExecutables(
-  chain: ChainDefinition,
-  chainDirectory: string,
+async function loadGraphStepExecutables(
+  graph: ExecutionGraph,
+  graphDirectory: string,
   registryStore?: RegistryStore,
   skillCacheDir?: string,
 ): Promise<ReadonlyMap<string, ValidatedSkill>> {
   const skills = new Map<string, ValidatedSkill>();
-  for (const step of chain.steps) {
+  for (const step of graph.steps) {
     if (step.skill) {
-      const resolvedPath = await resolveChainStepSkillPath(step.skill, chainDirectory, registryStore, skillCacheDir);
+      const resolvedPath = await resolveGraphStepSkillPath(step.skill, graphDirectory, registryStore, skillCacheDir);
       skills.set(step.id, await loadValidatedSkill(resolvedPath, step.runner));
       continue;
     }
     if (step.tool) {
-      skills.set(step.id, await loadValidatedTool(step.tool, chainDirectory));
+      skills.set(step.id, await loadValidatedTool(step.tool, graphDirectory));
     }
   }
   return skills;
 }
 
-async function resolveChainStepExecution(options: {
-  readonly step: ChainStep;
-  readonly chainDirectory: string;
-  readonly chainStepCache: ReadonlyMap<string, ValidatedSkill>;
+async function resolveGraphStepExecution(options: {
+  readonly step: GraphStep;
+  readonly graphDirectory: string;
+  readonly graphStepCache: ReadonlyMap<string, ValidatedSkill>;
   readonly skillEnvironment?: {
     readonly name: string;
     readonly body: string;
@@ -3779,15 +3779,15 @@ async function resolveChainStepExecution(options: {
   readonly reference: string;
 }> {
   if (options.step.skill) {
-    const resolvedPath = await resolveChainStepSkillPath(
+    const resolvedPath = await resolveGraphStepSkillPath(
       options.step.skill,
-      options.chainDirectory,
+      options.graphDirectory,
       options.registryStore,
       options.skillCacheDir,
     );
     return {
       skill:
-        options.chainStepCache.get(options.step.id)
+        options.graphStepCache.get(options.step.id)
         ?? (await loadValidatedSkill(resolvedPath, options.step.runner)),
       skillPath: resolvedPath,
       reference: options.step.skill,
@@ -3795,9 +3795,9 @@ async function resolveChainStepExecution(options: {
   }
 
   if (options.step.tool) {
-    const resolvedTool = await resolveToolReference(options.step.tool, options.chainDirectory);
+    const resolvedTool = await resolveToolReference(options.step.tool, options.graphDirectory);
     return {
-      skill: options.chainStepCache.get(options.step.id) ?? (await loadValidatedTool(options.step.tool, options.chainDirectory)),
+      skill: options.graphStepCache.get(options.step.id) ?? (await loadValidatedTool(options.step.tool, options.graphDirectory)),
       skillPath: resolvedTool.toolPath,
       reference: options.step.tool,
     };
@@ -3808,13 +3808,13 @@ async function resolveChainStepExecution(options: {
   }
 
   return {
-    skill: buildInlineChainStepSkill(options.step, options.skillEnvironment),
+    skill: buildInlineGraphStepSkill(options.step, options.skillEnvironment),
     skillPath: `inline:${options.step.id}`,
     reference: `run:${String(options.step.run.type)}`,
   };
 }
 
-function composeInlineStepBody(skillBody: string | undefined, step: ChainStep): string {
+function composeInlineStepBody(skillBody: string | undefined, step: GraphStep): string {
   const parts = [
     skillBody?.trim(),
     step.instructions?.trim(),
@@ -3822,8 +3822,8 @@ function composeInlineStepBody(skillBody: string | undefined, step: ChainStep): 
   return parts.join("\n\n");
 }
 
-function buildInlineChainStepSkill(
-  step: ChainStep,
+function buildInlineGraphStepSkill(
+  step: GraphStep,
   skillEnvironment?: {
     readonly name: string;
     readonly body: string;
@@ -3834,7 +3834,7 @@ function buildInlineChainStepSkill(
   }
   const body = composeInlineStepBody(skillEnvironment?.body, step);
   return {
-    name: `${skillEnvironment?.name ?? "chain"}.${step.id}`,
+    name: `${skillEnvironment?.name ?? "graph"}.${step.id}`,
     description: step.instructions,
     body,
     source: validateSkillSource(step.run),
@@ -3854,7 +3854,7 @@ function buildInlineChainStepSkill(
 }
 
 function buildRetryReceiptContext(
-  step: ChainStep,
+  step: GraphStep,
   inputs: Readonly<Record<string, unknown>>,
   attempt: number,
   skill: ValidatedSkill,

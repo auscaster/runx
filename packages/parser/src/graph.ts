@@ -1,16 +1,16 @@
 import { parseDocument } from "yaml";
 
-export interface RawChainIR {
+export interface RawGraphIR {
   readonly document: Record<string, unknown>;
 }
 
-export interface ChainContextEdge {
+export interface GraphContextEdge {
   readonly input: string;
   readonly fromStep: string;
   readonly output: string;
 }
 
-export interface ChainRetryPolicy {
+export interface GraphRetryPolicy {
   readonly maxAttempts: number;
   readonly backoffMs?: number;
 }
@@ -43,18 +43,18 @@ export interface FanoutGroupPolicy {
   readonly conflictGates: readonly FanoutConflictGate[];
 }
 
-export interface ChainTransitionGate {
+export interface GraphTransitionGate {
   readonly to: string;
   readonly field: string;
   readonly equals?: unknown;
   readonly notEquals?: unknown;
 }
 
-export interface ChainPolicy {
-  readonly transitions: readonly ChainTransitionGate[];
+export interface GraphPolicy {
+  readonly transitions: readonly GraphTransitionGate[];
 }
 
-export interface ChainStep {
+export interface GraphStep {
   readonly id: string;
   readonly label?: string;
   readonly skill?: string;
@@ -65,48 +65,48 @@ export interface ChainStep {
   readonly runner?: string;
   readonly inputs: Readonly<Record<string, unknown>>;
   readonly context: Readonly<Record<string, string>>;
-  readonly contextEdges: readonly ChainContextEdge[];
+  readonly contextEdges: readonly GraphContextEdge[];
   readonly scopes: readonly string[];
   readonly allowedTools?: readonly string[];
-  readonly retry?: ChainRetryPolicy;
+  readonly retry?: GraphRetryPolicy;
   readonly policy?: Readonly<Record<string, unknown>>;
   readonly fanoutGroup?: string;
   readonly mutating: boolean;
   readonly idempotencyKey?: string;
 }
 
-export interface ChainDefinition {
+export interface ExecutionGraph {
   readonly name: string;
   readonly owner?: string;
-  readonly steps: readonly ChainStep[];
+  readonly steps: readonly GraphStep[];
   readonly fanoutGroups: Readonly<Record<string, FanoutGroupPolicy>>;
-  readonly policy?: ChainPolicy;
-  readonly raw: RawChainIR;
+  readonly policy?: GraphPolicy;
+  readonly raw: RawGraphIR;
 }
 
-export class ChainParseError extends Error {
+export class GraphParseError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "ChainParseError";
+    this.name = "GraphParseError";
   }
 }
 
-export class ChainValidationError extends Error {
+export class GraphValidationError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "ChainValidationError";
+    this.name = "GraphValidationError";
   }
 }
 
-export function parseChainYaml(source: string): RawChainIR {
+export function parseGraphYaml(source: string): RawGraphIR {
   const document = parseDocument(source, { prettyErrors: false });
   if (document.errors.length > 0) {
-    throw new ChainParseError(document.errors.map((error) => error.message).join("; "));
+    throw new GraphParseError(document.errors.map((error) => error.message).join("; "));
   }
 
   const parsed = document.toJS() as unknown;
   if (!isRecord(parsed)) {
-    throw new ChainParseError("Chain YAML must parse to an object.");
+    throw new GraphParseError("Graph YAML must parse to an object.");
   }
 
   return {
@@ -114,20 +114,20 @@ export function parseChainYaml(source: string): RawChainIR {
   };
 }
 
-export function validateChain(raw: RawChainIR): ChainDefinition {
-  return validateChainDocument(raw.document, raw);
+export function validateGraph(raw: RawGraphIR): ExecutionGraph {
+  return validateGraphDocument(raw.document, raw);
 }
 
-export function validateChainDocument(document: Record<string, unknown>, raw?: RawChainIR): ChainDefinition {
+export function validateGraphDocument(document: Record<string, unknown>, raw?: RawGraphIR): ExecutionGraph {
   rejectUnsupportedTopLevel(document);
 
   const name = requiredString(document.name, "name");
   const owner = optionalString(document.owner, "owner");
   const rawSteps = requiredArray(document.steps, "steps");
   const fanoutGroups = validateFanoutGroups(document.fanout, "fanout");
-  const policy = validateChainPolicy(document.policy, "policy");
+  const policy = validateGraphPolicy(document.policy, "policy");
   const seenStepIds = new Set<string>();
-  const steps: ChainStep[] = [];
+  const steps: GraphStep[] = [];
 
   for (let index = 0; index < rawSteps.length; index += 1) {
     const field = `steps.${index}`;
@@ -153,12 +153,12 @@ function validateStep(
   rawStep: Record<string, unknown>,
   field: string,
   previousStepIds: ReadonlySet<string>,
-): ChainStep {
+): GraphStep {
   rejectUnsupportedStepFields(rawStep, field);
 
   const id = requiredString(rawStep.id, `${field}.id`);
   if (previousStepIds.has(id)) {
-    throw new ChainValidationError(`${field}.id '${id}' must be unique.`);
+    throw new GraphValidationError(`${field}.id '${id}' must be unique.`);
   }
   const label = optionalNonEmptyString(rawStep.label, `${field}.label`);
 
@@ -166,14 +166,14 @@ function validateStep(
   const tool = optionalNonEmptyString(rawStep.tool, `${field}.tool`);
   const run = optionalRecord(rawStep.run, `${field}.run`);
   if ((skill ? 1 : 0) + (tool ? 1 : 0) + (run ? 1 : 0) !== 1) {
-    throw new ChainValidationError(`${field} must declare exactly one of skill, tool, or run.`);
+    throw new GraphValidationError(`${field} must declare exactly one of skill, tool, or run.`);
   }
   if (run && typeof run.type !== "string") {
-    throw new ChainValidationError(`${field}.run.type is required.`);
+    throw new GraphValidationError(`${field}.run.type is required.`);
   }
   const runner = optionalNonEmptyString(rawStep.runner, `${field}.runner`);
   if ((run || tool) && runner) {
-    throw new ChainValidationError(`${field}.runner is only valid for nested skill steps.`);
+    throw new GraphValidationError(`${field}.runner is only valid for nested skill steps.`);
   }
   const inputs = optionalRecord(rawStep.inputs, `${field}.inputs`) ?? {};
   const context = optionalStringRecord(rawStep.context, `${field}.context`) ?? {};
@@ -215,7 +215,7 @@ function validateStep(
 function rejectUnsupportedTopLevel(document: Readonly<Record<string, unknown>>): void {
   for (const field of ["sync", "schedule", "schedules"]) {
     if (document[field] !== undefined) {
-      throw new ChainValidationError(`${field} is not supported by the local sequential chain runner.`);
+      throw new GraphValidationError(`${field} is not supported by the local sequential graph runner.`);
     }
   }
 }
@@ -223,20 +223,20 @@ function rejectUnsupportedTopLevel(document: Readonly<Record<string, unknown>>):
 function rejectUnsupportedStepFields(rawStep: Readonly<Record<string, unknown>>, field: string): void {
   for (const unsupported of ["sync"]) {
     if (rawStep[unsupported] !== undefined) {
-      throw new ChainValidationError(`${field}.${unsupported} is not supported by the local sequential chain runner.`);
+      throw new GraphValidationError(`${field}.${unsupported} is not supported by the local sequential graph runner.`);
     }
   }
 
   const mode = rawStep.mode;
   if (mode !== undefined && mode !== "sequential" && mode !== "fanout") {
-    throw new ChainValidationError(`${field}.mode '${String(mode)}' is not supported by the local chain runner.`);
+    throw new GraphValidationError(`${field}.mode '${String(mode)}' is not supported by the local graph runner.`);
   }
   if (mode === "fanout" && typeof rawStep.fanout_group !== "string") {
-    throw new ChainValidationError(`${field}.fanout_group is required when mode is fanout.`);
+    throw new GraphValidationError(`${field}.fanout_group is required when mode is fanout.`);
   }
   const declaredTargets = [rawStep.run, rawStep.skill, rawStep.tool].filter((value) => value !== undefined).length;
   if (declaredTargets > 1) {
-    throw new ChainValidationError(`${field} must not declare more than one of run, skill, or tool.`);
+    throw new GraphValidationError(`${field} must not declare more than one of run, skill, or tool.`);
   }
 }
 
@@ -258,7 +258,7 @@ function validateFanoutGroups(value: unknown, field: string): Readonly<Record<st
     const thresholdGates = validateThresholdGates(group.threshold_gates, `${field}.groups.${groupId}.threshold_gates`);
     const conflictGates = validateConflictGates(group.conflict_gates, `${field}.groups.${groupId}.conflict_gates`);
     if (strategy === "quorum" && (!Number.isInteger(minSuccess) || minSuccess === undefined || minSuccess < 1)) {
-      throw new ChainValidationError(`${field}.groups.${groupId}.min_success must be a positive integer for quorum sync.`);
+      throw new GraphValidationError(`${field}.groups.${groupId}.min_success must be a positive integer for quorum sync.`);
     }
     validated[groupId] = {
       groupId,
@@ -273,7 +273,7 @@ function validateFanoutGroups(value: unknown, field: string): Readonly<Record<st
   return validated;
 }
 
-function validateChainPolicy(value: unknown, field: string): ChainPolicy | undefined {
+function validateGraphPolicy(value: unknown, field: string): GraphPolicy | undefined {
   const policy = optionalRecord(value, field);
   if (!policy) {
     return undefined;
@@ -288,10 +288,10 @@ function validateChainPolicy(value: unknown, field: string): ChainPolicy | undef
     const equals = gate.equals;
     const notEquals = gate.not_equals;
     if (equals !== undefined && notEquals !== undefined) {
-      throw new ChainValidationError(`${gateField} must not declare both equals and not_equals.`);
+      throw new GraphValidationError(`${gateField} must not declare both equals and not_equals.`);
     }
     if (equals === undefined && notEquals === undefined) {
-      throw new ChainValidationError(`${gateField} must declare equals or not_equals.`);
+      throw new GraphValidationError(`${gateField} must declare equals or not_equals.`);
     }
     return {
       to: requiredString(gate.to, `${gateField}.to`),
@@ -313,7 +313,7 @@ function validateThresholdGates(value: unknown, field: string): readonly FanoutT
     const gate = requiredRecord(rawGate, gateField);
     for (const unsupported of ["contains", "matches", "semantic", "prompt", "sentiment"]) {
       if (gate[unsupported] !== undefined) {
-        throw new ChainValidationError(`${gateField}.${unsupported} is not supported; chain policy must evaluate structured fields.`);
+        throw new GraphValidationError(`${gateField}.${unsupported} is not supported; graph policy must evaluate structured fields.`);
       }
     }
     return {
@@ -335,7 +335,7 @@ function validateConflictGates(value: unknown, field: string): readonly FanoutCo
     const gate = requiredRecord(rawGate, gateField);
     for (const unsupported of ["contains", "matches", "semantic", "prompt", "sentiment"]) {
       if (gate[unsupported] !== undefined) {
-        throw new ChainValidationError(`${gateField}.${unsupported} is not supported; chain policy must evaluate structured fields.`);
+        throw new GraphValidationError(`${gateField}.${unsupported} is not supported; graph policy must evaluate structured fields.`);
       }
     }
     return {
@@ -347,10 +347,10 @@ function validateConflictGates(value: unknown, field: string): readonly FanoutCo
 }
 
 function validateFanoutStepBindings(
-  steps: readonly ChainStep[],
+  steps: readonly GraphStep[],
   groups: Readonly<Record<string, FanoutGroupPolicy>>,
 ): void {
-  const usedGroups = new Map<string, ChainStep[]>();
+  const usedGroups = new Map<string, GraphStep[]>();
   const stepToGroup = new Map<string, string>();
 
   for (const step of steps) {
@@ -358,7 +358,7 @@ function validateFanoutStepBindings(
       continue;
     }
     if (!groups[step.fanoutGroup]) {
-      throw new ChainValidationError(`steps.${step.id}.fanout_group references unknown fanout group '${step.fanoutGroup}'.`);
+      throw new GraphValidationError(`steps.${step.id}.fanout_group references unknown fanout group '${step.fanoutGroup}'.`);
     }
     usedGroups.set(step.fanoutGroup, [...(usedGroups.get(step.fanoutGroup) ?? []), step]);
     stepToGroup.set(step.id, step.fanoutGroup);
@@ -367,32 +367,32 @@ function validateFanoutStepBindings(
   for (const groupId of Object.keys(groups)) {
     const groupSteps = usedGroups.get(groupId) ?? [];
     if (groupSteps.length === 0) {
-      throw new ChainValidationError(`fanout.groups.${groupId} is not used by any chain step.`);
+      throw new GraphValidationError(`fanout.groups.${groupId} is not used by any graph step.`);
     }
     const indexes = groupSteps.map((groupStep) => steps.findIndex((step) => step.id === groupStep.id));
     const minIndex = Math.min(...indexes);
     const maxIndex = Math.max(...indexes);
     for (let index = minIndex; index <= maxIndex; index += 1) {
       if (steps[index]?.fanoutGroup !== groupId) {
-        throw new ChainValidationError(`fanout group '${groupId}' steps must be contiguous.`);
+        throw new GraphValidationError(`fanout group '${groupId}' steps must be contiguous.`);
       }
     }
 
     const groupPolicy = groups[groupId];
     if (groupPolicy.strategy === "quorum" && groupPolicy.minSuccess !== undefined && groupPolicy.minSuccess > groupSteps.length) {
-      throw new ChainValidationError(`fanout.groups.${groupId}.min_success cannot exceed the number of branches.`);
+      throw new GraphValidationError(`fanout.groups.${groupId}.min_success cannot exceed the number of branches.`);
     }
 
     const groupStepIds = new Set(groupSteps.map((step) => step.id));
     for (const gate of groupPolicy.thresholdGates) {
       if (!groupStepIds.has(gate.step)) {
-        throw new ChainValidationError(`fanout.groups.${groupId}.threshold_gates step '${gate.step}' is not in the fanout group.`);
+        throw new GraphValidationError(`fanout.groups.${groupId}.threshold_gates step '${gate.step}' is not in the fanout group.`);
       }
     }
     for (const gate of groupPolicy.conflictGates) {
       for (const stepId of gate.steps) {
         if (!groupStepIds.has(stepId)) {
-          throw new ChainValidationError(`fanout.groups.${groupId}.conflict_gates step '${stepId}' is not in the fanout group.`);
+          throw new GraphValidationError(`fanout.groups.${groupId}.conflict_gates step '${stepId}' is not in the fanout group.`);
         }
       }
     }
@@ -404,7 +404,7 @@ function validateFanoutStepBindings(
     }
     for (const edge of step.contextEdges) {
       if (stepToGroup.get(edge.fromStep) === step.fanoutGroup) {
-        throw new ChainValidationError(`steps.${step.id}.context.${edge.input} cannot depend on another branch in the same fanout group.`);
+        throw new GraphValidationError(`steps.${step.id}.context.${edge.input} cannot depend on another branch in the same fanout group.`);
       }
     }
   }
@@ -415,16 +415,16 @@ function parseContextReference(
   reference: string,
   previousStepIds: ReadonlySet<string>,
   field: string,
-): ChainContextEdge {
+): GraphContextEdge {
   const dotIndex = reference.indexOf(".");
   if (dotIndex <= 0 || dotIndex === reference.length - 1) {
-    throw new ChainValidationError(`${field} must use '<step-id>.<output-field>' syntax.`);
+    throw new GraphValidationError(`${field} must use '<step-id>.<output-field>' syntax.`);
   }
 
   const fromStep = reference.slice(0, dotIndex);
   const output = reference.slice(dotIndex + 1);
   if (!previousStepIds.has(fromStep)) {
-    throw new ChainValidationError(`${field} references unknown or later step '${fromStep}'.`);
+    throw new GraphValidationError(`${field} references unknown or later step '${fromStep}'.`);
   }
 
   return {
@@ -434,7 +434,7 @@ function parseContextReference(
   };
 }
 
-function validateRetry(value: unknown, field: string): ChainRetryPolicy | undefined {
+function validateRetry(value: unknown, field: string): GraphRetryPolicy | undefined {
   const retry = optionalRecord(value, field);
   if (!retry) {
     return undefined;
@@ -443,10 +443,10 @@ function validateRetry(value: unknown, field: string): ChainRetryPolicy | undefi
   const maxAttempts = optionalNumber(retry.max_attempts, `${field}.max_attempts`) ?? 1;
   const backoffMs = optionalNumber(retry.backoff_ms, `${field}.backoff_ms`);
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
-    throw new ChainValidationError(`${field}.max_attempts must be a positive integer.`);
+    throw new GraphValidationError(`${field}.max_attempts must be a positive integer.`);
   }
   if (backoffMs !== undefined && (!Number.isInteger(backoffMs) || backoffMs < 0)) {
-    throw new ChainValidationError(`${field}.backoff_ms must be a non-negative integer.`);
+    throw new GraphValidationError(`${field}.backoff_ms must be a non-negative integer.`);
   }
 
   return {
@@ -462,13 +462,13 @@ function validateMutation(value: unknown, field: string): boolean {
   if (typeof value === "boolean") {
     return value;
   }
-  throw new ChainValidationError(`${field} must be a boolean.`);
+  throw new GraphValidationError(`${field} must be a boolean.`);
 }
 
 function requiredString(value: unknown, field: string): string {
   const stringValue = optionalString(value, field);
   if (!stringValue) {
-    throw new ChainValidationError(`${field} is required.`);
+    throw new GraphValidationError(`${field} is required.`);
   }
   return stringValue;
 }
@@ -478,7 +478,7 @@ function optionalString(value: unknown, field: string): string | undefined {
     return undefined;
   }
   if (typeof value !== "string") {
-    throw new ChainValidationError(`${field} must be a string.`);
+    throw new GraphValidationError(`${field} must be a string.`);
   }
   return value;
 }
@@ -486,24 +486,24 @@ function optionalString(value: unknown, field: string): string | undefined {
 function optionalNonEmptyString(value: unknown, field: string): string | undefined {
   const stringValue = optionalString(value, field);
   if (stringValue !== undefined && stringValue.trim() === "") {
-    throw new ChainValidationError(`${field} must not be empty.`);
+    throw new GraphValidationError(`${field} must not be empty.`);
   }
   return stringValue;
 }
 
 function requiredArray(value: unknown, field: string): readonly unknown[] {
   if (!Array.isArray(value)) {
-    throw new ChainValidationError(`${field} must be an array.`);
+    throw new GraphValidationError(`${field} must be an array.`);
   }
   if (value.length === 0) {
-    throw new ChainValidationError(`${field} must contain at least one step.`);
+    throw new GraphValidationError(`${field} must contain at least one step.`);
   }
   return value;
 }
 
 function requiredRecord(value: unknown, field: string): Record<string, unknown> {
   if (!isRecord(value)) {
-    throw new ChainValidationError(`${field} must be an object.`);
+    throw new GraphValidationError(`${field} must be an object.`);
   }
   return value;
 }
@@ -513,7 +513,7 @@ function optionalRecord(value: unknown, field: string): Readonly<Record<string, 
     return undefined;
   }
   if (!isRecord(value)) {
-    throw new ChainValidationError(`${field} must be an object.`);
+    throw new GraphValidationError(`${field} must be an object.`);
   }
   return value;
 }
@@ -526,7 +526,7 @@ function optionalStringRecord(value: unknown, field: string): Readonly<Record<st
 
   for (const [key, entryValue] of Object.entries(record)) {
     if (typeof entryValue !== "string") {
-      throw new ChainValidationError(`${field}.${key} must be a string.`);
+      throw new GraphValidationError(`${field}.${key} must be a string.`);
     }
   }
   return record as Readonly<Record<string, string>>;
@@ -537,7 +537,7 @@ function optionalStringArray(value: unknown, field: string): readonly string[] |
     return undefined;
   }
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
-    throw new ChainValidationError(`${field} must be an array of strings.`);
+    throw new GraphValidationError(`${field} must be an array of strings.`);
   }
   return value;
 }
@@ -547,7 +547,7 @@ function optionalNumber(value: unknown, field: string): number | undefined {
     return undefined;
   }
   if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw new ChainValidationError(`${field} must be a finite number.`);
+    throw new GraphValidationError(`${field} must be a finite number.`);
   }
   return value;
 }
@@ -555,7 +555,7 @@ function optionalNumber(value: unknown, field: string): number | undefined {
 function requiredNumber(value: unknown, field: string): number {
   const numberValue = optionalNumber(value, field);
   if (numberValue === undefined) {
-    throw new ChainValidationError(`${field} is required.`);
+    throw new GraphValidationError(`${field} is required.`);
   }
   return numberValue;
 }
@@ -567,7 +567,7 @@ function optionalSyncStrategy(value: unknown, field: string): FanoutSyncStrategy
   if (value === "all" || value === "any" || value === "quorum") {
     return value;
   }
-  throw new ChainValidationError(`${field} must be all, any, or quorum.`);
+  throw new GraphValidationError(`${field} must be all, any, or quorum.`);
 }
 
 function optionalBranchFailurePolicy(value: unknown, field: string): FanoutBranchFailurePolicy | undefined {
@@ -577,21 +577,21 @@ function optionalBranchFailurePolicy(value: unknown, field: string): FanoutBranc
   if (value === "halt" || value === "continue") {
     return value;
   }
-  throw new ChainValidationError(`${field} must be halt or continue.`);
+  throw new GraphValidationError(`${field} must be halt or continue.`);
 }
 
 function requiredThresholdAction(value: unknown, field: string): FanoutThresholdAction {
   if (value === "pause" || value === "escalate") {
     return value;
   }
-  throw new ChainValidationError(`${field} must be pause or escalate.`);
+  throw new GraphValidationError(`${field} must be pause or escalate.`);
 }
 
 function requiredConflictAction(value: unknown, field: string): FanoutConflictAction {
   if (value === "pause" || value === "escalate") {
     return value;
   }
-  throw new ChainValidationError(`${field} must be pause or escalate.`);
+  throw new GraphValidationError(`${field} must be pause or escalate.`);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

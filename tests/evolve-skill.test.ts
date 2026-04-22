@@ -111,7 +111,7 @@ describe("evolve skill", () => {
       };
       expect(report.status).toBe("success");
       expect(report.receipt).toMatchObject({
-        kind: "chain_execution",
+        kind: "graph_execution",
       });
 
       const journal = await readFile(path.join(receiptDir, "journals", `${report.receipt.id}.jsonl`), "utf8");
@@ -208,7 +208,7 @@ describe("evolve skill", () => {
       };
       expect(report.status).toBe("success");
       expect(report.receipt).toMatchObject({
-        kind: "chain_execution",
+        kind: "graph_execution",
       });
 
       const journal = await readFile(path.join(receiptDir, "journals", `${report.receipt.id}.jsonl`), "utf8");
@@ -242,7 +242,7 @@ describe("evolve skill", () => {
         receipt: { kind: string };
       };
       expect(report.status).toBe("failure");
-      expect(report.receipt.kind).toBe("chain_execution");
+      expect(report.receipt.kind).toBe("graph_execution");
       expect(report.execution.stderr || report.execution.errorMessage).toContain("evolve currently stops at spec");
     } finally {
       await rm(tempDir, { recursive: true, force: true });

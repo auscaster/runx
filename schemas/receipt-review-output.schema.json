@@ -24,7 +24,7 @@
         "properties": {
           "target": {
             "type": "string",
-            "description": "What to change (e.g., SKILL.md, execution profile, chain step, input, fixture path)."
+            "description": "What to change (e.g., SKILL.md, execution profile, graph step, input, fixture path)."
           },
           "change": {
             "type": "string",

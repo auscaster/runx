@@ -34,7 +34,7 @@ export async function validatePublishHarness(
     throw new Error(`Expected inline harness suite for publish target ${path.resolve(targetPath)}.`);
   }
 
-  const receiptIds = result.cases.flatMap((entry) => [entry.receipt?.id, entry.chainReceipt?.id].filter(isString));
+  const receiptIds = result.cases.flatMap((entry) => [entry.receipt?.id, entry.graphReceipt?.id].filter(isString));
   return {
     status: result.assertionErrors.length === 0 ? "passed" : "failed",
     case_count: result.cases.length,

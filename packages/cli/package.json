@@ -2,7 +2,7 @@
   "name": "@runxai/cli",
   "version": "0.4.1",
   "private": false,
-  "license": "MIT",
+  "license": "Apache-2.0",
   "type": "module",
   "publishConfig": {
     "access": "public"

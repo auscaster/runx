@@ -5,7 +5,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { runCli } from "../packages/cli/src/index.js";
-import { inspectLocalChain, runLocalChain, type Caller } from "../packages/runner-local/src/index.js";
+import { inspectLocalGraph, runLocalGraph, type Caller } from "../packages/runner-local/src/index.js";
 
 const nonInteractiveCaller: Caller = {
   resolve: async () => undefined,
@@ -19,8 +19,8 @@ describe("local fanout chain runner", () => {
     const runxHome = path.join(tempDir, "home");
 
     try {
-      const result = await runLocalChain({
-        chainPath: path.resolve("fixtures/chains/fanout/all.yaml"),
+      const result = await runLocalGraph({
+        graphPath: path.resolve("fixtures/chains/fanout/all.yaml"),
         caller: nonInteractiveCaller,
         receiptDir,
         runxHome,
@@ -60,7 +60,7 @@ describe("local fanout chain runner", () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-fanout-parallel-"));
     const receiptDir = path.join(tempDir, "receipts");
     const runxHome = path.join(tempDir, "home");
-    const chainPath = path.join(tempDir, "parallel.yaml");
+    const graphPath = path.join(tempDir, "parallel.yaml");
 
     try {
       await Promise.all([
@@ -69,7 +69,7 @@ describe("local fanout chain runner", () => {
         writeSleepSkill(path.join(tempDir, "finance"), "finance"),
       ]);
       await writeFile(
-        chainPath,
+        graphPath,
         `name: timed-fanout
 owner: runx
 fanout:
@@ -94,8 +94,8 @@ steps:
       );
 
       const started = performance.now();
-      const result = await runLocalChain({
-        chainPath,
+      const result = await runLocalGraph({
+        graphPath,
         caller: nonInteractiveCaller,
         receiptDir,
         runxHome,
@@ -120,8 +120,8 @@ steps:
     const runxHome = path.join(tempDir, "home");
 
     try {
-      const result = await runLocalChain({
-        chainPath: path.resolve("fixtures/chains/fanout/chain.yaml"),
+      const result = await runLocalGraph({
+        graphPath: path.resolve("fixtures/chains/fanout/chain.yaml"),
         caller: nonInteractiveCaller,
         receiptDir,
         runxHome,
@@ -170,8 +170,8 @@ steps:
     const runxHome = path.join(tempDir, "home");
 
     try {
-      const result = await runLocalChain({
-        chainPath: path.resolve("fixtures/chains/fanout/threshold.yaml"),
+      const result = await runLocalGraph({
+        graphPath: path.resolve("fixtures/chains/fanout/threshold.yaml"),
         caller: nonInteractiveCaller,
         receiptDir,
         runxHome,
@@ -204,8 +204,8 @@ steps:
     const stderr = createMemoryStream();
 
     try {
-      const result = await runLocalChain({
-        chainPath: path.resolve("fixtures/chains/fanout/chain.yaml"),
+      const result = await runLocalGraph({
+        graphPath: path.resolve("fixtures/chains/fanout/chain.yaml"),
         caller: nonInteractiveCaller,
         receiptDir,
         runxHome: path.join(tempDir, "home"),
@@ -216,8 +216,8 @@ steps:
         return;
       }
 
-      const inspection = await inspectLocalChain({
-        chainId: result.receipt.id,
+      const inspection = await inspectLocalGraph({
+        graphId: result.receipt.id,
         receiptDir,
         env: process.env,
       });
@@ -237,7 +237,7 @@ steps:
       );
       expect(inspectExit).toBe(0);
       expect(stdout.contents()).toContain("fanout-advisors");
-      expect(stdout.contents()).toContain("chain_execution");
+      expect(stdout.contents()).toContain("graph_execution");
       expect(stdout.contents()).toContain(result.receipt.id);
       expect(stdout.contents()).toContain("verified");
     } finally {

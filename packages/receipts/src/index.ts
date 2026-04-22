@@ -140,7 +140,7 @@ export interface WriteLocalReceiptOptions extends BuildLocalReceiptOptions {
   readonly runxHome?: string;
 }
 
-export interface ChainReceiptStep {
+export interface GraphReceiptStep {
   readonly step_id: string;
   readonly attempt: number;
   readonly skill: string;
@@ -161,7 +161,7 @@ export interface ChainReceiptStep {
     readonly output: string;
     readonly receipt_id?: string;
   }[];
-  readonly governance?: ChainReceiptGovernance;
+  readonly governance?: GraphReceiptGovernance;
   readonly artifact_ids?: readonly string[];
   readonly disposition?: GovernedDisposition;
   readonly input_context?: ReceiptInputContext;
@@ -171,7 +171,7 @@ export interface ChainReceiptStep {
   readonly evidence_refs?: readonly ReceiptSurfaceRef[];
 }
 
-export interface ChainReceiptGovernance {
+export interface GraphReceiptGovernance {
   readonly scope_admission?: {
     readonly status: "allow" | "deny";
     readonly requested_scopes: readonly string[];
@@ -182,7 +182,7 @@ export interface ChainReceiptGovernance {
   };
 }
 
-export interface ChainReceiptSyncPoint {
+export interface GraphReceiptSyncPoint {
   readonly group_id: string;
   readonly strategy: "all" | "any" | "quorum";
   readonly decision: "proceed" | "halt" | "pause" | "escalate";
@@ -196,15 +196,15 @@ export interface ChainReceiptSyncPoint {
   readonly gate?: Readonly<Record<string, unknown>>;
 }
 
-export interface BuildLocalChainReceiptOptions {
-  readonly chainId: string;
-  readonly chainName: string;
+export interface BuildLocalGraphReceiptOptions {
+  readonly graphId: string;
+  readonly graphName: string;
   readonly owner?: string;
   readonly status: "success" | "failure";
   readonly inputs: Readonly<Record<string, unknown>>;
   readonly output: string;
-  readonly steps: readonly ChainReceiptStep[];
-  readonly syncPoints?: readonly ChainReceiptSyncPoint[];
+  readonly steps: readonly GraphReceiptStep[];
+  readonly syncPoints?: readonly GraphReceiptSyncPoint[];
   readonly startedAt?: string;
   readonly completedAt?: string;
   readonly durationMs: number;
@@ -218,12 +218,12 @@ export interface BuildLocalChainReceiptOptions {
   readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
-export interface WriteLocalChainReceiptOptions extends BuildLocalChainReceiptOptions {
+export interface WriteLocalGraphReceiptOptions extends BuildLocalGraphReceiptOptions {
   readonly receiptDir: string;
   readonly runxHome?: string;
 }
 
-export type LocalReceipt = LocalSkillReceipt | LocalChainReceipt;
+export type LocalReceipt = LocalSkillReceipt | LocalGraphReceipt;
 
 export type ReceiptVerificationStatus = "verified" | "unverified" | "invalid";
 
@@ -278,17 +278,17 @@ export interface LocalSkillReceipt {
   };
 }
 
-export interface LocalChainReceipt {
+export interface LocalGraphReceipt {
   readonly schema_version: "runx.receipt.v1";
   readonly id: string;
-  readonly kind: "chain_execution";
+  readonly kind: "graph_execution";
   readonly issuer: {
     readonly type: "local";
     readonly kid: string;
     readonly public_key_sha256: string;
   };
   readonly subject: {
-    readonly chain_name: string;
+    readonly graph_name: string;
     readonly owner?: string;
   };
   readonly status: "success" | "failure";
@@ -305,8 +305,8 @@ export interface LocalChainReceipt {
   readonly surface_refs?: readonly ReceiptSurfaceRef[];
   readonly evidence_refs?: readonly ReceiptSurfaceRef[];
   readonly metadata?: Readonly<Record<string, unknown>>;
-  readonly steps: readonly ChainReceiptStep[];
-  readonly sync_points?: readonly ChainReceiptSyncPoint[];
+  readonly steps: readonly GraphReceiptStep[];
+  readonly sync_points?: readonly GraphReceiptSyncPoint[];
   readonly signature: {
     readonly alg: "Ed25519";
     readonly value: string;
@@ -324,9 +324,9 @@ export async function writeLocalReceipt(options: WriteLocalReceiptOptions): Prom
   return receipt;
 }
 
-export async function writeLocalChainReceipt(options: WriteLocalChainReceiptOptions): Promise<LocalChainReceipt> {
+export async function writeLocalGraphReceipt(options: WriteLocalGraphReceiptOptions): Promise<LocalGraphReceipt> {
   const keyPair = await loadOrCreateLocalKey(options.runxHome);
-  const receipt = buildLocalChainReceipt(options, keyPair);
+  const receipt = buildLocalGraphReceipt(options, keyPair);
   await mkdir(options.receiptDir, { recursive: true });
   await writeFile(path.join(options.receiptDir, `${receipt.id}.json`), `${JSON.stringify(receipt, null, 2)}\n`, {
     flag: "wx",
@@ -366,7 +366,7 @@ export async function listLocalReceipts(receiptDir: string): Promise<readonly Lo
 
   const receipts = await Promise.all(
     entries
-      .filter((entry) => /^(rx|cx)_[A-Za-z0-9_-]+\.json$/.test(entry))
+      .filter((entry) => /^(rx|gx)_[A-Za-z0-9_-]+\.json$/.test(entry))
       .map(async (entry) => JSON.parse(await readFile(path.join(receiptDir, entry), "utf8")) as LocalReceipt),
   );
   return receipts.sort((left, right) => receiptTimestamp(right).localeCompare(receiptTimestamp(left)));
@@ -388,7 +388,7 @@ export async function listVerifiedLocalReceipts(
 
   const receipts = await Promise.all(
     entries
-      .filter((entry) => /^(rx|cx)_[A-Za-z0-9_-]+\.json$/.test(entry))
+      .filter((entry) => /^(rx|gx)_[A-Za-z0-9_-]+\.json$/.test(entry))
       .map(async (entry) => readVerifiedLocalReceipt(receiptDir, entry.slice(0, -".json".length), runxHome)),
   );
   return receipts.sort((left, right) => receiptTimestamp(right.receipt).localeCompare(receiptTimestamp(left.receipt)));
@@ -439,21 +439,21 @@ export function buildLocalReceipt(options: BuildLocalReceiptOptions, keyPair: Lo
   };
 }
 
-export function buildLocalChainReceipt(
-  options: BuildLocalChainReceiptOptions,
+export function buildLocalGraphReceipt(
+  options: BuildLocalGraphReceiptOptions,
   keyPair: LocalKeyPair,
-): LocalChainReceipt {
+): LocalGraphReceipt {
   const normalizedSteps = options.steps.map((step, index) => ({
     ...step,
-    governance: validateChainReceiptGovernance(step.governance, `steps[${index}].governance`),
+    governance: validateGraphReceiptGovernance(step.governance, `steps[${index}].governance`),
   }));
   const signedPayload = {
     schema_version: "runx.receipt.v1" as const,
-    id: options.chainId,
-    kind: "chain_execution" as const,
+    id: options.graphId,
+    kind: "graph_execution" as const,
     issuer: localIssuer(keyPair),
     subject: {
-      chain_name: options.chainName,
+      graph_name: options.graphName,
       owner: options.owner,
     },
     status: options.status,
@@ -526,7 +526,7 @@ export function hashString(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-export function uniqueReceiptId(prefix: "rx" | "cx"): string {
+export function uniqueReceiptId(prefix: "rx" | "gx"): string {
   return `${prefix}_${crypto.randomUUID().replace(/-/g, "")}`;
 }
 
@@ -538,10 +538,10 @@ export function redactReceiptValue<T>(value: T): T {
   return redactValue(value) as T;
 }
 
-export function validateChainReceiptGovernance(
-  value: ChainReceiptGovernance | undefined,
+export function validateGraphReceiptGovernance(
+  value: GraphReceiptGovernance | undefined,
   label = "governance",
-): ChainReceiptGovernance | undefined {
+): GraphReceiptGovernance | undefined {
   if (value === undefined) {
     return undefined;
   }
@@ -552,9 +552,9 @@ export function validateChainReceiptGovernance(
 }
 
 export function validateScopeAdmission(
-  value: ChainReceiptGovernance["scope_admission"] | undefined,
+  value: GraphReceiptGovernance["scope_admission"] | undefined,
   label = "scope_admission",
-): ChainReceiptGovernance["scope_admission"] | undefined {
+): GraphReceiptGovernance["scope_admission"] | undefined {
   if (value === undefined) {
     return undefined;
   }
@@ -580,7 +580,7 @@ export function validateScopeAdmission(
 }
 
 function assertLocalReceiptId(id: string): void {
-  if (!/^(rx|cx)_[A-Za-z0-9_-]+$/.test(id)) {
+  if (!/^(rx|gx)_[A-Za-z0-9_-]+$/.test(id)) {
     throw new Error(`Invalid receipt id '${id}'.`);
   }
 }

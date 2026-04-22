@@ -9,7 +9,7 @@ import {
   HttpCachedRegistryStore,
   ingestSkillMarkdown,
 } from "../packages/registry/src/index.js";
-import { runLocalChain, type Caller } from "../packages/runner-local/src/index.js";
+import { runLocalGraph, type Caller } from "../packages/runner-local/src/index.js";
 import {
   isRegistryRef,
   parseRegistryRef,
@@ -93,7 +93,7 @@ describe("chain registry refs", () => {
     });
   });
 
-  it("resolves a chain step skill via the registry store", async () => {
+  it("resolves a graph step skill via the registry store", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-registry-"));
 
     try {
@@ -105,9 +105,9 @@ describe("chain registry refs", () => {
         profileDocument: ECHO_PROFILE,
       });
 
-      const chainPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "chain.yaml");
       await writeFile(
-        chainPath,
+        graphPath,
         `name: chain-registry-ref
 steps:
   - id: echo
@@ -117,8 +117,8 @@ steps:
 `,
       );
 
-      const result = await runLocalChain({
-        chainPath,
+      const result = await runLocalGraph({
+        graphPath,
         caller,
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
@@ -132,7 +132,7 @@ steps:
         return;
       }
       expect(result.steps[0]).toMatchObject({
-        skill: "echo",
+        skill: "testorg/echo",
         stdout: "hello from registry",
       });
     } finally {
@@ -158,9 +158,9 @@ steps:
         profileDocument: ECHO_PROFILE,
       });
 
-      const chainPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "chain.yaml");
       await writeFile(
-        chainPath,
+        graphPath,
         `name: chain-registry-pinned
 steps:
   - id: echo
@@ -170,8 +170,8 @@ steps:
 `,
       );
 
-      const result = await runLocalChain({
-        chainPath,
+      const result = await runLocalGraph({
+        graphPath,
         caller,
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
@@ -194,9 +194,9 @@ steps:
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-registry-missing-"));
 
     try {
-      const chainPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "chain.yaml");
       await writeFile(
-        chainPath,
+        graphPath,
         `name: chain-registry-missing-store
 steps:
   - id: echo
@@ -207,14 +207,14 @@ steps:
       );
 
       await expect(
-        runLocalChain({
-          chainPath,
+        runLocalGraph({
+          graphPath,
           caller,
           receiptDir: path.join(tempDir, "receipts"),
           runxHome: path.join(tempDir, "home"),
           env: process.env,
         }),
-      ).rejects.toThrow(/Registry ref 'testorg\/echo' used in chain step/);
+      ).rejects.toThrow(/Registry ref 'testorg\/echo' used in graph step/);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
@@ -225,9 +225,9 @@ steps:
 
     try {
       const store = createFileRegistryStore(path.join(tempDir, "registry"));
-      const chainPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "chain.yaml");
       await writeFile(
-        chainPath,
+        graphPath,
         `name: chain-registry-missing-skill
 steps:
   - id: echo
@@ -238,8 +238,8 @@ steps:
       );
 
       await expect(
-        runLocalChain({
-          chainPath,
+        runLocalGraph({
+          graphPath,
           caller,
           receiptDir: path.join(tempDir, "receipts"),
           runxHome: path.join(tempDir, "home"),
@@ -265,9 +265,9 @@ steps:
         profileDocument: ECHO_PROFILE,
       });
 
-      const chainPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "chain.yaml");
       await writeFile(
-        chainPath,
+        graphPath,
         `name: chain-registry-missing-pin
 steps:
   - id: echo
@@ -278,8 +278,8 @@ steps:
       );
 
       await expect(
-        runLocalChain({
-          chainPath,
+        runLocalGraph({
+          graphPath,
           caller,
           receiptDir: path.join(tempDir, "receipts"),
           runxHome: path.join(tempDir, "home"),
@@ -287,13 +287,13 @@ steps:
           registryStore: store,
           skillCacheDir: path.join(tempDir, "skill-cache"),
         }),
-      ).rejects.toThrow(/testorg\/echo@9\.9\.9 not found \(available: 0\.1\.0\)/);
+      ).rejects.toThrow(/Registry skill 'testorg\/echo@9\.9\.9' not found \(available: 0\.1\.0\)\./);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
   });
 
-  it("fetches a chain step skill from a remote registry via HttpCachedRegistryStore", async () => {
+  it("fetches a graph step skill from a remote registry via HttpCachedRegistryStore", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-registry-http-"));
 
     try {
@@ -332,9 +332,9 @@ steps:
         fetchImpl,
       });
 
-      const chainPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "chain.yaml");
       await writeFile(
-        chainPath,
+        graphPath,
         `name: chain-registry-http
 steps:
   - id: echo
@@ -344,8 +344,8 @@ steps:
 `,
       );
 
-      const result = await runLocalChain({
-        chainPath,
+      const result = await runLocalGraph({
+        graphPath,
         caller,
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
@@ -361,8 +361,8 @@ steps:
       expect(result.steps[0]?.stdout).toBe("hello from http");
       expect(fetches).toBe(1);
 
-      const second = await runLocalChain({
-        chainPath,
+      const second = await runLocalGraph({
+        graphPath,
         caller,
         receiptDir: path.join(tempDir, "receipts-2"),
         runxHome: path.join(tempDir, "home-2"),
@@ -386,9 +386,9 @@ steps:
       await writeFile(path.join(skillDir, "SKILL.md"), ECHO_MARKDOWN);
       await writeFile(path.join(skillDir, "X.yaml"), ECHO_PROFILE);
 
-      const chainPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "chain.yaml");
       await writeFile(
-        chainPath,
+        graphPath,
         `name: chain-registry-fs-compat
 steps:
   - id: echo
@@ -398,8 +398,8 @@ steps:
 `,
       );
 
-      const result = await runLocalChain({
-        chainPath,
+      const result = await runLocalGraph({
+        graphPath,
         caller,
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),

@@ -1,13 +1,13 @@
 name: sequential-chain
-kind: chain
+kind: graph
 target: ../chains/sequential/chain.yaml
 expect:
   status: success
   receipt:
-    kind: chain_execution
+    kind: graph_execution
     status: success
     subject:
-      chain_name: sequential-echo
+      graph_name: sequential-echo
   steps:
     - first
     - second

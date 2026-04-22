@@ -517,7 +517,7 @@ function receiptEntry(options: IndexReceiptOptions): LocalJournalReceiptEntry {
     receipt_id: receipt.id,
     kind: receipt.kind,
     status: receipt.status,
-    subject: receipt.kind === "skill_execution" ? receipt.subject.skill_name : receipt.subject.chain_name,
+    subject: receipt.kind === "skill_execution" ? receipt.subject.skill_name : receipt.subject.graph_name,
     source_type: receipt.kind === "skill_execution" ? receipt.subject.source_type : undefined,
     receipt_path: options.receiptPath,
     project: options.project ? path.resolve(options.project) : undefined,

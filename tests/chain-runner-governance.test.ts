@@ -5,23 +5,23 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import type { SkillAdapter } from "../packages/executor/src/index.js";
-import { runLocalChain, type Caller } from "../packages/runner-local/src/index.js";
+import { runLocalGraph, type Caller } from "../packages/runner-local/src/index.js";
 
 const caller: Caller = {
   resolve: async () => undefined,
   report: () => undefined,
 };
 
-describe("chain runner governance", () => {
-  it("selects a named cli-tool binding runner from a chain step", async () => {
+describe("governed graph runner governance", () => {
+  it("selects a named cli-tool binding runner from a graph step", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-composite-runner-cli-"));
 
     try {
       const skillDir = path.join(tempDir, "skills", "package-echo");
       await writePackageEchoSkill(skillDir);
-      const chainPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "chain.yaml");
       await writeFile(
-        chainPath,
+        graphPath,
         `name: chain-runner-cli
 steps:
   - id: echo
@@ -32,8 +32,8 @@ steps:
 `,
       );
 
-      const result = await runLocalChain({
-        chainPath,
+      const result = await runLocalGraph({
+        graphPath,
         caller,
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
@@ -64,13 +64,13 @@ steps:
     }
   });
 
-  it("selects an A2A binding runner from a chain step", async () => {
+  it("selects an A2A binding runner from a graph step", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-composite-runner-a2a-"));
-    const chainPath = path.join(tempDir, "chain.yaml");
+    const graphPath = path.join(tempDir, "chain.yaml");
 
     try {
       await writeFile(
-        chainPath,
+        graphPath,
         `name: chain-runner-a2a
 steps:
   - id: echo
@@ -81,8 +81,8 @@ steps:
 `,
       );
 
-      const result = await runLocalChain({
-        chainPath,
+      const result = await runLocalGraph({
+        graphPath,
         caller,
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
@@ -103,16 +103,16 @@ steps:
     }
   });
 
-  it("denies step scopes that exceed the parent chain grant before execution", async () => {
+  it("denies step scopes that exceed the parent graph grant before execution", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-scope-deny-"));
     const adapter = createCountingAdapter();
 
     try {
       const skillDir = path.join(tempDir, "skills", "package-echo");
       await writePackageEchoSkill(skillDir);
-      const chainPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "chain.yaml");
       await writeFile(
-        chainPath,
+        graphPath,
         `name: chain-scope-deny
 steps:
   - id: deploy
@@ -125,14 +125,14 @@ steps:
 `,
       );
 
-      const result = await runLocalChain({
-        chainPath,
+      const result = await runLocalGraph({
+        graphPath,
         caller,
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
         env: process.env,
         adapters: [adapter],
-        chainGrant: {
+        graphGrant: {
           grant_id: "grant_checks",
           scopes: ["checks:read"],
         },
@@ -142,7 +142,7 @@ steps:
       if (result.status !== "policy_denied") {
         return;
       }
-      expect(result.reasons).toEqual(["step 'deploy' requested scope(s) outside chain grant: deployments:write"]);
+      expect(result.reasons).toEqual(["step 'deploy' requested scope(s) outside graph grant: deployments:write"]);
       expect(adapter.callCount()).toBe(0);
       expect(result.receipt).toMatchObject({
         disposition: "policy_denied",

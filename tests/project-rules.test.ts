@@ -4,8 +4,8 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { parseChainYaml, validateChain } from "../packages/parser/src/index.js";
-import { runLocalChain, runLocalSkill, type Caller } from "../packages/runner-local/src/index.js";
+import { parseGraphYaml, validateGraph } from "../packages/parser/src/index.js";
+import { runLocalGraph, runLocalSkill, type Caller } from "../packages/runner-local/src/index.js";
 
 const passiveCaller: Caller = {
   resolve: async () => undefined,
@@ -101,8 +101,8 @@ describe("project rules", () => {
       await writeFile(memoryPath, originalMemory);
       await writeFile(conventionsPath, originalConventions);
 
-      const chain = validateChain(
-        parseChainYaml(`
+      const chain = validateGraph(
+        parseGraphYaml(`
 name: project-rules-snapshot
 steps:
   - id: mutate
@@ -144,9 +144,9 @@ steps:
         report: () => undefined,
       };
 
-      const result = await runLocalChain({
-        chain,
-        chainDirectory: workspaceDir,
+      const result = await runLocalGraph({
+        graph: chain,
+        graphDirectory: workspaceDir,
         caller,
         env: {
           ...process.env,

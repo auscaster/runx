@@ -1,8 +1,8 @@
 export const stateMachinePackage = "@runx/state-machine";
 
 export type StepStatus = "pending" | "admitted" | "running" | "succeeded" | "failed";
-export type ChainStatus = "pending" | "running" | "succeeded" | "failed";
-export type ChainStepStatus = "pending" | "running" | "succeeded" | "failed";
+export type GraphStatus = "pending" | "running" | "succeeded" | "failed";
+export type GraphStepStatus = "pending" | "running" | "succeeded" | "failed";
 export type FanoutSyncStrategy = "all" | "any" | "quorum";
 export type FanoutBranchFailurePolicy = "halt" | "continue";
 export type FanoutGateAction = "pause" | "escalate";
@@ -15,7 +15,7 @@ export interface SingleStepState {
   readonly error?: string;
 }
 
-export interface SequentialChainStepDefinition {
+export interface SequentialGraphStepDefinition {
   readonly id: string;
   readonly contextFrom?: readonly string[];
   readonly retry?: {
@@ -48,7 +48,7 @@ export interface FanoutGroupPolicy {
 
 export interface FanoutBranchResult {
   readonly stepId: string;
-  readonly status: ChainStepStatus;
+  readonly status: GraphStepStatus;
   readonly outputs?: Readonly<Record<string, unknown>>;
 }
 
@@ -73,9 +73,9 @@ export interface FanoutSyncDecision {
   };
 }
 
-export interface SequentialChainStepState {
+export interface SequentialGraphStepState {
   readonly stepId: string;
-  readonly status: ChainStepStatus;
+  readonly status: GraphStepStatus;
   readonly attempts: number;
   readonly startedAt?: string;
   readonly completedAt?: string;
@@ -84,13 +84,13 @@ export interface SequentialChainStepState {
   readonly error?: string;
 }
 
-export interface SequentialChainState {
-  readonly chainId: string;
-  readonly status: ChainStatus;
-  readonly steps: readonly SequentialChainStepState[];
+export interface SequentialGraphState {
+  readonly graphId: string;
+  readonly status: GraphStatus;
+  readonly steps: readonly SequentialGraphStepState[];
 }
 
-export type SequentialChainEvent =
+export type SequentialGraphEvent =
   | { readonly type: "start_step"; readonly stepId: string; readonly at: string }
   | {
       readonly type: "step_succeeded";
@@ -101,9 +101,9 @@ export type SequentialChainEvent =
     }
   | { readonly type: "step_failed"; readonly stepId: string; readonly at: string; readonly error: string }
   | { readonly type: "complete" }
-  | { readonly type: "fail_chain"; readonly error: string };
+  | { readonly type: "fail_graph"; readonly error: string };
 
-export type SequentialChainPlan =
+export type SequentialGraphPlan =
   | {
       readonly type: "run_step";
       readonly stepId: string;
@@ -175,12 +175,12 @@ export function transitionSingleStep(state: SingleStepState, event: SingleStepEv
   }
 }
 
-export function createSequentialChainState(
-  chainId: string,
-  steps: readonly SequentialChainStepDefinition[],
-): SequentialChainState {
+export function createSequentialGraphState(
+  graphId: string,
+  steps: readonly SequentialGraphStepDefinition[],
+): SequentialGraphState {
   return {
-    chainId,
+    graphId,
     status: "pending",
     steps: steps.map((step) => ({
       stepId: step.id,
@@ -190,11 +190,11 @@ export function createSequentialChainState(
   };
 }
 
-export function planSequentialChainTransition(
-  state: SequentialChainState,
-  steps: readonly SequentialChainStepDefinition[],
+export function planSequentialGraphTransition(
+  state: SequentialGraphState,
+  steps: readonly SequentialGraphStepDefinition[],
   fanoutPolicies: Readonly<Record<string, FanoutGroupPolicy>> = {},
-): SequentialChainPlan {
+): SequentialGraphPlan {
   const runningStep = state.steps.find((step) => step.status === "running");
   if (runningStep) {
     return {
@@ -265,10 +265,10 @@ export function planSequentialChainTransition(
   };
 }
 
-export function transitionSequentialChain(
-  state: SequentialChainState,
-  event: SequentialChainEvent,
-): SequentialChainState {
+export function transitionSequentialGraph(
+  state: SequentialGraphState,
+  event: SequentialGraphEvent,
+): SequentialGraphState {
   switch (event.type) {
     case "start_step":
       return updateStep(state, event.stepId, (step) => {
@@ -320,7 +320,7 @@ export function transitionSequentialChain(
         };
       }
       return state;
-    case "fail_chain":
+    case "fail_graph":
       return {
         ...state,
         status: "failed",
@@ -427,14 +427,14 @@ export function evaluateFanoutSync(
 }
 
 function planFanoutGroup(
-  state: SequentialChainState,
-  groupSteps: readonly SequentialChainStepDefinition[],
+  state: SequentialGraphState,
+  groupSteps: readonly SequentialGraphStepDefinition[],
   policy: FanoutGroupPolicy | undefined,
 ):
   | { readonly type: "proceed" }
   | {
       readonly type: "plan";
-      readonly plan: SequentialChainPlan;
+      readonly plan: SequentialGraphPlan;
     } {
   const firstStep = groupSteps[0];
   if (!firstStep?.fanoutGroup) {
@@ -458,7 +458,7 @@ function planFanoutGroup(
       conflictGates: [],
     } satisfies FanoutGroupPolicy);
 
-  const candidates: SequentialChainStepDefinition[] = [];
+  const candidates: SequentialGraphStepDefinition[] = [];
   const attempts: Record<string, number> = {};
   const contextFrom: Record<string, readonly string[]> = {};
 
@@ -541,11 +541,11 @@ function planFanoutGroup(
 }
 
 function collectContiguousFanoutGroup(
-  steps: readonly SequentialChainStepDefinition[],
+  steps: readonly SequentialGraphStepDefinition[],
   startIndex: number,
   groupId: string,
-): readonly SequentialChainStepDefinition[] {
-  const groupSteps: SequentialChainStepDefinition[] = [];
+): readonly SequentialGraphStepDefinition[] {
+  const groupSteps: SequentialGraphStepDefinition[] = [];
   for (let index = startIndex; index < steps.length; index += 1) {
     const step = steps[index];
     if (step?.fanoutGroup !== groupId) {
@@ -588,16 +588,16 @@ function syncDecision(
   };
 }
 
-function findStepState(state: SequentialChainState, stepId: string): SequentialChainStepState | undefined {
+function findStepState(state: SequentialGraphState, stepId: string): SequentialGraphStepState | undefined {
   return state.steps.find((step) => step.stepId === stepId);
 }
 
 function updateStep(
-  state: SequentialChainState,
+  state: SequentialGraphState,
   stepId: string,
-  update: (step: SequentialChainStepState) => SequentialChainStepState,
-  nextStatus: ChainStatus = state.status,
-): SequentialChainState {
+  update: (step: SequentialGraphStepState) => SequentialGraphStepState,
+  nextStatus: GraphStatus = state.status,
+): SequentialGraphState {
   return {
     ...state,
     status: nextStatus,

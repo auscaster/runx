@@ -6,12 +6,12 @@ import { receiptTreeItems } from "../plugins/antigravity/src/views.js";
 describe("ide receipt view", () => {
   it("renders chain receipt graph metadata without raw output bodies", () => {
     const receipt = {
-      id: "cx_1",
-      kind: "chain_execution",
+      id: "gx_1",
+      kind: "graph_execution",
       status: "success",
       output_hash: "hash-output",
       raw_output: "secret full output body",
-      subject: { chain_name: "fanout-docs" },
+      subject: { graph_name: "fanout-docs" },
       steps: [
         {
           step_id: "research-a",

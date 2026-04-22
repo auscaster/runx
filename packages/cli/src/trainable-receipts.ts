@@ -30,7 +30,7 @@ export interface TrainableReceiptRow {
   readonly receipt_id: string;
   readonly receipt_kind: LocalReceipt["kind"];
   readonly skill_name: string | null;
-  readonly chain_name: string | null;
+  readonly graph_name: string | null;
   readonly owner: string | null;
   readonly source_type: string | null;
   readonly status: LocalReceipt["status"];
@@ -115,8 +115,8 @@ export function projectTrainableReceiptRow(options: {
     receipt_id: receipt.id,
     receipt_kind: receipt.kind,
     skill_name: receipt.kind === "skill_execution" ? receipt.subject.skill_name : null,
-    chain_name: receipt.kind === "chain_execution" ? receipt.subject.chain_name : null,
-    owner: receipt.kind === "chain_execution" ? receipt.subject.owner ?? null : null,
+    graph_name: receipt.kind === "graph_execution" ? receipt.subject.graph_name : null,
+    owner: receipt.kind === "graph_execution" ? receipt.subject.owner ?? null : null,
     source_type: receipt.kind === "skill_execution" ? receipt.subject.source_type : null,
     status: receipt.status,
     disposition: receipt.disposition ?? null,

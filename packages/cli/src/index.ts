@@ -970,18 +970,25 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     ? inputs.scopeFamily
     : isConnect && typeof inputs.scope_family === "string"
       ? inputs.scope_family
+      : isConnect && typeof inputs["scope-family"] === "string"
+        ? inputs["scope-family"]
       : undefined;
-  const connectAuthorityKind = isConnect ? normalizeAuthorityKind(inputs.authorityKind ?? inputs.authority_kind) : undefined;
   const connectTargetRepo = isConnect && typeof inputs.targetRepo === "string"
     ? inputs.targetRepo
     : isConnect && typeof inputs.target_repo === "string"
       ? inputs.target_repo
+      : isConnect && typeof inputs["target-repo"] === "string"
+        ? inputs["target-repo"]
       : undefined;
   const connectTargetLocator = isConnect && typeof inputs.targetLocator === "string"
     ? inputs.targetLocator
     : isConnect && typeof inputs.target_locator === "string"
       ? inputs.target_locator
+      : isConnect && typeof inputs["target-locator"] === "string"
+        ? inputs["target-locator"]
       : undefined;
+  const connectAuthoritySource = inputs.authorityKind ?? inputs.authority_kind ?? inputs["authority-kind"];
+  const connectAuthorityKind = isConnect ? normalizeAuthorityKind(connectAuthoritySource) : undefined;
   const initAction = isInit && truthyFlag(inputs.global) ? "global" : isInit ? "project" : undefined;
   const prefetchOfficial =
     isInit
@@ -993,7 +1000,24 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       : isSkillPublish
         ? omitInputs(inputs, ["version", "owner", "registry"])
         : isConnect
-          ? omitInputs(inputs, ["scope", "scopeFamily", "scope_family", "authorityKind", "authority_kind", "targetRepo", "target_repo", "targetLocator", "target_locator"])
+          ? omitInputs(
+            inputs,
+            [
+              "scope",
+              "scopeFamily",
+              "scope_family",
+              "scope-family",
+              "authorityKind",
+              "authority_kind",
+              "authority-kind",
+              "targetRepo",
+              "target_repo",
+              "target-repo",
+              "targetLocator",
+              "target_locator",
+              "target-locator",
+            ],
+          )
           : isConfig
             ? {}
             : isInit

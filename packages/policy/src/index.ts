@@ -46,22 +46,22 @@ export interface RetryAdmissionRequest {
   readonly idempotencyKey?: string;
 }
 
-export interface ChainScopeGrant {
+export interface GraphScopeGrant {
   readonly grant_id?: string;
   readonly scopes: readonly string[];
 }
 
-export interface ChainScopeAdmissionRequest {
+export interface GraphScopeAdmissionRequest {
   readonly stepId: string;
   readonly requestedScopes: readonly string[];
-  readonly grant: ChainScopeGrant;
+  readonly grant: GraphScopeGrant;
 }
 
 export type AdmissionDecision =
   | { readonly status: "allow"; readonly reasons: readonly string[] }
   | { readonly status: "deny"; readonly reasons: readonly string[] };
 
-export type ChainScopeAdmissionDecision =
+export type GraphScopeAdmissionDecision =
   | {
       readonly status: "allow";
       readonly reasons: readonly string[];
@@ -153,7 +153,7 @@ export function admitRetryPolicy(request: RetryAdmissionRequest): AdmissionDecis
   };
 }
 
-export function admitChainStepScopes(request: ChainScopeAdmissionRequest): ChainScopeAdmissionDecision {
+export function admitGraphStepScopes(request: GraphScopeAdmissionRequest): GraphScopeAdmissionDecision {
   const requestedScopes = unique(request.requestedScopes);
   const grantedScopes = unique(request.grant.scopes);
   const deniedScopes = requestedScopes.filter((scope) => !grantedScopes.some((grantedScope) => scopeAllows(grantedScope, scope)));
@@ -161,7 +161,7 @@ export function admitChainStepScopes(request: ChainScopeAdmissionRequest): Chain
   if (deniedScopes.length > 0) {
     return {
       status: "deny",
-      reasons: [`step '${request.stepId}' requested scope(s) outside chain grant: ${deniedScopes.join(", ")}`],
+      reasons: [`step '${request.stepId}' requested scope(s) outside graph grant: ${deniedScopes.join(", ")}`],
       stepId: request.stepId,
       requestedScopes,
       grantedScopes,
@@ -171,7 +171,7 @@ export function admitChainStepScopes(request: ChainScopeAdmissionRequest): Chain
 
   return {
     status: "allow",
-    reasons: requestedScopes.length > 0 ? ["chain step scopes allowed"] : ["chain step requested no scopes"],
+    reasons: requestedScopes.length > 0 ? ["graph step scopes allowed"] : ["graph step requested no scopes"],
     stepId: request.stepId,
     requestedScopes,
     grantedScopes,

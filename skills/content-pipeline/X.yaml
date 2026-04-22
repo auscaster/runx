@@ -57,7 +57,7 @@ harness:
       expect:
         status: success
         receipt:
-          kind: chain_execution
+          kind: graph_execution
           status: success
 
     - name: content-pipeline-needs-objective

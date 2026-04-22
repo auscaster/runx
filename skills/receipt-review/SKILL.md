@@ -64,7 +64,7 @@ consumers (notably `harness-author`) may validate on receipt.
 - `failure_summary`: which step, which failure class, what root cause.
   One to three sentences.
 - `improvement_proposals`: array of bounded changes. Each:
-  - `target`: what to change (SKILL.md, execution profile, chain step, input, fixture)
+  - `target`: what to change (SKILL.md, execution profile, graph step, input, fixture)
   - `change`: what specifically to change
   - `rationale`: why this fixes the root cause
   - `risk`: what could go wrong

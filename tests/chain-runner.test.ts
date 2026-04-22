@@ -6,22 +6,22 @@ import { describe, expect, it } from "vitest";
 
 import { readJournalEntries } from "../packages/artifacts/src/index.js";
 import { runCli } from "../packages/cli/src/index.js";
-import { inspectLocalChain, runLocalChain, type Caller } from "../packages/runner-local/src/index.js";
+import { inspectLocalGraph, runLocalGraph, type Caller } from "../packages/runner-local/src/index.js";
 
 const nonInteractiveCaller: Caller = {
   resolve: async () => undefined,
   report: () => undefined,
 };
 
-describe("local chain runner", () => {
+describe("local governed graph runner", () => {
   it("runs a sequential chain and writes linked receipts", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-"));
     const receiptDir = path.join(tempDir, "receipts");
     const runxHome = path.join(tempDir, "home");
 
     try {
-      const result = await runLocalChain({
-        chainPath: path.resolve("fixtures/chains/sequential/chain.yaml"),
+      const result = await runLocalGraph({
+        graphPath: path.resolve("fixtures/chains/sequential/chain.yaml"),
         caller: nonInteractiveCaller,
         receiptDir,
         runxHome,
@@ -44,7 +44,7 @@ describe("local chain runner", () => {
           receiptId: result.steps[0].receiptId,
         },
       ]);
-      expect(result.receipt.kind).toBe("chain_execution");
+      expect(result.receipt.kind).toBe("graph_execution");
       expect(result.receipt.steps.map((step) => step.receipt_id)).toEqual(result.steps.map((step) => step.receiptId));
 
       const files = await readdir(receiptDir);
@@ -66,8 +66,8 @@ describe("local chain runner", () => {
     const runxHome = path.join(tempDir, "home");
 
     try {
-      const result = await runLocalChain({
-        chainPath: path.resolve("fixtures/chains/sequential/input.yaml"),
+      const result = await runLocalGraph({
+        graphPath: path.resolve("fixtures/chains/sequential/input.yaml"),
         inputs: { message: "explicit chain input" },
         caller: nonInteractiveCaller,
         receiptDir,
@@ -94,8 +94,8 @@ describe("local chain runner", () => {
     const runxHome = path.join(tempDir, "home");
 
     try {
-      const result = await runLocalChain({
-        chainPath: path.resolve("fixtures/chains/sequential/chain.yaml"),
+      const result = await runLocalGraph({
+        graphPath: path.resolve("fixtures/chains/sequential/chain.yaml"),
         caller: nonInteractiveCaller,
         receiptDir,
         runxHome,
@@ -107,8 +107,8 @@ describe("local chain runner", () => {
         return;
       }
 
-      const inspection = await inspectLocalChain({
-        chainId: result.receipt.id,
+      const inspection = await inspectLocalGraph({
+        graphId: result.receipt.id,
         receiptDir,
         env: { ...process.env, RUNX_CWD: tempDir, INIT_CWD: tempDir },
       });
@@ -131,8 +131,8 @@ describe("local chain runner", () => {
     const stderr = createMemoryStream();
 
     try {
-      const result = await runLocalChain({
-        chainPath: path.resolve("fixtures/chains/sequential/chain.yaml"),
+      const result = await runLocalGraph({
+        graphPath: path.resolve("fixtures/chains/sequential/chain.yaml"),
         caller: nonInteractiveCaller,
         receiptDir,
         runxHome: path.join(tempDir, "home"),
@@ -151,7 +151,7 @@ describe("local chain runner", () => {
 
       expect(inspectExit).toBe(0);
       expect(stdout.contents()).toContain("sequential-echo");
-      expect(stdout.contents()).toContain("chain_execution");
+      expect(stdout.contents()).toContain("graph_execution");
       expect(stdout.contents()).toContain(result.receipt.id);
       expect(stdout.contents()).toContain("verified");
     } finally {
@@ -159,15 +159,15 @@ describe("local chain runner", () => {
     }
   });
 
-  it("writes step_started before step_waiting_resolution for agent-mediated chain steps", async () => {
+  it("writes step_started before step_waiting_resolution for agent-mediated graph steps", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-started-before-waiting-"));
     const receiptDir = path.join(tempDir, "receipts");
     const runxHome = path.join(tempDir, "home");
-    const chainPath = path.join(tempDir, "waiting-chain.yaml");
+    const graphPath = path.join(tempDir, "waiting-chain.yaml");
 
     try {
       await writeFile(
-        chainPath,
+        graphPath,
         `name: waiting-chain
 owner: runx
 steps:
@@ -178,8 +178,8 @@ steps:
 `,
       );
 
-      const result = await runLocalChain({
-        chainPath,
+      const result = await runLocalGraph({
+        graphPath,
         caller: nonInteractiveCaller,
         receiptDir,
         runxHome,

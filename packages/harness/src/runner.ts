@@ -15,17 +15,17 @@ import {
   type RunnerHarnessCase,
 } from "../../parser/src/index.js";
 import {
-  runLocalChain,
+  runLocalGraph,
   runLocalSkill,
   type Caller,
   type ExecutionEvent,
-  type RunLocalChainResult,
+  type RunLocalGraphResult,
   type RunLocalSkillResult,
 } from "../../runner-local/src/index.js";
 import type { RegistryStore } from "../../registry/src/index.js";
 import type { ResolutionRequest, ResolutionResponse } from "../../executor/src/index.js";
 
-type HarnessKind = "skill" | "chain";
+type HarnessKind = "skill" | "graph";
 
 export interface HarnessFixture {
   readonly name: string;
@@ -60,14 +60,14 @@ export interface HarnessRunResult {
   readonly targetPath: string;
   readonly receiptDir: string;
   readonly runxHome: string;
-  readonly status: RunLocalSkillResult["status"] | RunLocalChainResult["status"];
+  readonly status: RunLocalSkillResult["status"] | RunLocalGraphResult["status"];
   readonly receipt?: RunLocalSkillResult extends infer SkillResult
     ? SkillResult extends { readonly receipt: infer Receipt }
       ? Receipt
       : never
     : never;
-  readonly chainReceipt?: RunLocalChainResult extends infer ChainResult
-    ? ChainResult extends { readonly receipt: infer Receipt }
+  readonly graphReceipt?: RunLocalGraphResult extends infer GraphResult
+    ? GraphResult extends { readonly receipt: infer Receipt }
       ? Receipt
       : never
     : never;
@@ -109,8 +109,8 @@ export function parseHarnessFixture(contents: string): HarnessFixture {
   }
 
   const kind = requiredString(parsed.kind, "kind");
-  if (kind !== "skill" && kind !== "chain") {
-    throw new Error("Harness fixture kind must be skill or chain.");
+  if (kind !== "skill" && kind !== "graph") {
+    throw new Error("Harness fixture kind must be skill or graph.");
   }
 
   return {
@@ -221,8 +221,8 @@ async function executeHarnessFixture(args: {
             registryStore: args.options.registryStore,
             skillCacheDir: args.options.skillCacheDir,
           })
-        : await runLocalChain({
-            chainPath: args.targetPath,
+        : await runLocalGraph({
+            graphPath: args.targetPath,
             inputs: args.fixture.inputs,
             caller,
             env,
@@ -242,7 +242,7 @@ async function executeHarnessFixture(args: {
       runxHome,
       status: result.status,
       receipt: skillReceipt(result),
-      chainReceipt: chainReceipt(result),
+      graphReceipt: graphReceipt(result),
       trace,
       assertionErrors,
     };
@@ -300,7 +300,7 @@ function isInlineHarnessTarget(targetPath: string, targetStat: Awaited<ReturnTyp
 
 function assertHarnessResult(
   fixture: HarnessFixture,
-  result: RunLocalSkillResult | RunLocalChainResult,
+  result: RunLocalSkillResult | RunLocalGraphResult,
 ): readonly string[] {
   const errors: string[] = [];
 
@@ -308,7 +308,7 @@ function assertHarnessResult(
     errors.push(`Expected status ${fixture.expect.status}, got ${result.status}.`);
   }
 
-  const receipt = skillReceipt(result) ?? chainReceipt(result);
+  const receipt = skillReceipt(result) ?? graphReceipt(result);
   if (fixture.expect.receipt) {
     if (!receipt) {
       errors.push("Expected a receipt, but run did not produce one.");
@@ -329,7 +329,7 @@ function assertHarnessResult(
 
   if (fixture.expect.steps) {
     const actualSteps =
-      receipt?.kind === "chain_execution"
+      receipt?.kind === "graph_execution"
         ? receipt.steps.map((step) => step.step_id)
         : "steps" in result
           ? result.steps.map((step) => step.stepId)
@@ -387,15 +387,15 @@ function resolveHarnessRequest(
 
 type SkillReceipt = Extract<RunLocalSkillResult, { readonly status: "success" | "failure" }>["receipt"];
 
-function skillReceipt(result: RunLocalSkillResult | RunLocalChainResult): SkillReceipt | undefined {
+function skillReceipt(result: RunLocalSkillResult | RunLocalGraphResult): SkillReceipt | undefined {
   if ("receipt" in result && "skill" in result && !("chain" in result)) {
     return result.receipt as SkillReceipt | undefined;
   }
   return undefined;
 }
 
-function chainReceipt(result: RunLocalSkillResult | RunLocalChainResult): Extract<RunLocalChainResult, { readonly receipt: unknown }>["receipt"] | undefined {
-  if ("receipt" in result && "chain" in result) {
+function graphReceipt(result: RunLocalSkillResult | RunLocalGraphResult): Extract<RunLocalGraphResult, { readonly receipt: unknown }>["receipt"] | undefined {
+  if ("receipt" in result && "graph" in result) {
     return result.receipt;
   }
   return undefined;
@@ -516,10 +516,10 @@ function optionalReceiptKind(value: unknown, field: string): HarnessReceiptExpec
   if (value === undefined || value === null) {
     return undefined;
   }
-  if (value === "skill_execution" || value === "chain_execution") {
+  if (value === "skill_execution" || value === "graph_execution") {
     return value;
   }
-  throw new Error(`${field} must be skill_execution or chain_execution.`);
+  throw new Error(`${field} must be skill_execution or graph_execution.`);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

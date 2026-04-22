@@ -1,6 +1,6 @@
 import { parseDocument } from "yaml";
 
-import { validateChainDocument, type ChainDefinition } from "./chain.js";
+import { validateGraphDocument, type ExecutionGraph } from "./graph.js";
 import type { ExecutionSemantics } from "../../receipts/src/index.js";
 
 export const parserPackage = "@runx/parser";
@@ -47,7 +47,7 @@ export interface SkillSource {
   readonly task?: string;
   readonly hook?: string;
   readonly outputs?: Readonly<Record<string, unknown>>;
-  readonly chain?: ChainDefinition;
+  readonly chain?: ExecutionGraph;
   readonly raw: Record<string, unknown>;
 }
 
@@ -132,7 +132,7 @@ export interface HarnessCallerFixture {
 }
 
 export interface HarnessReceiptExpectation {
-  readonly kind?: "skill_execution" | "chain_execution";
+  readonly kind?: "skill_execution" | "graph_execution";
   readonly status?: "success" | "failure";
   readonly subject?: Readonly<Record<string, unknown>>;
 }
@@ -466,9 +466,9 @@ function validateSource(source: Record<string, unknown>, runx: Record<string, un
   };
 }
 
-function validateChainSource(value: unknown): ChainDefinition {
+function validateChainSource(value: unknown): ExecutionGraph {
   const chain = requiredRecord(value, "source.chain");
-  return validateChainDocument(chain);
+  return validateGraphDocument(chain);
 }
 
 function validateToolSource(source: SkillSource, field: string): SkillSource {
@@ -801,10 +801,10 @@ function optionalHarnessReceiptKind(value: unknown, field: string): HarnessRecei
   if (value === undefined || value === null) {
     return undefined;
   }
-  if (value === "skill_execution" || value === "chain_execution") {
+  if (value === "skill_execution" || value === "graph_execution") {
     return value;
   }
-  throw new SkillValidationError(`${field} must be skill_execution or chain_execution.`);
+  throw new SkillValidationError(`${field} must be skill_execution or graph_execution.`);
 }
 
 function requiredString(value: unknown, field: string): string {
@@ -917,5 +917,5 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export * from "./chain.js";
+export * from "./graph.js";
 export * from "./install.js";

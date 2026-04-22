@@ -94,7 +94,7 @@ describe("sourcey preflight", () => {
         return;
       }
 
-      expect(result.receipt.kind).toBe("chain_execution");
+      expect(result.receipt.kind).toBe("graph_execution");
       const receiptFiles = await readdir(receiptDir);
       expect(receiptFiles).toContain("journals");
       expect(receiptFiles.filter((file) => file.endsWith(".json"))).toContain(`${result.receipt.id}.json`);

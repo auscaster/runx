@@ -24,7 +24,7 @@ inputs:
 expect:
   status: success              # or failure, needs_resolution, etc.
   receipt:
-    kind: skill_execution      # or chain_execution
+    kind: skill_execution      # or graph_execution
     status: success
     subject:
       skill_name: expected-name
@@ -35,15 +35,15 @@ For chain fixtures, assert step completion:
 
 ```yaml
 name: chain-completes
-kind: chain
+kind: graph
 target: ../chains/my-chain.yaml
 expect:
   status: success
   receipt:
-    kind: chain_execution
+    kind: graph_execution
     status: success
     subject:
-      chain_name: my-chain
+      graph_name: my-chain
   steps:
     - step-one
     - step-two
