@@ -14,7 +14,20 @@ workspace:
       const outputIndex = process.argv.indexOf("-o");
       const outputDir = outputIndex >= 0 ? process.argv[outputIndex + 1] : path.resolve(process.cwd(), ".sourcey/runx-docs");
       mkdirSync(outputDir, { recursive: true });
-      writeFileSync(path.join(outputDir, "index.html"), "<!doctype html><html><head><title>Acme Docs</title></head><body><h1>Acme Docs</h1><p>Fixture docs.</p></body></html>");
+      writeFileSync(path.join(outputDir, "index.html"), `<!doctype html>
+      <html>
+        <head><title>Acme Docs</title></head>
+        <body>
+          <nav>Wrong Nav Text</nav>
+          <main id="docs">
+            <aside>Wrong Toc</aside>
+            <div id="content-area">
+              <header><h1>Acme Docs</h1><div>Native docs.</div></header>
+              <div class="prose"><p>Real content starts here.</p></div>
+            </div>
+          </main>
+        </body>
+      </html>`);
 inputs:
   project: project
   homepage_url: https://example.com
@@ -32,3 +45,6 @@ expect:
       brand_name: Acme
       generated: true
       index_title: Acme Docs
+      index_headings:
+        - Acme Docs
+      index_excerpt: Acme Docs Native docs. Real content starts here.

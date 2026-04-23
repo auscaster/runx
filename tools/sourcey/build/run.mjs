@@ -109,6 +109,68 @@ function extractHeadingTexts(html, maxHeadings = 4) {
   return headings;
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function extractBalancedElement(html, startIndex, tagName) {
+  const tagPattern = new RegExp(`</?${escapeRegExp(tagName)}\\b[^>]*>`, "gi");
+  tagPattern.lastIndex = startIndex;
+  let depth = 0;
+  let match = tagPattern.exec(html);
+  while (match) {
+    const token = match[0];
+    const isClosing = token.startsWith("</");
+    const isSelfClosing = /\/\s*>$/.test(token);
+    if (!isClosing && !isSelfClosing) {
+      depth += 1;
+    } else if (isClosing) {
+      depth -= 1;
+    }
+    if (depth === 0) {
+      return html.slice(startIndex, tagPattern.lastIndex);
+    }
+    match = tagPattern.exec(html);
+  }
+  return undefined;
+}
+
+function extractElementById(html, id) {
+  const matcher = new RegExp(`<([a-z0-9-]+)\\b[^>]*\\bid\\s*=\\s*(["'])${escapeRegExp(id)}\\2[^>]*>`, "i");
+  const match = matcher.exec(html);
+  if (!match || match.index === undefined) {
+    return undefined;
+  }
+  return extractBalancedElement(html, match.index, match[1]);
+}
+
+function extractFirstElement(html, tagName) {
+  const matcher = new RegExp(`<${escapeRegExp(tagName)}\\b[^>]*>`, "i");
+  const match = matcher.exec(html);
+  if (!match || match.index === undefined) {
+    return undefined;
+  }
+  return extractBalancedElement(html, match.index, tagName);
+}
+
+function removeHtmlSubtrees(html, tagNames) {
+  let output = html;
+  for (const tagName of tagNames) {
+    const pattern = new RegExp(`<${escapeRegExp(tagName)}\\b[^>]*>[\\s\\S]*?<\\/${escapeRegExp(tagName)}>`, "gi");
+    output = output.replace(pattern, " ");
+  }
+  return output;
+}
+
+function extractRenderedContentHtml(html) {
+  const content =
+    extractElementById(html, "content-area") ??
+    extractFirstElement(html, "main") ??
+    extractFirstElement(html, "body") ??
+    html;
+  return removeHtmlSubtrees(content, ["nav", "aside", "script", "style", "noscript"]);
+}
+
 function buildIndexEvidence(indexPath) {
   if (!existsSync(indexPath)) {
     return {};
@@ -120,10 +182,11 @@ function buildIndexEvidence(indexPath) {
   }
 
   const html = readFileSync(indexPath, "utf8");
-  const excerpt = stripHtml(html).slice(0, 1200);
+  const contentHtml = extractRenderedContentHtml(html);
+  const excerpt = stripHtml(contentHtml).slice(0, 1200);
   return {
     index_title: extractTagText(html, "title") ?? null,
-    index_headings: extractHeadingTexts(html),
+    index_headings: extractHeadingTexts(contentHtml),
     index_excerpt: excerpt || null,
   };
 }
