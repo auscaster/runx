@@ -7,6 +7,54 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../packages/cli/src/index.js";
 
 describe("runx init", () => {
+  it("scaffolds a new authoring package through runx new", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-new-package-"));
+    const stdout = createMemoryStream();
+    const stderr = createMemoryStream();
+
+    try {
+      const exitCode = await runCli(
+        ["new", "Docs Demo", "--json"],
+        { stdin: process.stdin, stdout, stderr },
+        { ...process.env, RUNX_CWD: tempDir },
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stderr.contents()).toBe("");
+      const report = JSON.parse(stdout.contents()) as {
+        readonly new: {
+          readonly action: string;
+          readonly name: string;
+          readonly packet_namespace: string;
+          readonly directory: string;
+          readonly files: readonly string[];
+        };
+      };
+      const target = path.join(tempDir, "docs-demo");
+      expect(report.new).toMatchObject({
+        action: "package",
+        name: "docs-demo",
+        packet_namespace: "docs.demo",
+        directory: target,
+      });
+      expect(report.new.files).toContain("SKILL.md");
+      await expect(readFile(path.join(target, "SKILL.md"), "utf8")).resolves.toContain("name: docs-demo");
+      await expect(readFile(path.join(target, "X.yaml"), "utf8")).resolves.toContain("tool: docs.echo");
+      await expect(readFile(path.join(target, "tools/docs/echo/fixtures/basic.yaml"), "utf8")).resolves.toContain("lane: deterministic");
+      await expect(readFile(path.join(target, "fixtures/agent.yaml"), "utf8")).resolves.toContain("lane: agent");
+      await expect(readFile(path.join(target, "fixtures/agent.replay.json"), "utf8")).resolves.toContain("runx.replay.v1");
+      await expect(readFile(path.join(target, "dist/packets/echo.v1.schema.json"), "utf8")).resolves.toContain("docs.demo.echo.v1");
+      const manifest = JSON.parse(await readFile(path.join(target, "tools/docs/echo/manifest.json"), "utf8")) as {
+        readonly source_hash?: string;
+        readonly schema_hash?: string;
+      };
+      expect(manifest.source_hash).toMatch(/^sha256:[a-f0-9]{64}$/);
+      expect(manifest.schema_hash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("creates project-local state without creating global state", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-init-project-"));
     const projectDir = path.join(tempDir, "project");

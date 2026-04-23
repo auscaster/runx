@@ -8,6 +8,12 @@ importers:
 
   .:
     devDependencies:
+      '@runxhq/authoring':
+        specifier: workspace:*
+        version: link:packages/authoring
+      '@sinclair/typebox':
+        specifier: ^0.34.41
+        version: 0.34.49
       '@types/node':
         specifier: ^24.0.0
         version: 24.12.2
@@ -39,6 +45,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@runxhq/authoring':
+        specifier: workspace:^0.1.0
+        version: link:../authoring
       yaml:
         specifier: ^2.8.3
         version: 2.8.3
@@ -46,8 +55,6 @@ importers:
   packages/config: {}
 
   packages/contracts: {}
-
-  packages/create-package: {}
 
   packages/executor: {}
 

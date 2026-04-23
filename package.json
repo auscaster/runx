@@ -27,6 +27,8 @@
     "lint": "pnpm typecheck"
   },
   "devDependencies": {
+    "@runxhq/authoring": "workspace:*",
+    "@sinclair/typebox": "^0.34.41",
     "@types/node": "^24.0.0",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",

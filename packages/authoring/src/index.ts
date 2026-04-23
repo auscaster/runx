@@ -359,6 +359,73 @@ export function pruneUndefined<T>(value: T): T {
   return pruned as T;
 }
 
+export function prune<T>(value: T): T | undefined {
+  if (Array.isArray(value)) {
+    const items = value
+      .map((entry) => prune(entry))
+      .filter((entry) => entry !== undefined);
+    return (items.length > 0 ? items : undefined) as T | undefined;
+  }
+  if (!isRecord(value)) {
+    return value === undefined ? undefined : value;
+  }
+  const entries = Object.entries(value)
+    .map(([key, entry]) => [key, prune(entry)] as const)
+    .filter(([, entry]) => entry !== undefined);
+  return (entries.length > 0 ? Object.fromEntries(entries) : undefined) as T | undefined;
+}
+
+export function firstNonEmptyString(...values: readonly unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return String(value);
+    }
+  }
+  return undefined;
+}
+
+export function parseJsonObject(
+  value: unknown,
+  fallback: Readonly<Record<string, unknown>> = {},
+): Readonly<Record<string, unknown>> {
+  if (isRecord(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = JSON.parse(value) as unknown;
+    if (isRecord(parsed)) {
+      return parsed;
+    }
+  }
+  return fallback;
+}
+
+export function resolveRepoRoot(
+  inputs: Readonly<Record<string, unknown>> = {},
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return path.resolve(
+    String(
+      inputs.repo_root
+        || inputs.project
+        || inputs.fixture
+        || env.RUNX_CWD
+        || process.cwd(),
+    ),
+  );
+}
+
+export function resolveInsideRepo(repoRoot: string, targetPath: string): string {
+  const resolvedPath = path.resolve(repoRoot, targetPath);
+  if (!resolvedPath.startsWith(`${repoRoot}${path.sep}`) && resolvedPath !== repoRoot) {
+    throw new Error(`path escapes repo_root: ${targetPath}`);
+  }
+  return resolvedPath;
+}
+
 function finalizeOutput<Output>(
   output: Output | ToolFailure,
   definition: Pick<ToolDefinition<Record<string, InputParser<unknown>>, Output>, "schema" | "output">,
@@ -366,7 +433,7 @@ function finalizeOutput<Output>(
   if (isToolFailure(output)) {
     return output;
   }
-  const pruned = pruneUndefined(output);
+  const pruned = prune(output);
   const schema = definition.schema ?? definition.output?.packet;
   if (!schema || !isRecord(pruned) || "schema" in pruned) {
     return pruned;
@@ -381,6 +448,6 @@ function isToolFailure(value: unknown): value is ToolFailure {
   return typeof value === "object" && value !== null && (value as ToolFailure)[failureMarker] === true;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

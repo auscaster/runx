@@ -8,7 +8,7 @@ import {
   resolveInsideRepo,
   resolveRepoRoot,
   stringInput,
-} from "../../_lib/harness.mjs";
+} from "@runxhq/authoring";
 
 const tool = defineTool({
   inputs: {

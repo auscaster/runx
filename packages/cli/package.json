@@ -1,9 +1,19 @@
 {
   "name": "@runxhq/cli",
-  "version": "0.4.1",
+  "version": "0.4.2",
+  "description": "Runx CLI — governed runtime for agent skills, tools, chains, and packets.",
   "private": false,
   "license": "Apache-2.0",
   "type": "module",
+  "homepage": "https://github.com/runxhq/runx",
+  "bugs": {
+    "url": "https://github.com/runxhq/runx/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/runxhq/runx.git",
+    "directory": "packages/cli"
+  },
   "publishConfig": {
     "access": "public"
   },
@@ -31,6 +41,7 @@
     }
   },
   "dependencies": {
+    "@runxhq/authoring": "workspace:^0.1.0",
     "yaml": "^2.8.3"
   }
 }

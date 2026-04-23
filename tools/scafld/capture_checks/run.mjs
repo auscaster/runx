@@ -5,7 +5,7 @@ import {
   defineTool,
   firstNonEmptyString,
   stringInput,
-} from "../../_lib/harness.mjs";
+} from "@runxhq/authoring";
 
 const tool = defineTool({
   name: "scafld.capture_checks",

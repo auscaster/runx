@@ -165,6 +165,14 @@ runners:
               own evidence already uses those words.
             - A maintainer should be able to read the result and believe it is
               their project's docs, not a demo site.
+            - Sourcey card icons must be exact Heroicons v2 outline kebab-case
+              names. Do not invent icon names. Known-good card icons include
+              academic-cap, arrow-path, bell, bolt, book-open, chart-bar,
+              check-circle, cloud-arrow-up, code-bracket, command-line,
+              cpu-chip, cube, document, document-text, exclamation-triangle,
+              globe-alt, key, lifebuoy, light-bulb, lock-closed,
+              magnifying-glass, map, rocket-launch, server-stack,
+              shield-check, sparkles, and wrench-screwdriver.
           allowed_tools:
             - fs.read
             - cli.capture_help
@@ -212,7 +220,10 @@ runners:
             generated output living in source control without intent or
             deploy-time authoring assumptions. Explicitly call out any wording
             that reads like a preview, adoption pitch, migration pitch, or tool
-            scaffolding instead of native project docs. Do not propose
+            scaffolding instead of native project docs. Treat
+            build_report.icon_validation.status == "invalid" as a blocking
+            quality failure: cite invalid_icons and require exact Heroicons v2
+            outline replacements before passing the run. Do not propose
             open-ended revision loops here.
           allowed_tools:
             - fs.read
@@ -242,7 +253,10 @@ runners:
             loop, do not widen scope beyond the discovered plan, and do not turn
             generated site output into committed source. Prioritize fixing
             brand-fit errors, generic vendor framing, shallow IA, and missing
-            maintainer-grade coverage before making cosmetic changes.
+            maintainer-grade coverage before making cosmetic changes. If
+            evaluation_report or build_report identifies invalid Sourcey card
+            icons, replace them with exact Heroicons v2 outline kebab-case names
+            before making lower-priority prose edits.
           allowed_tools:
             - fs.read
           context:
@@ -280,6 +294,7 @@ runners:
           context:
             output_dir: rebuild.sourcey_build_report.data.output_dir
             index_path: rebuild.sourcey_build_report.data.index_path
+            sourcey_build_report: rebuild.sourcey_build_report.data
         - id: package
           label: package sourcey run
           tool: sourcey.package

@@ -40,6 +40,7 @@ Recommended flows:
 ```bash
 runx init
 runx init -g --prefetch official
+runx new docs-demo
 runx search sourcey
 runx sourcey --project .
 runx evolve

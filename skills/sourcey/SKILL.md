@@ -251,6 +251,22 @@ description: One-line description for search and meta tags
 Content here. Standard markdown with code blocks, tables, links.
 ```
 
+## Card Icon Contract
+
+Sourcey card icons are Heroicons v2 outline names in kebab-case. The renderer
+returns an empty icon for unknown names, so authoring must use exact names.
+
+Known-good names for documentation cards include: `academic-cap`, `arrow-path`,
+`bell`, `bolt`, `book-open`, `chart-bar`, `check-circle`, `cloud-arrow-up`,
+`code-bracket`, `command-line`, `cpu-chip`, `cube`, `document`,
+`document-text`, `exclamation-triangle`, `globe-alt`, `key`, `lifebuoy`,
+`light-bulb`, `lock-closed`, `magnifying-glass`, `map`, `rocket-launch`,
+`server-stack`, `shield-check`, `sparkles`, and `wrench-screwdriver`.
+
+Invalid card icon names are a blocking quality issue. The build report includes
+`icon_validation`; critique and revision must fix any
+`icon_validation.status: "invalid"` result before the run is accepted.
+
 ## Constraints
 
 - Only create tabs for content types the project actually has. Do not add an
@@ -258,6 +274,8 @@ Content here. Standard markdown with code blocks, tables, links.
 - Do not document APIs by hand when a spec file exists — use the spec tab.
 - Keep navigation shallow: 1-2 tabs, 2-4 groups for most projects.
 - Use project brand colors if identifiable. Otherwise use a neutral palette.
+- Use only exact Heroicons v2 outline names for Sourcey card `icon`
+  attributes; never invent icon names.
 - When a grounded brief provides logo, favicon, color, or IA guidance, prefer
   that over generic defaults.
 - Match the project's existing voice and terminology.

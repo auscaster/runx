@@ -21,6 +21,11 @@
       "type": "string",
       "required": false,
       "description": "Explicit index file path; defaults to <output_dir>/index.html."
+    },
+    "sourcey_build_report": {
+      "type": "json",
+      "required": false,
+      "description": "Optional Sourcey build report; invalid card icon validation blocks verification."
     }
   },
   "scopes": [
@@ -41,7 +46,7 @@
     "packet": "runx.sourcey.verification.v1",
     "wrap_as": "sourcey_verification_report"
   },
-  "source_hash": "sha256:89e758af880c273e2b964317bbdbaf6e7b2af105dd6ff831516bd2de9335efd9",
-  "schema_hash": "sha256:fb4aff7339afc0c0a2792454bde7f58f0235f213641ad41acfddc65e9044575d",
+  "source_hash": "sha256:f28d1645ac9d5f6e68c9c005317d66e6a1795961742f3b1792501811d65fa2f4",
+  "schema_hash": "sha256:988547124ced9b1f8d9c43f4a354e418ee673cae6ec04056460951119e89ae4d",
   "toolkit_version": "0.0.0"
 }

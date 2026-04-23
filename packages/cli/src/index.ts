@@ -68,6 +68,7 @@ import type { ApprovalGate, Question, ResolutionRequest, ResolutionResponse } fr
 import { loadCliAgentRuntime, type CliAgentRuntime } from "./agent-runtime.js";
 import { createHttpConnectService } from "./connect-http.js";
 import { ensureRunxInstallState, ensureRunxProjectState } from "./runx-state.js";
+import { scaffoldRunxPackage, sanitizeRunxPackageName } from "./scaffold.js";
 import { streamTrainableReceipts } from "./trainable-receipts.js";
 import { parse as parseYaml } from "yaml";
 
@@ -503,6 +504,8 @@ export interface ParsedArgs {
   readonly configAction?: "set" | "get" | "list";
   readonly configKey?: string;
   readonly configValue?: string;
+  readonly newName?: string;
+  readonly newDirectory?: string;
   readonly initAction?: "project" | "global";
   readonly prefetchOfficial: boolean;
   readonly exportSince?: string;
@@ -527,6 +530,7 @@ const builtinRootCommands = new Set([
   "harness",
   "connect",
   "config",
+  "new",
   "init",
   "export-receipts",
 ]);
@@ -683,6 +687,16 @@ export async function runCli(
         io.stdout.write(`${JSON.stringify({ status: "success", init: result }, null, 2)}\n`);
       } else {
         io.stdout.write(renderInitResult(result, env));
+      }
+      return 0;
+    }
+
+    if (parsed.command === "new" && parsed.newName) {
+      const result = await handleNewCommand(parsed, env);
+      if (parsed.json) {
+        io.stdout.write(`${JSON.stringify({ status: "success", new: result }, null, 2)}\n`);
+      } else {
+        io.stdout.write(renderNewResult(result, env));
       }
       return 0;
     }
@@ -1073,6 +1087,7 @@ function writeUsage(stream: NodeJS.WritableStream, env: NodeJS.ProcessEnv = proc
       "  runx knowledge show --project . [--json]",
       "  runx connect list|revoke <grant-id>|<provider> [--scope scope] [--scope-family family] [--authority-kind read_only|constructive|destructive] [--target-repo owner/repo] [--target-locator locator] [--json]",
       "  runx config set|get|list [agent.provider|agent.model|agent.api_key] [value] [--json]",
+      "  runx new <name> [--directory dir] [--json]",
       "  runx init [-g|--global] [--prefetch official] [--json]",
       "  runx harness <fixture.yaml|skill-dir|SKILL.md> [--json]",
       "  runx list [tools|skills|chains|packets|overlays] [--ok-only|--invalid-only] [--json]",
@@ -1084,6 +1099,7 @@ function writeUsage(stream: NodeJS.WritableStream, env: NodeJS.ProcessEnv = proc
       "  runx search docs",
       "  runx <skill> --project .",
       "  runx evolve",
+      "  runx new docs-demo",
       "  runx init",
       "  runx init -g --prefetch official",
       "  runx resume <run-id>",
@@ -1176,6 +1192,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   const isKnowledgeShow = command === "knowledge" && positionals[0] === "show";
   const isConnect = command === "connect";
   const isConfig = command === "config";
+  const isNew = command === "new";
   const isInit = command === "init";
   const isResume = command === "resume";
   const isDoctor = command === "doctor";
@@ -1219,6 +1236,13 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       : undefined;
   const connectAuthoritySource = inputs.authorityKind ?? inputs.authority_kind ?? inputs["authority-kind"];
   const connectAuthorityKind = isConnect ? normalizeAuthorityKind(connectAuthoritySource) : undefined;
+  const newDirectory = isNew && typeof inputs.directory === "string"
+    ? inputs.directory
+    : isNew && typeof inputs.dir === "string"
+      ? inputs.dir
+      : isNew
+        ? positionals[1]
+      : undefined;
   const initAction = isInit && truthyFlag(inputs.global) ? "global" : isInit ? "project" : undefined;
   const prefetchOfficial =
     isInit
@@ -1250,6 +1274,8 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
           )
           : isConfig
             ? {}
+            : isNew
+              ? omitInputs(inputs, ["directory", "dir"])
             : isInit
               ? omitInputs(inputs, ["global", "prefetch", "prefetchOfficial"])
               : isDoctor
@@ -1329,6 +1355,8 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     configAction: isConfig ? configAction(positionals) : undefined,
     configKey: isConfig ? positionals[1] : undefined,
     configValue: isConfig ? positionals.slice(2).join(" ") || undefined : undefined,
+    newName: isNew ? positionals[0] : undefined,
+    newDirectory,
     initAction,
     prefetchOfficial,
     exportSince: isExportReceipts && typeof inputs.since === "string" ? inputs.since : undefined,
@@ -1397,6 +1425,9 @@ function isSupportedCommand(parsed: ParsedArgs): boolean {
     return true;
   }
   if (parsed.command === "config" && parsed.configAction === "set" && parsed.configKey && parsed.configValue !== undefined) {
+    return true;
+  }
+  if (parsed.command === "new" && parsed.newName) {
     return true;
   }
   if (parsed.command === "init" && parsed.initAction) {
@@ -4492,6 +4523,15 @@ type ConfigResult =
   | { readonly action: "get"; readonly key: string; readonly value: unknown }
   | { readonly action: "list"; readonly values: RunxConfigFile };
 
+interface NewResult {
+  readonly action: "package";
+  readonly name: string;
+  readonly packet_namespace: string;
+  readonly directory: string;
+  readonly files: readonly string[];
+  readonly next_steps: readonly string[];
+}
+
 interface InitResult {
   readonly action: "project" | "global";
   readonly created: boolean;
@@ -4540,6 +4580,21 @@ async function handleConfigCommand(parsed: ParsedArgs, env: NodeJS.ProcessEnv): 
   throw new Error("Invalid config invocation.");
 }
 
+async function handleNewCommand(parsed: ParsedArgs, env: NodeJS.ProcessEnv): Promise<NewResult> {
+  if (!parsed.newName) {
+    throw new Error("runx new requires a package name.");
+  }
+  const directory = resolveNewPackageDirectory(parsed.newName, parsed.newDirectory, env);
+  const result = await scaffoldRunxPackage({
+    name: parsed.newName,
+    directory,
+  });
+  return {
+    action: "package",
+    ...result,
+  };
+}
+
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
 }
@@ -4553,6 +4608,31 @@ function renderConfigResult(result: ConfigResult, env: NodeJS.ProcessEnv = proce
   }
   const value = String(result.value ?? "");
   return renderKeyValue("config", "success", [[result.key, value]], t);
+}
+
+function renderNewResult(result: NewResult, env: NodeJS.ProcessEnv = process.env): string {
+  const t = theme(undefined, env);
+  return renderKeyValue(
+    "runx new",
+    "success",
+    [
+      ["package", result.name],
+      ["packet_namespace", result.packet_namespace],
+      ["directory", result.directory],
+      ["files", String(result.files.length)],
+      ["next", result.next_steps.join(" && ")],
+    ],
+    t,
+  );
+}
+
+function resolveNewPackageDirectory(name: string, directory: string | undefined, env: NodeJS.ProcessEnv): string {
+  if (directory) {
+    return path.isAbsolute(directory)
+      ? directory
+      : path.resolve(env.RUNX_CWD ?? env.INIT_CWD ?? process.cwd(), directory);
+  }
+  return path.resolve(env.RUNX_CWD ?? env.INIT_CWD ?? process.cwd(), sanitizeRunxPackageName(name));
 }
 
 async function handleInitCommand(parsed: ParsedArgs, env: NodeJS.ProcessEnv): Promise<InitResult> {

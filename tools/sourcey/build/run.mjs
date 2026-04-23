@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 
@@ -8,7 +8,7 @@ import {
   isRecord,
   rawInput,
   stringInput,
-} from "../../_lib/harness.mjs";
+} from "@runxhq/authoring";
 
 function parseDocsInputs(value) {
   if (isRecord(value)) {
@@ -63,6 +63,196 @@ function collectGeneratedFiles(rootDir, currentDir = rootDir, files = [], maxFil
   }
 
   return files;
+}
+
+function isDirectory(candidate) {
+  try {
+    return existsSync(candidate) && statSync(candidate).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function walkUp(startDir) {
+  const dirs = [];
+  let current = path.resolve(startDir);
+  while (true) {
+    dirs.push(current);
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return dirs;
+    }
+    current = parent;
+  }
+}
+
+function findHeroiconsOutlineDir(project, sourceyBin) {
+  const candidates = [];
+  candidates.push(path.join(project, "node_modules", "heroicons", "24", "outline"));
+
+  if (sourceyBin && (sourceyBin.includes(path.sep) || sourceyBin.startsWith("."))) {
+    const resolvedSourcey = path.resolve(project, sourceyBin);
+    const sourceyPath = existsSync(resolvedSourcey) ? realpathSync(resolvedSourcey) : resolvedSourcey;
+    for (const dir of walkUp(path.dirname(sourceyPath))) {
+      candidates.push(path.join(dir, "node_modules", "heroicons", "24", "outline"));
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (isDirectory(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+function loadHeroiconNames(outlineDir) {
+  return new Set(
+    readdirSync(outlineDir)
+      .filter((file) => file.endsWith(".svg"))
+      .map((file) => path.basename(file, ".svg")),
+  );
+}
+
+function collectMarkdownFiles(rootDir, currentDir = rootDir, files = [], maxFiles = 512) {
+  if (!isDirectory(currentDir) || files.length >= maxFiles) {
+    return files;
+  }
+
+  const ignoredDirs = new Set([".git", ".sourcey", "dist", "build", "node_modules"]);
+  const entries = readdirSync(currentDir, { withFileTypes: true })
+    .sort((left, right) => left.name.localeCompare(right.name));
+
+  for (const entry of entries) {
+    if (files.length >= maxFiles) {
+      break;
+    }
+
+    const absolutePath = path.join(currentDir, entry.name);
+    if (entry.isDirectory()) {
+      if (!ignoredDirs.has(entry.name)) {
+        collectMarkdownFiles(rootDir, absolutePath, files, maxFiles);
+      }
+      continue;
+    }
+
+    if (entry.isFile() && /\.(md|mdx)$/i.test(entry.name)) {
+      files.push(absolutePath);
+    }
+  }
+
+  return files;
+}
+
+function extractCardIconReferences(filePath, sourceRoot) {
+  const references = [];
+  const lines = readFileSync(filePath, "utf8").split(/\r?\n/);
+  const cardLinePattern = /(:{2,}card(?=[\s{])|<Card\b)/;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!cardLinePattern.test(line)) {
+      continue;
+    }
+    const iconPattern = /\bicon\s*=\s*(?:"([^"]+)"|'([^']+)'|\{\s*["']([^"']+)["']\s*\})/g;
+    let match = iconPattern.exec(line);
+    while (match) {
+      const icon = match[1] || match[2] || match[3] || "";
+      if (icon.trim()) {
+        references.push({
+          icon: icon.trim(),
+          path: path.relative(sourceRoot, filePath),
+          line: index + 1,
+          column: match.index + 1,
+        });
+      }
+      match = iconPattern.exec(line);
+    }
+  }
+  return references;
+}
+
+function editDistance(left, right) {
+  const rows = Array.from({ length: left.length + 1 }, () => Array(right.length + 1).fill(0));
+  for (let index = 0; index <= left.length; index += 1) {
+    rows[index][0] = index;
+  }
+  for (let index = 0; index <= right.length; index += 1) {
+    rows[0][index] = index;
+  }
+  for (let row = 1; row <= left.length; row += 1) {
+    for (let col = 1; col <= right.length; col += 1) {
+      const cost = left[row - 1] === right[col - 1] ? 0 : 1;
+      rows[row][col] = Math.min(
+        rows[row - 1][col] + 1,
+        rows[row][col - 1] + 1,
+        rows[row - 1][col - 1] + cost,
+      );
+    }
+  }
+  return rows[left.length][right.length];
+}
+
+function closestHeroiconName(icon, validNames) {
+  const prefixMatch = [...validNames]
+    .filter((name) => name.startsWith(`${icon}-`) || name.startsWith(icon))
+    .sort((left, right) => left.length - right.length || left.localeCompare(right))[0];
+  if (prefixMatch) {
+    return prefixMatch;
+  }
+
+  const maxDistance = Math.max(3, Math.ceil(icon.length * 0.3));
+  let best;
+  for (const name of validNames) {
+    const distance = editDistance(icon, name);
+    if (distance <= maxDistance && (!best || distance < best.distance || (distance === best.distance && name < best.name))) {
+      best = { name, distance };
+    }
+  }
+  return best?.name;
+}
+
+function validateCardIcons(project, sourceRoot, sourceyBin) {
+  if (!sourceRoot || !isDirectory(sourceRoot)) {
+    return {
+      checked: false,
+      status: "skipped",
+      icon_count: 0,
+      invalid_count: 0,
+      invalid_icons: [],
+      reason: "No Sourcey markdown source directory was available for card icon validation.",
+    };
+  }
+
+  const iconReferences = collectMarkdownFiles(sourceRoot)
+    .flatMap((filePath) => extractCardIconReferences(filePath, sourceRoot));
+  const outlineDir = findHeroiconsOutlineDir(project, sourceyBin);
+  if (!outlineDir) {
+    return {
+      checked: false,
+      status: "skipped",
+      icon_count: iconReferences.length,
+      invalid_count: 0,
+      invalid_icons: [],
+      reason: "Could not locate heroicons/24/outline for Sourcey card icon validation.",
+    };
+  }
+
+  const validNames = loadHeroiconNames(outlineDir);
+  const invalidIcons = iconReferences
+    .filter((reference) => !validNames.has(reference.icon))
+    .map((reference) => ({
+      ...reference,
+      suggestion: closestHeroiconName(reference.icon, validNames),
+    }));
+
+  return {
+    checked: true,
+    status: invalidIcons.length > 0 ? "invalid" : "valid",
+    icon_count: iconReferences.length,
+    invalid_count: invalidIcons.length,
+    invalid_icons: invalidIcons.slice(0, 25),
+    registry_source: outlineDir,
+  };
 }
 
 function decodeHtmlEntities(text) {
@@ -210,6 +400,7 @@ const tool = defineTool({
     const sourceyArgs = /\.(mjs|cjs|js)$/.test(sourcey) ? [sourcey] : [];
     const mode = String(docsInputs.mode || "config");
     let buildCwd = project;
+    let docsSourceRoot;
 
     sourceyArgs.push("build");
     if (mode === "openapi") {
@@ -224,6 +415,7 @@ const tool = defineTool({
         throw new Error(`Sourcey config not found: ${configPath}`);
       }
       buildCwd = path.dirname(configPath);
+      docsSourceRoot = buildCwd;
       const configFile = path.basename(configPath);
       if (configFile !== "sourcey.config.ts") {
         sourceyArgs.push("--config", configFile);
@@ -293,6 +485,7 @@ const tool = defineTool({
       generated,
       index_path: indexPath,
       generated_files: collectGeneratedFiles(outputDir),
+      icon_validation: validateCardIcons(project, docsSourceRoot, sourcey),
       ...buildIndexEvidence(indexPath),
     };
   },

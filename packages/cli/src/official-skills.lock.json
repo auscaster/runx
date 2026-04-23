@@ -101,8 +101,8 @@
   },
   {
     "skill_id": "runx/sourcey",
-    "version": "sha-4f4bbbfd4a85",
-    "digest": "c926c607f075dabcf01bf7ecbd5a0efc0947aa0c7f2b49ccbc94751b18f9f28d"
+    "version": "sha-290658cbb0a7",
+    "digest": "eb115a19ad6c090776639f8cba1120cd89847b573e1b880ad1e908a2e4f91daf"
   },
   {
     "skill_id": "runx/vuln-scan",

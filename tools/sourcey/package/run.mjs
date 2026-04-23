@@ -3,7 +3,7 @@ import {
   defineTool,
   firstNonEmptyString,
   optionalArtifact,
-} from "../../_lib/harness.mjs";
+} from "@runxhq/authoring";
 
 const tool = defineTool({
   schema: "runx.sourcey.packet.v1",

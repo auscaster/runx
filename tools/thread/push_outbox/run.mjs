@@ -9,7 +9,7 @@ import {
   optionalArtifact,
   recordInput,
   stringInput,
-} from "../../_lib/harness.mjs";
+} from "@runxhq/authoring";
 import {
   fetchGitHubIssueThread,
   firstNonEmptyString,

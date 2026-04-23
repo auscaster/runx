@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 
-import { defineTool, failure, rawInput, stringInput } from "../../_lib/harness.mjs";
+import { defineTool, failure, rawInput, stringInput } from "@runxhq/authoring";
 
 const tool = defineTool({
   inputs: {

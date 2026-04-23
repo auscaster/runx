@@ -1,7 +1,9 @@
+import path from "node:path";
+
 import { Type } from "@sinclair/typebox";
 import { describe, expect, it } from "vitest";
 
-import { artifact, definePacket, defineTool, failure, stringInput } from "./index.js";
+import { artifact, definePacket, defineTool, failure, firstNonEmptyString, prune, resolveInsideRepo, resolveRepoRoot, stringInput } from "./index.js";
 
 describe("@runxhq/authoring", () => {
   it("defines packets as durable schema objects", () => {
@@ -84,5 +86,14 @@ describe("@runxhq/authoring", () => {
     await expect(tool.runWith({ packet: { schema: "demo.packet.v1", data: { value: "ok" } } })).resolves.toEqual({
       value: "ok",
     });
+  });
+
+  it("exports shared authoring helpers for built-in and project-local tools", () => {
+    expect(firstNonEmptyString("", undefined, " docs ")).toBe("docs");
+    expect(prune({ keep: "yes", drop: undefined, empty: [], nested: { value: undefined } })).toEqual({ keep: "yes" });
+    expect(resolveRepoRoot({ repo_root: "repo" }, { RUNX_CWD: "/tmp/project" } as NodeJS.ProcessEnv)).toBe(
+      path.resolve("repo"),
+    );
+    expect(() => resolveInsideRepo("/tmp/repo", "../escape")).toThrow(/escapes repo_root/);
   });
 });
