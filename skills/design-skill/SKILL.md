@@ -37,6 +37,8 @@ review for the catalog:
   prose; name what the skill gives the maintainer or operator
 - write from the maintainer's viewpoint: "Compared with issue-triage, this
   skill owns..." not "Based on the supplied catalog..."
+- avoid "provided catalog evidence" framing; say `current catalog` or name the
+  adjacent entries directly
 - never use `supplied` or `envelope` in reader-facing proposal fields; replace
   them with named sources, `current runx catalog`, `available evidence`, or
   concrete provenance

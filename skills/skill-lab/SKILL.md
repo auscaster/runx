@@ -41,6 +41,8 @@ proposal should:
   prose; name the maintainer artifact, decision, or workflow improvement
 - write catalog fit from the maintainer's point of view: name the adjacent
   skill or chain and the boundary directly
+- avoid "provided catalog evidence" framing; say `current catalog` or name the
+  adjacent entries directly
 - never use `supplied` or `envelope` in proposal prose; if provenance is thin,
   say what source was unavailable in plain maintainer language
 
