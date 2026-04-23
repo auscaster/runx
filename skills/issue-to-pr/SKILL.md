@@ -68,6 +68,24 @@ The important contract shape is:
   live outside the governed repo, or under ignored paths, so scafld audit and
   review gates only reason about declared engineering changes.
 
+## Quality Profile
+
+- Purpose: turn one bounded thread-driven change into a visible, reviewable
+  draft PR through native scafld surfaces.
+- Audience: maintainers reviewing the issue, spec, code change, adversarial
+  review, and draft PR.
+- Artifact contract: scafld spec, authored change bundle, review artifact,
+  checks, PR body, draft pull request packet, outbox entry, and receipt trail.
+- Evidence bar: every spec objective, file impact, acceptance check, and PR
+  claim must trace to the thread, repo snapshot, scafld state, or actual
+  working-tree change.
+- Voice bar: engineering-system prose. No generic fix summaries, no hidden
+  workflow objects, and no PR body that overstates what changed.
+- Strategic bar: use this lane only when the change is bounded enough for one
+  governed PR; otherwise return planning or review handoff.
+- Stop conditions: return `needs_resolution` or stop at review when scope,
+  validation, reviewer evidence, or push authorization is missing.
+
 ## Structured Output
 
 On success, the lane now emits two coupled PR outputs and, when supported, a

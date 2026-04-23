@@ -15,6 +15,24 @@ cognition — every phase produces a typed artifact, every mutation requires
 approval, every step emits a receipt. A single evolve run ends in a bounded
 artifact, not an open-ended improvement loop.
 
+## Quality Profile
+
+- Purpose: identify or plan one bounded repo improvement under governed phase
+  semantics.
+- Audience: maintainers deciding whether the proposed objective is worth
+  turning into a spec, patch, or PR lane.
+- Artifact contract: opportunity report, recommended objective, change plan,
+  spec document when applicable, and explicit stop state.
+- Evidence bar: ground opportunities in repo state, receipts, failing runs,
+  visible docs, current plans, or explicit operator context.
+- Voice bar: maintainer planning brief. No vague self-improvement language or
+  open-ended "make it better" framing.
+- Strategic bar: recommend the smallest improvement that materially strengthens
+  runx capability, reliability, content quality, or trust.
+- Stop conditions: stop at `spec` when mutation is not authorized, and return
+  no recommendation when the evidence does not support a bounded high-value
+  move.
+
 ## Canonical semantics
 
 Complex runx skills share one internal phase language:

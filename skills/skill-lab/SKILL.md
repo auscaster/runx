@@ -46,6 +46,27 @@ proposal should:
 - never use `supplied` or `envelope` in proposal prose; if provenance is thin,
   say what source was unavailable in plain maintainer language
 
+## Quality Profile
+
+- Purpose: decide whether one bounded opportunity deserves a first-party runx
+  skill or chain proposal, then produce the proposal packet.
+- Audience: runx maintainers reviewing the catalog, not a model evaluating its
+  own work.
+- Artifact contract: crisp thesis, maintainer pain, catalog fit, full contract
+  with inputs and outputs, sample output shape, boundaries, non-goals, harness
+  fixtures, acceptance checks, and explicit maintainer decisions.
+- Evidence bar: cite the source thread, amendments, catalog entries, and prior
+  art that make the proposal necessary. Do not turn issue discussion into
+  public proposal prose.
+- Voice bar: first-party catalog proposal. It should read like a maintainer
+  wrote it after doing the work.
+- Strategic bar: explain why this should be first-party, why it is not Sourcey,
+  `draft-content`, an existing skill, or a chain amendment, and what strategic
+  runx capability it strengthens.
+- Stop conditions: return `needs_more_evidence`, `needs_review`, or
+  `not_first_party` when the idea is useful but does not deserve a new catalog
+  surface.
+
 It does not silently open PRs, mutate external repos, or imply that a proposed
 skill is already accepted. Those outward moves belong to provider-bound lanes
 such as `aster`'s live issue-ledger flow.

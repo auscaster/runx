@@ -1,14 +1,39 @@
 ---
 name: prior-art
-description: Research best-in-class skill and composite execution patterns for a proposed runx flow.
+description: Compare existing approaches, catalog surfaces, and domain patterns before runx designs, drafts, or acts.
 ---
 
 # Prior Art
 
-Research existing tools, standards, protocols, and skill patterns relevant to
-a proposed runx skill or execution flow. Produce verified findings that
-constrain the design — not a survey, not a summary, but specific claims with
-sources that the skill author needs to make decisions.
+Compare existing tools, standards, protocols, catalog surfaces, content
+patterns, and domain precedents relevant to one bounded runx objective.
+Produce verified findings that constrain the next artifact — not a survey, not
+a summary, but specific claims with sources that a maintainer, author, or
+operator needs to make a better decision.
+
+`prior-art` is not only for skill design. It should support Sourcey docs
+outreach, skill research, ecosystem briefs, content drafts, issue responses,
+release narratives, and any chain that needs to know what already exists before
+it produces an artifact.
+
+## Quality Profile
+
+- Purpose: prevent low-value duplication and weak strategic choices before a
+  chain writes, publishes, proposes, or mutates anything.
+- Audience: the downstream skill or human reviewer deciding whether the next
+  artifact is worth producing.
+- Artifact contract: concise findings, sources, catalog/comparison fit, risks,
+  and a recommended posture for the current chain purpose.
+- Evidence bar: cite exact docs, source files, receipts, issue threads,
+  external references, or catalog entries; mark uncertainty explicitly.
+- Voice bar: write as a maintainer briefing another maintainer. Do not narrate
+  the research process or describe context as "provided catalog evidence."
+- Strategic bar: explain what this comparison changes about the next artifact:
+  reuse, narrow scope, no action, new skill, better docs angle, safer outreach,
+  or a tighter content claim.
+- Stop conditions: return `needs_more_evidence` when the comparison would rest
+  on guesses, and return `not_worth_pursuing` when the objective is true but
+  not strategically useful for the chain purpose.
 
 Priority order:
 
@@ -22,7 +47,8 @@ Priority order:
    version. Read the spec.
 
 3. **Prior art in runx.** Check `skills/` and the registry. Could an existing
-   skill be composed or extended instead of building from scratch?
+   skill, chain, Sourcey docs path, content path, or issue workflow be reused
+   or amended instead of creating a new first-party surface?
 
    When `decomposition.required_skills` contains entries where `exists: true`,
    recommending reuse is a first-class output. Do not draft new primitives
@@ -30,16 +56,22 @@ Priority order:
    path in `recommended_flow` and `findings`, and scope any new design work
    to the composition glue around it rather than duplicating its internals.
 
-   Be concrete about catalog fit. Name the adjacent current skill or chain,
-   explain the boundary it already owns, and say exactly what remains unsolved.
-   "Not quite right" is not enough. The proposal should either clearly reuse
-   the current catalog or clearly explain the gap.
+   Be concrete about catalog fit. Name the adjacent current skill, chain, or
+   content surface, explain the boundary it already owns, and say exactly what
+   remains unsolved. "Not quite right" is not enough. The downstream artifact
+   should either clearly reuse the current catalog or clearly explain the gap.
 
-4. **Governance patterns.** What scopes does this skill need? Where are the
-   mutation boundaries? What approval or review checkpoints does the domain
-   imply?
+4. **Audience and artifact precedents.** What would high-quality output look
+   like for this audience? For docs, inspect native project vocabulary and
+   information architecture. For outreach, inspect community norms. For briefs,
+   inspect what would change the operator's decision. For skills, inspect
+   adjacent skill contracts and examples.
 
-5. **Failure modes.** What goes wrong? Common error conditions, edge cases,
+5. **Governance patterns.** What scopes does the chain need? Where are the
+   mutation, publication, or handoff boundaries? What approval or review
+   checkpoints does the domain imply?
+
+6. **Failure modes.** What goes wrong? Common error conditions, edge cases,
    partial-success scenarios, timeouts, missing context.
 
 For each finding: state the claim, cite where you verified it, and note
@@ -53,14 +85,21 @@ something, say so.
 - `findings`: array of claims with `claim`, `source`, `relevance`, `confidence`.
 - `recommended_flow`: suggested skill/execution flow based on findings.
 - `catalog_fit`: concise explanation of which current runx skills or chains
-  were considered, where they stop, and why the proposed skill is new work
-  rather than duplication.
+  were considered, where they stop, and why the next artifact is new work,
+  reuse, amendment, or a clean stop rather than duplication.
+- `quality_bar`: audience, artifact, evidence, voice, and stop conditions that
+  should constrain the downstream skill.
 - `sources`: references consulted (file paths, URLs, spec names, versions).
 - `risks`: adoption, safety, or implementation risks with likelihood,
   impact, and mitigation.
 
 ## Inputs
 
-- `objective` (required): the skill objective being researched.
+- `objective` (required): the bounded objective being researched.
 - `decomposition` (optional): output from `work-plan`. When
   provided, focus on validating the proposed steps rather than surveying.
+- `chain_purpose` (optional): why the caller is researching this objective,
+  such as `skill_proposal`, `sourcey_docs`, `content_draft`,
+  `ecosystem_brief`, `issue_response`, or `release`.
+- `audience` (optional): who will read or act on the downstream artifact.
+- `artifact_contract` (optional): expected downstream output shape.

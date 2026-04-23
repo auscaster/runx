@@ -14,6 +14,24 @@ what tests or governance gaps block adoption.
 Avoid generic praise. The output should help an operator decide whether to
 adopt, publish, sandbox, or reject the skill.
 
+## Quality Profile
+
+- Purpose: decide whether a bounded skill package is trustworthy and useful
+  enough for adoption, publication, sandboxing, or rejection.
+- Audience: operators and maintainers responsible for capability trust.
+- Artifact contract: capability profile, trust assessment, test matrix, and
+  recommendation report.
+- Evidence bar: base trust on the skill contract, execution profile, fixtures,
+  receipts, source notes, and known failure evidence. Do not infer trust from
+  a confident README alone.
+- Voice bar: direct review notes with concrete blockers and residual risk. No
+  generic praise, marketing language, or "looks good" summaries.
+- Strategic bar: explain whether the skill strengthens the catalog, fills a
+  real operator need, duplicates existing capability, or carries unacceptable
+  trust risk.
+- Stop conditions: return `needs_more_evidence` when receipts or harness proof
+  are missing, and `reject` when the skill cannot be bounded or audited.
+
 ## Output
 
 - `capability_profile`: what the skill appears to do and how it executes.

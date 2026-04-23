@@ -13,6 +13,23 @@ requires native `--json` output for supported commands, records the runx
 receipt for the hop, and lets the chain define which command is allowed at each
 step.
 
+## Quality Profile
+
+- Purpose: expose native scafld lifecycle commands through governed runx steps
+  without hiding scafld state.
+- Audience: maintainers and chains that need spec, review, branch, status,
+  checks, and PR-body surfaces to stay native and inspectable.
+- Artifact contract: native scafld JSON payload, receipt metadata, and any
+  projected markdown or check surface requested by the command.
+- Evidence bar: forward scafld fields as-is. Do not reconstruct lifecycle state
+  from prose or invent missing spec/review data.
+- Voice bar: operational wrapper language only. The wrapper should not become a
+  second workflow narrative.
+- Strategic bar: keep the engineering system visible while runx governs
+  boundaries, scopes, approvals, and receipts.
+- Stop conditions: fail or return the native scafld gate reason when validation,
+  audit, review, or completion blocks. Do not smooth over lifecycle failures.
+
 ## Lifecycle
 
 scafld manages code-change work through a linear lifecycle:

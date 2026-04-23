@@ -45,6 +45,26 @@ would stand behind:
 - if the repo evidence is too thin for a strong docs page, surface that as an
   evidence gap instead of manufacturing confident filler
 
+## Quality Profile
+
+- Purpose: produce native project documentation, not a generic generated docs
+  demo.
+- Audience: developers evaluating or using the target project, plus the
+  maintainer who owns the docs.
+- Artifact contract: bounded docs plan, authored source bundle, deterministic
+  build output, critique, at most one revision pass, and verification evidence.
+- Evidence bar: infer docs structure from the repository, existing docs,
+  package metadata, API specs, examples, and project terminology. Missing
+  evidence narrows the docs; it does not justify filler.
+- Voice bar: match the project's own vocabulary, confidence level, and
+  ambition. Never expose discovery, build, or critique mechanics as page prose.
+- Strategic bar: the docs should make a real user action easier: install,
+  evaluate, integrate, operate, or contribute. A pretty site with thin content
+  is a failed run.
+- Stop conditions: return `needs_more_evidence`, `needs_review`, or an empty
+  author/revise bundle when the repo already has the right docs or the evidence
+  does not support new pages.
+
 ## Canonical semantics
 
 Complex runx skills share a reusable phase language:

@@ -44,6 +44,22 @@ failure should produce one fix, not an architectural rewrite. If the
 review reveals multiple independent issues, propose them as separate
 improvements, not a bundled change.
 
+## Quality Profile
+
+- Purpose: convert failure evidence into one bounded, testable improvement.
+- Audience: skill maintainers deciding what to fix next.
+- Artifact contract: root-cause review, improvement proposal, updated
+  acceptance checks, and harness fixtures that reproduce or prevent the failure.
+- Evidence bar: tie every proposed change to receipt data, harness output,
+  source notes, or the current skill contract. Do not invent a rewrite because
+  a failure is inconvenient.
+- Voice bar: direct engineering review. No vague "improve robustness" language
+  without a concrete failing behavior and fixture.
+- Strategic bar: prefer the smallest fix that strengthens the skill's trust
+  boundary, content quality, contract clarity, or runtime correctness.
+- Stop conditions: return `no_change`, `needs_more_evidence`, or
+  `needs_human` when the receipt does not support a bounded fix.
+
 ## Inputs
 
 All inputs are optional. Supply whichever evidence is available:

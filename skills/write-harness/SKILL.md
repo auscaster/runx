@@ -92,6 +92,26 @@ relative target `../<skill-name>` in harness fixtures instead of unresolved
 placeholder targets. If artifact placement truly needs maintainer input, put
 that in `maintainer_decisions` rather than leaking it into the fixture target.
 
+## Quality Profile
+
+- Purpose: turn the proposed contract into replayable proof and sharpen the
+  proposal while doing it.
+- Audience: implementers and reviewers who need to know what correct behavior
+  means before code exists.
+- Artifact contract: skill spec, execution plan when needed, pain points,
+  catalog fit, maintainer decisions, harness fixtures, and acceptance checks.
+- Evidence bar: fixtures must reflect the declared contract, prior-art
+  constraints, and known failure modes. Do not invent unsupported behavior just
+  to make a fuller matrix.
+- Voice bar: maintainer-facing proposal language. Fixtures can be technical,
+  but the surfaced proposal must not read like a trace, scaffold, or placeholder
+  bundle.
+- Strategic bar: every fixture should protect a user-visible promise, trust
+  boundary, or failure mode that matters for the skill's purpose.
+- Stop conditions: return `needs_resolution` when the contract is too vague to
+  harness, and return `not_first_party` when the proposed skill should be reuse,
+  Sourcey/content work, or a chain amendment instead.
+
 ## Output
 
 - `skill_spec`: proposed SKILL.md content or update.

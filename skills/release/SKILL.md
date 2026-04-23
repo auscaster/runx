@@ -57,6 +57,24 @@ receipt link.
 Refuses to act if the brief is missing, unpublishable, or not carried
 through the approval gate.
 
+## Quality Profile
+
+- Purpose: turn release evidence into an audited publish/no-publish decision
+  and, after approval, a versioned release.
+- Audience: maintainers, package consumers, and operators reviewing the release
+  trail.
+- Artifact contract: release brief, changelog, check results, unresolved flags,
+  approval decision, publish report, and announcement packet.
+- Evidence bar: changelog and version claims must trace to commits, tags,
+  checks, package metadata, or explicit operator context.
+- Voice bar: release writing should be concrete and user-facing. Do not pad
+  with generic launch language or hide blockers behind positive wording.
+- Strategic bar: the release should explain why this version matters and what
+  users should do next.
+- Stop conditions: stop at prepare or approval when checks fail, versioning is
+  unclear, changelog evidence is thin, or the announcement would overstate the
+  release.
+
 ## Inputs
 
 | Name | Required | Description |

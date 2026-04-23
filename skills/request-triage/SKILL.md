@@ -24,6 +24,25 @@ governed remediation lane. Use `work-plan` for larger or multi-step
 work. Use `reply-only` when the right answer is guidance rather than mutation.
 Use `manual-triage` when the report is ambiguous, risky, or missing key context.
 
+## Quality Profile
+
+- Purpose: convert a noisy inbound request into one explicit, governed next
+  lane or a clean stop.
+- Audience: the maintainer supervising the queue and the downstream lane that
+  must share the same parent change artifact.
+- Artifact contract: `triage_report`, `change_set`, and exactly one downstream
+  request shape when planning or build is justified.
+- Evidence bar: ground severity, category, and routing in the request text,
+  visible context, and product constraints. Missing context must appear in
+  `operator_notes`, not as invented certainty.
+- Voice bar: concise maintainer handoff. The suggested reply should sound like
+  the project owner, not a ticket macro.
+- Strategic bar: prefer the smallest lane that moves the request forward while
+  preserving trust boundaries and visible review.
+- Stop conditions: use `hold`, `needs_human`, `manual-triage`, or
+  `request_review` when the request is too broad, risky, under-specified, or
+  low-value for immediate work.
+
 ## Output Contract
 
 `triage_report` must contain:

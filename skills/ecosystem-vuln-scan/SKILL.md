@@ -13,6 +13,23 @@ It keeps the security flow bounded and reviewable:
 2. draft the advisory
 3. require approval before anything is packaged for publication
 
+## Quality Profile
+
+- Purpose: compose scan, advisory drafting, and approval into one public-facing
+  security lane.
+- Audience: maintainers, operators, and external readers affected by the
+  advisory.
+- Artifact contract: risk packet, advisory draft, approval decision, and
+  publish packet.
+- Evidence bar: public-facing claims must trace back to the risk packet and
+  verified advisory sources. Speculation remains private operator context.
+- Voice bar: precise advisory language with clear impact, affected scope, and
+  remediation. No sensationalism or generic security filler.
+- Strategic bar: publish only when the advisory materially helps affected
+  users. Otherwise keep the output as an operator remediation packet.
+- Stop conditions: stop at review when severity, exposure, remediation, or
+  disclosure authorization is not clear.
+
 ## Inputs
 
 - `target` (required): repo, lockfile, package set, or ecosystem slice.

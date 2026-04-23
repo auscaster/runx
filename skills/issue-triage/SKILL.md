@@ -16,6 +16,25 @@ Separate discovery from response. Discovery finds the thread worth engaging.
 Response drafting turns one chosen thread into a concrete answer, escalation,
 or change plan.
 
+## Quality Profile
+
+- Purpose: choose or answer the issue where runx can create the most useful
+  next maintainer action.
+- Audience: maintainers and contributors reading the thread, plus any downstream
+  lane that consumes the triage artifact.
+- Artifact contract: issue candidates and selection rationale for discovery;
+  issue profile, response strategy, response draft, and follow-up actions for
+  response mode.
+- Evidence bar: quote or summarize the actual issue state, repo facts, receipts,
+  and maintainer context. Do not infer intent beyond the visible thread.
+- Voice bar: helpful maintainer response, not support-ticket filler or generic
+  bot tone. Lead with the decision, answer, or next action.
+- Strategic bar: explain why this issue deserves attention now and whether the
+  right move is reply, plan, build, hold, or no action.
+- Stop conditions: return `needs_more_evidence` or `needs_human` when the issue
+  is ambiguous, hostile, underspecified, unsafe, or outside the maintainer's
+  declared posture.
+
 ## Output
 
 Discovery runner:
