@@ -38,6 +38,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./metadata": {
+      "types": "./dist/src/metadata.d.ts",
+      "import": "./dist/src/metadata.js"
     }
   },
   "dependencies": {
