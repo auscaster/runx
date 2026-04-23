@@ -29,8 +29,11 @@ review for the catalog:
 - keep evidence, issue discussion, and approval mechanics as provenance; do not
   turn them into the reader-facing proposal body
 - avoid builder-internal language such as "supplied decomposition",
-  `UNRESOLVED_*` placeholders, issue-number-specific contract fields, or
-  repo-local path hedging that would look wrong in a first-party proposal
+  "supplied work-plan", "supplied catalog", `UNRESOLVED_*` placeholders,
+  issue-number-specific contract fields, or repo-local path hedging that would
+  look wrong in a first-party proposal
+- write from the maintainer's viewpoint: "Compared with issue-triage, this
+  skill owns..." not "Based on the supplied catalog..."
 
 When the proposed skill is thread-driven, the generated contract should model
 portable runx nouns, not provider nouns. Prefer `thread_title`,
