@@ -251,7 +251,12 @@ export function hydrateGitHubIssueThread({ adapterRef, issue, pullRequests }) {
   }
 
   for (const comment of comments) {
-    const commentId = firstNonEmptyString(comment.id, comment.databaseId, comment.url, `${entries.length + 1}`);
+    const commentId = firstNonEmptyString(
+      comment.databaseId,
+      parseGitHubIssueCommentId(comment.url),
+      comment.id,
+      `${entries.length + 1}`,
+    );
     const recordedAt = firstNonEmptyString(comment.createdAt, comment.updatedAt, updatedAt) ?? updatedAt;
     const outboxEntryId = parseGitHubOutboxEntryMarker(comment.body);
     const commentBody = stripGitHubOutboxEntryMarker(firstNonEmptyText(comment.body));
@@ -384,7 +389,7 @@ export function pushGitHubPullRequest({
   const base = firstNonEmptyString(target.base);
   const remote = firstNonEmptyString(target.remote, "origin");
   const title = firstNonEmptyString(pullRequest.title, outbox.title, state.title);
-  const commitMessage = buildGitHubCommitMessage(draft, title);
+  const commitMessage = buildGitHubCommitMessage(draft, title, outbox);
 
   if (!workspacePath) {
     throw new Error("workspace_path is required to push a GitHub pull request.");
@@ -517,8 +522,11 @@ export function pushGitHubMessage({
   const repoSlug = firstNonEmptyString(optionalRecord(state.metadata)?.repo, issueRef.repo_slug);
   const bodyMarkdown = firstNonEmptyText(metadata.body_markdown, metadata.body);
   const commentId = firstNonEmptyString(
-    metadata.comment_id,
     parseGitHubIssueCommentId(outbox.locator),
+    normalizeGitHubIssueCommentId(metadata.comment_id),
+    normalizeGitHubIssueCommentId(optionalRecord(metadata.message)?.comment_id),
+    normalizeGitHubIssueCommentId(optionalRecord(metadata.comment)?.id),
+    normalizeGitHubIssueCommentId(optionalRecord(metadata.comment)?.database_id),
   );
   const locator = firstNonEmptyString(
     outbox.locator,
@@ -635,7 +643,11 @@ function normalizeGitHubPullRequestArray(value) {
 
 function mapGitHubCommentToOutboxEntry(comment, threadLocator, entryId) {
   const commentRecord = asRecord(comment, "comment");
-  const commentId = firstNonEmptyString(commentRecord.id, commentRecord.databaseId);
+  const commentId = firstNonEmptyString(
+    commentRecord.databaseId,
+    parseGitHubIssueCommentId(commentRecord.url),
+    commentRecord.id,
+  );
   const recordedAt = firstNonEmptyString(commentRecord.updatedAt, commentRecord.createdAt);
   const body = stripGitHubOutboxEntryMarker(firstNonEmptyText(commentRecord.body));
 
@@ -693,7 +705,22 @@ function parseGitHubIssueCommentId(value) {
   return firstNonEmptyString(match?.[1]);
 }
 
-function buildGitHubCommitMessage(draftPullRequest, title) {
+function normalizeGitHubIssueCommentId(value) {
+  const text = firstNonEmptyString(value);
+  if (!text) {
+    return undefined;
+  }
+  return /^\d+$/.test(text) ? text : undefined;
+}
+
+function buildGitHubCommitMessage(draftPullRequest, title, outboxEntry) {
+  const reviewedCommitSubject = firstNonEmptyString(
+    optionalRecord(draftPullRequest.pull_request)?.commit_subject,
+    optionalRecord(outboxEntry.metadata)?.commit_subject,
+  );
+  if (reviewedCommitSubject) {
+    return reviewedCommitSubject;
+  }
   const existingTitle = firstNonEmptyString(title);
   if (existingTitle && /^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([^)]+\))?: /i.test(existingTitle)) {
     return existingTitle;
