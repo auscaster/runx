@@ -47,7 +47,11 @@ export default defineTool({
   },
 });
 `;
-  const toolRuntime = `const inputs = JSON.parse(process.env.RUNX_INPUTS_JSON || "{}");
+  const toolRuntime = `const fs = require("node:fs");
+const rawInputs = process.env.RUNX_INPUTS_PATH
+  ? fs.readFileSync(process.env.RUNX_INPUTS_PATH, "utf8")
+  : (process.env.RUNX_INPUTS_JSON || "{}");
+const inputs = JSON.parse(rawInputs);
 process.stdout.write(JSON.stringify({ schema: "${packetId}", data: { message: String(inputs.message || "hello") } }));
 `;
   const toolInputs = {

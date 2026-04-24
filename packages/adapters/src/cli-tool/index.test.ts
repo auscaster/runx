@@ -158,6 +158,32 @@ describe("invokeCliTool", () => {
     });
   });
 
+  it("spills oversized JSON inputs to RUNX_INPUTS_PATH instead of overflowing env vars", async () => {
+    const largePayload = "x".repeat(80 * 1024);
+
+    const result = await invokeCliTool({
+      source: {
+        command: "node",
+        args: [
+          "-e",
+          [
+            "const fs = require('node:fs');",
+            "const filePath = process.env.RUNX_INPUTS_PATH || '';",
+            "const raw = filePath ? fs.readFileSync(filePath, 'utf8') : process.env.RUNX_INPUTS_JSON || '';",
+            "const parsed = JSON.parse(raw);",
+            "process.stdout.write(`${Boolean(process.env.RUNX_INPUTS_PATH)}:${parsed.message.length}:${process.env.RUNX_INPUT_MESSAGE ?? ''}`);",
+          ].join(" "),
+        ],
+        timeoutSeconds: 5,
+      },
+      inputs: { message: largePayload },
+      skillDirectory: process.cwd(),
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.stdout).toBe(`true:${largePayload.length}:`);
+  });
+
   it("inherits the ambient process environment when no explicit env is passed", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-cli-tool-path-"));
     const scriptPath = path.join(tempDir, "ambient-command");

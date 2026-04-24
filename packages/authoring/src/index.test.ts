@@ -1,9 +1,11 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
 import { Type } from "@sinclair/typebox";
 import { describe, expect, it } from "vitest";
 
-import { artifact, definePacket, defineTool, failure, firstNonEmptyString, prune, resolveInsideRepo, resolveRepoRoot, stringInput } from "./index.js";
+import { artifact, definePacket, defineTool, failure, firstNonEmptyString, parseInputs, prune, resolveInsideRepo, resolveRepoRoot, stringInput } from "./index.js";
 
 describe("@runxhq/authoring", () => {
   it("defines packets as durable schema objects", () => {
@@ -139,5 +141,16 @@ describe("@runxhq/authoring", () => {
       path.resolve("repo"),
     );
     expect(() => resolveInsideRepo("/tmp/repo", "../escape")).toThrow(/escapes repo_root/);
+  });
+
+  it("parses tool inputs from a spill file when RUNX_INPUTS_PATH is provided", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-authoring-inputs-"));
+    const inputsPath = path.join(tempDir, "inputs.json");
+    try {
+      await writeFile(inputsPath, JSON.stringify({ message: "from-file" }), "utf8");
+      expect(parseInputs(undefined, inputsPath)).toEqual({ message: "from-file" });
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
   });
 });

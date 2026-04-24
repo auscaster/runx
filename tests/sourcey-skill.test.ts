@@ -6,6 +6,16 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { runLocalSkill, type Caller } from "@runxhq/core/runner-local";
+import { createDefaultLocalSkillRuntime } from "../packages/adapters/src/runtime.js";
+
+async function createSourceyRuntime(root: string, env: NodeJS.ProcessEnv = process.env) {
+  return await createDefaultLocalSkillRuntime({
+    root,
+    receiptDir: path.join(root, "receipts"),
+    runxHome: path.join(root, "home"),
+    env,
+  });
+}
 
 describe("sourcey skill", () => {
   const sourceyBin = resolveSourceyBin();
@@ -21,6 +31,7 @@ describe("sourcey skill", () => {
     const expectedProject = path.resolve(project);
 
     try {
+      const runtime = await createSourceyRuntime(tempDir, { ...process.env, RUNX_CWD: process.cwd() });
       const caller: Caller = {
         resolve: async (request) => {
           if (request.kind === "approval") {
@@ -97,9 +108,10 @@ describe("sourcey skill", () => {
           sourcey_bin: sourceyBin as string,
         },
         caller,
-        env: { ...process.env, RUNX_CWD: process.cwd() },
-        receiptDir,
-        runxHome: path.join(tempDir, "home"),
+        adapters: runtime.adapters,
+        env: runtime.env,
+        receiptDir: runtime.paths.receiptDir,
+        runxHome: runtime.paths.runxHome,
       });
 
       expect(result.status).toBe("success");
@@ -332,6 +344,7 @@ describe("sourcey skill", () => {
     };
 
     try {
+      const runtime = await createSourceyRuntime(tempDir, { ...process.env, RUNX_CWD: process.cwd() });
       await mkdir(projectDir, { recursive: true });
       await writeFile(
         path.join(projectDir, "package.json"),
@@ -355,9 +368,10 @@ describe("sourcey skill", () => {
           sourcey_bin: sourceyBin as string,
         },
         caller,
-        env: { ...process.env, RUNX_CWD: process.cwd() },
-        receiptDir,
-        runxHome: path.join(tempDir, "home"),
+        adapters: runtime.adapters,
+        env: runtime.env,
+        receiptDir: runtime.paths.receiptDir,
+        runxHome: runtime.paths.runxHome,
       });
 
       expect(result.status).toBe("success");

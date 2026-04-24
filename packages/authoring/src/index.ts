@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 export { Type as t, type Static, type TSchema } from "@sinclair/typebox";
@@ -90,7 +91,10 @@ export function defineTool<
     },
     async main() {
       try {
-        const rawInputs = parseInputs(process.env.RUNX_INPUTS_JSON);
+        const rawInputs = parseInputs(
+          process.env.RUNX_INPUTS_JSON,
+          process.env.RUNX_INPUTS_PATH,
+        );
         const output = await this.runWith(rawInputs);
         if (isToolFailure(output)) {
           process.stdout.write(JSON.stringify(output.output));
@@ -346,7 +350,13 @@ export function rawInput<T = unknown>(options: OptionalInputOption = {}): InputP
   };
 }
 
-export function parseInputs(value: string | undefined): Readonly<Record<string, unknown>> {
+export function parseInputs(
+  value: string | undefined,
+  filePath?: string | undefined,
+): Readonly<Record<string, unknown>> {
+  if (typeof filePath === "string" && filePath.length > 0) {
+    return parseInputs(readFileSync(filePath, "utf8"));
+  }
   if (!value) {
     return {};
   }

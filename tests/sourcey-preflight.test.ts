@@ -7,6 +7,16 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../packages/cli/src/index.js";
 import { parseRunnerManifestYaml, parseSkillMarkdown, validateRunnerManifest, validateSkill } from "@runxhq/core/parser";
 import { runLocalSkill, type Caller } from "@runxhq/core/runner-local";
+import { createDefaultLocalSkillRuntime } from "../packages/adapters/src/runtime.js";
+
+async function createSourceyRuntime(root: string, env: NodeJS.ProcessEnv = process.env) {
+  return await createDefaultLocalSkillRuntime({
+    root,
+    receiptDir: path.join(root, "receipts"),
+    runxHome: path.join(root, "home"),
+    env,
+  });
+}
 
 describe("sourcey parser", () => {
   it("keeps the portable skill standard while X owns the mixed-runner contract", async () => {
@@ -72,6 +82,7 @@ describe("sourcey preflight", () => {
 
     try {
       await writeSourceyStub(sourceyStub);
+      const runtime = await createSourceyRuntime(tempDir, { ...process.env, RUNX_CWD: process.cwd() });
 
       const result = await runLocalSkill({
         skillPath: path.resolve("skills/sourcey"),
@@ -84,9 +95,10 @@ describe("sourcey preflight", () => {
           brandName: "Sourcey Fixture",
           homepageUrl: "https://sourcey.example.test",
         }),
-        env: { ...process.env, RUNX_CWD: process.cwd() },
-        receiptDir,
-        runxHome: path.join(tempDir, "home"),
+        adapters: runtime.adapters,
+        env: runtime.env,
+        receiptDir: runtime.paths.receiptDir,
+        runxHome: runtime.paths.runxHome,
       });
 
       expect(result.status).toBe("success");
@@ -114,6 +126,11 @@ describe("sourcey preflight", () => {
 
     try {
       await writeSourceyStub(sourceyStub, envCapturePath);
+      const runtime = await createSourceyRuntime(tempDir, {
+        ...process.env,
+        RUNX_CWD: process.cwd(),
+        SOURCEY_STUB_ENV_PATH: envCapturePath,
+      });
 
       const result = await runLocalSkill({
         skillPath: path.resolve("skills/sourcey"),
@@ -126,13 +143,10 @@ describe("sourcey preflight", () => {
           brandName: "Sourcey Fixture",
           homepageUrl: "https://sourcey.example.test",
         }),
-        env: {
-          ...process.env,
-          RUNX_CWD: process.cwd(),
-          SOURCEY_STUB_ENV_PATH: envCapturePath,
-        },
-        receiptDir: path.join(tempDir, "receipts"),
-        runxHome: path.join(tempDir, "home"),
+        adapters: runtime.adapters,
+        env: runtime.env,
+        receiptDir: runtime.paths.receiptDir,
+        runxHome: runtime.paths.runxHome,
       });
 
       expect(result.status).toBe("success");
@@ -156,6 +170,11 @@ describe("sourcey preflight", () => {
       await writeFile(path.join(projectDir, "package.json"), JSON.stringify({ name: "sourcey-cwd-fixture" }, null, 2));
       await writeFile(path.join(docsDir, "sourcey.config.ts"), "export default {};\n");
       await writeSourceyStub(sourceyStub);
+      const runtime = await createSourceyRuntime(tempDir, {
+        ...process.env,
+        RUNX_CWD: process.cwd(),
+        SOURCEY_STUB_INVOCATION_PATH: invocationPath,
+      });
 
       const result = await runLocalSkill({
         skillPath: path.resolve("skills/sourcey"),
@@ -169,13 +188,10 @@ describe("sourcey preflight", () => {
           homepageUrl: "https://sourcey.example.test",
           configPath: "docs/sourcey.config.ts",
         }),
-        env: {
-          ...process.env,
-          RUNX_CWD: process.cwd(),
-          SOURCEY_STUB_INVOCATION_PATH: invocationPath,
-        },
-        receiptDir: path.join(tempDir, "receipts"),
-        runxHome: path.join(tempDir, "home"),
+        adapters: runtime.adapters,
+        env: runtime.env,
+        receiptDir: runtime.paths.receiptDir,
+        runxHome: runtime.paths.runxHome,
       });
 
       expect(result.status).toBe("success");
@@ -228,9 +244,10 @@ function createSourceyCaller(overrides: { brandName: string; homepageUrl: string
         };
       }
       if (request.work.envelope.skill === "sourcey.critique") {
-        const buildReport = request.work.envelope.current_context.find(
+        const buildReportArtifact = request.work.envelope.current_context.find(
           (artifact) => artifact.type === "sourcey_build_report",
         )?.data;
+        const buildReport = unwrapPacketData(buildReportArtifact);
         expect(buildReport).toMatchObject({
           generated: true,
           generated_files: ["index.html"],
@@ -265,6 +282,18 @@ function createSourceyCaller(overrides: { brandName: string; homepageUrl: string
     },
     report: () => undefined,
   };
+}
+
+function unwrapPacketData(value: unknown): unknown {
+  let current = value;
+  while (
+    current &&
+    typeof current === "object" &&
+    "data" in current
+  ) {
+    current = (current as { data: unknown }).data;
+  }
+  return current;
 }
 
 async function writeSourceyStub(stubPath: string, envCapturePath?: string): Promise<void> {

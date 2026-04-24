@@ -1,6 +1,8 @@
 export const cliToolAdapterPackage = "@runxhq/adapters/cli-tool";
 
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 
 export type CliToolInputMode = "args" | "stdin" | "none";
@@ -50,6 +52,8 @@ export interface CliToolAdapter {
 
 const outputLimitBytes = 1024 * 1024;
 const forceKillGraceMs = 100;
+const maxInlineInputsBytes = 48 * 1024;
+const maxInlineInputValueBytes = 8 * 1024;
 
 export function createCliToolAdapter(): CliToolAdapter {
   return {
@@ -235,12 +239,23 @@ function resolveArg(
 }
 
 function inputEnv(inputs: Readonly<Record<string, unknown>>): Record<string, string> {
-  const env: Record<string, string> = {
-    RUNX_INPUTS_JSON: JSON.stringify(inputs),
-  };
+  const env: Record<string, string> = {};
+  const serializedInputs = JSON.stringify(inputs);
+  if (Buffer.byteLength(serializedInputs, "utf8") > maxInlineInputsBytes) {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "runx-cli-inputs-"));
+    const inputsPath = path.join(tempDir, "inputs.json");
+    writeFileSync(inputsPath, serializedInputs, "utf8");
+    env.RUNX_INPUTS_PATH = inputsPath;
+  } else {
+    env.RUNX_INPUTS_JSON = serializedInputs;
+  }
 
   for (const [key, value] of Object.entries(inputs)) {
-    env[`RUNX_INPUT_${toEnvName(key)}`] = stringifyInput(value);
+    const serializedValue = stringifyInput(value);
+    if (Buffer.byteLength(serializedValue, "utf8") > maxInlineInputValueBytes) {
+      continue;
+    }
+    env[`RUNX_INPUT_${toEnvName(key)}`] = serializedValue;
   }
 
   return env;
