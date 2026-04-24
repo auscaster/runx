@@ -92,7 +92,9 @@ runners:
             as grounded evidence about brand, current docs quality, information
             architecture, and writing direction. Use it to resolve a better
             documentation plan, but do not widen scope beyond the repo evidence
-            and the brief's stated priorities.
+            and the brief's stated priorities. When the brief includes an
+            existing_surface inventory, carry it forward as a real coverage
+            requirement instead of treating it as optional context.
             discovery_report must use this canonical shape:
             {
               "discovered": {
@@ -158,13 +160,20 @@ runners:
               visual direction when the evidence supports it.
             - Use the brief's current_docs_audit and information_architecture to
               preserve what works and fill only the highest-value gaps.
+            - If the brief includes existing_surface.visible_paths, preserve a
+              maintainable equivalent of that visible docs footprint. Do not
+              drop notebook-backed examples, API reference sections, or other
+              current pages just because they were not called out as priority
+              pages.
             - Use the brief's writing_directives to keep terminology, audience,
               and tone native to the project.
             - Never write docs that call themselves a preview, migration,
               adoption, scaffold, or vendor-generated artifact unless the repo's
               own evidence already uses those words.
             - A maintainer should be able to read the result and believe it is
-              their project's docs, not a demo site.
+              their project's docs, not a demo site. The generated site should
+              feel like a fuller, better version of the current docs surface,
+              not a smaller demo.
             - Sourcey card icons must be exact Heroicons v2 outline kebab-case
               names. Do not invent icon names. Known-good card icons include
               academic-cap, arrow-path, bell, bolt, book-open, chart-bar,
@@ -223,7 +232,10 @@ runners:
             scaffolding instead of native project docs. Treat
             build_report.icon_validation.status == "invalid" as a blocking
             quality failure: cite invalid_icons and require exact Heroicons v2
-            outline replacements before passing the run. Do not propose
+            outline replacements before passing the run. When project_brief
+            includes existing_surface.visible_page_count or visible_paths,
+            compare the built site against that inventory and treat coverage
+            regression as a blocking quality failure. Do not propose
             open-ended revision loops here.
           allowed_tools:
             - fs.read
@@ -253,7 +265,10 @@ runners:
             loop, do not widen scope beyond the discovered plan, and do not turn
             generated site output into committed source. Prioritize fixing
             brand-fit errors, generic vendor framing, shallow IA, and missing
-            maintainer-grade coverage before making cosmetic changes. If
+            maintainer-grade coverage before making cosmetic changes. If the
+            brief or evaluation report shows that the current build is smaller
+            than the maintainer's existing visible docs surface, spend the
+            revision pass on closing that coverage gap first. If
             evaluation_report or build_report identifies invalid Sourcey card
             icons, replace them with exact Heroicons v2 outline kebab-case names
             before making lower-priority prose edits.

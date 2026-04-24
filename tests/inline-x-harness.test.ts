@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
+import { createDefaultSkillAdapters } from "@runxhq/adapters";
 import { runHarnessTarget } from "@runxhq/core/harness";
 
 describe("inline x harness", () => {
   it("runs the evolve inline harness suite successfully", async () => {
-    const result = await runHarnessTarget("skills/evolve");
+    const result = await runHarnessTarget("skills/evolve", { adapters: createDefaultSkillAdapters() });
 
     expect(result.source).toBe("inline");
     if (!("cases" in result)) {
@@ -18,7 +19,7 @@ describe("inline x harness", () => {
   }, 15_000);
 
   it("runs the Sourcey inline harness suite through the skill package", async () => {
-    const result = await runHarnessTarget("skills/sourcey");
+    const result = await runHarnessTarget("skills/sourcey", { adapters: createDefaultSkillAdapters() });
 
     expect(result.source).toBe("inline");
     if (!("cases" in result)) {

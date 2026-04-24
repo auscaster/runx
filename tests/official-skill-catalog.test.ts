@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { createDefaultSkillAdapters } from "@runxhq/adapters";
 import { runHarnessTarget } from "@runxhq/core/harness";
 import { parseSkillMarkdown, parseRunnerManifestYaml, validateRunnerManifest, validateSkill } from "@runxhq/core/parser";
 
@@ -84,7 +85,9 @@ describe("official skill catalog", () => {
 
   it("keeps evaluator-facing packages runnable through inline harness suites", async () => {
     for (const skillName of harnessedShowcasePackages) {
-      const result = await runHarnessTarget(path.resolve("skills", skillName));
+      const result = await runHarnessTarget(path.resolve("skills", skillName), {
+        adapters: createDefaultSkillAdapters(),
+      });
 
       expect(result.source).toBe("inline");
       if (!("cases" in result)) {
