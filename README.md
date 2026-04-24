@@ -42,6 +42,7 @@ Recommended flows:
 runx init
 runx init -g --prefetch official
 runx new docs-demo
+npm create @runxhq/skill@latest docs-demo
 runx search sourcey
 runx sourcey --project .
 runx evolve
@@ -63,6 +64,25 @@ tools, approvals, and required human inputs keep their existing local behavior.
 
 The global link points at `oss/packages/cli` in this checkout. Rebuild with
 `pnpm --dir oss build`; do not reinstall.
+
+## Standalone Skill Packages
+
+`runx new <name>` is the canonical standalone package scaffold:
+
+```bash
+runx new docs-demo
+```
+
+For cold-start adoption, the thin alias is:
+
+```bash
+npm create @runxhq/skill@latest docs-demo
+```
+
+Both entrypoints go through the same scaffolder. Community skills should be
+authored and published as standalone packages created this way. The main `runx`
+repo is the first-party lane for official skills and runtime code, not the
+community package catalog.
 
 ## Skill And X Model
 

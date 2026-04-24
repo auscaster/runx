@@ -82,11 +82,17 @@ process.stdout.write(JSON.stringify({ schema: "${packetId}", data: { message: St
     ["package.json", JSON.stringify({
       name,
       version: "0.1.0",
+      description: "Scaffolded runx skill package.",
       type: "module",
+      publishConfig: {
+        access: "public",
+      },
       scripts: {
+        build: "runx tool build --all --json",
         "runx:list": "runx list --json",
         "runx:doctor": "runx doctor --json",
         "runx:dev": "runx dev --lane deterministic --json",
+        prepublishOnly: "runx tool build --all --json && runx doctor --json",
       },
       runx: {
         packets: ["./dist/packets/*.schema.json"],
@@ -114,6 +120,7 @@ Runx authoring package: composable skills governed by typed contracts.
 
 \`\`\`bash
 pnpm install
+pnpm build
 pnpm runx:list
 pnpm runx:doctor
 pnpm runx:dev
@@ -122,6 +129,15 @@ pnpm runx:dev
 Edit \`tools/docs/echo/src/index.ts\`, then run \`runx tool build --all\` to regenerate \`manifest.json\` and \`run.mjs\`. Add fixtures in \`tools/<namespace>/<name>/fixtures/\` to lock behaviour.
 
 Packet IDs are immutable. Schema changes mean a new packet ID, not an in-place edit.
+
+## Bootstrap
+
+- Canonical: \`runx new ${name}\`
+- Cold start: \`npm create @runxhq/skill@latest ${name}\`
+
+## Publish
+
+The scaffold includes \`.github/workflows/publish.yml\`, which publishes with npm provenance from GitHub Actions. Before publishing, update \`package.json\` metadata for your repo and package.
 `],
     ["SKILL.md", `---
 name: ${name}
@@ -237,6 +253,41 @@ expect:
     }, null, 2)],
     ["fixtures/repos/readme-only/README.md", `# ${name}
 `],
+    [".github/workflows/publish.yml", `name: publish
+
+on:
+  workflow_dispatch:
+  release:
+    types:
+      - published
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm runx:doctor
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: \${{ secrets.NPM_TOKEN }}
+`],
+    [".gitignore", `node_modules/
+.runx/
+*.tgz
+`],
     [".gitattributes", "tools/**/run.mjs linguist-generated=true\ntools/**/manifest.json linguist-generated=true\ntools/**/dist/** linguist-generated=true\n"],
     ["tsconfig.json", JSON.stringify({
       extends: "@tsconfig/node20/tsconfig.json",
@@ -260,6 +311,7 @@ expect:
     next_steps: [
       `cd ${root}`,
       "pnpm install",
+      "pnpm build",
       "runx dev",
     ],
   };
