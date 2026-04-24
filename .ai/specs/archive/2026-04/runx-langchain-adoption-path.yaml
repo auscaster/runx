@@ -1,0 +1,221 @@
+spec_version: "1.1"
+task_id: "runx-langchain-adoption-path"
+created: "2026-04-24T03:10:00Z"
+updated: "2026-04-24T11:20:00Z"
+status: "completed"
+
+task:
+  title: "Make LangChain a first-class adoption and tool-bridge path"
+  summary: >
+    Runx already exposes thin framework adapters, but the product plan still
+    treats LangChain as a late-stage sidecar. That undershoots the real
+    opportunity. LangChain is a major year-1 adoption surface because it brings
+    a large builder ecosystem, a broad prebuilt tool catalog, MCP adapters, and
+    an official integrations/discovery channel. Runx should keep a native
+    kernel while adding an optional LangChain bridge that expands distribution
+    and tool reach without surrendering receipts, approvals, or policy.
+  size: "large"
+  risk_level: "medium"
+  context:
+    packages:
+      - "packages/core"
+      - "packages/adapters"
+      - "packages/sdk-python"
+      - "../plans"
+      - "../docs"
+    files_impacted:
+      - path: "packages/core/src/sdk/framework-adapters.ts"
+        lines: "all"
+        reason: "Current thin framework bridge and response wrappers are the starting point."
+      - path: "packages/sdk-python/runx/framework_adapters.py"
+        lines: "all"
+        reason: "Python should stay aligned with the JS bridge semantics where feasible."
+      - path: "../plans/runx.md"
+        lines: "framework and adoption sections"
+        reason: "Top-level product positioning should treat LangChain as a near-term adoption lane."
+      - path: "../plans/sourcey-adoption-engine.md"
+        lines: "public capability and adoption loop sections"
+        reason: "Sourcey should have an explicit LangChain distribution path without depending on it."
+      - path: "../docs/framework-adapters.md"
+        lines: "all"
+        reason: "Framework docs should distinguish the thin host adapter from the broader LangChain tool bridge."
+    invariants:
+      - "Runx stays the native execution kernel for policy, receipts, approvals, and resume."
+      - "LangChain remains optional and additive, not a required core dependency."
+      - "Provider-native execution adapters for OpenAI and Anthropic remain first-class."
+  objectives:
+    - "Promote LangChain from a vague future integration to an explicit adoption strategy."
+    - "Define an optional package surface that exposes runx skills and chains as LangChain-callable tools."
+    - "Use LangChain as a distribution and ecosystem bridge without replacing runx orchestration."
+  scope:
+    in_scope:
+      - "Plan and package design for a LangChain bridge."
+      - "Adoption and demo pathways around Sourcey, docs PRs, and governed workflows."
+      - "Official docs, examples, and integration-channel positioning."
+    out_of_scope:
+      - "Rebuilding runx on LangGraph or any other orchestration framework."
+      - "Replacing the native receipt, policy, or approval model with LangChain semantics."
+  dependencies:
+    - "runx-runner-local-facade-final-split"
+  touchpoints:
+    - area: "Framework bridge"
+      description: "Existing thin host wrappers are the kernel-safe starting point."
+    - area: "Adoption strategy"
+      description: "The product plan should explicitly name LangChain as a distribution multiplier."
+    - area: "Sourcey dogfood path"
+      description: "Sourcey is the best first public workflow to prove the bridge."
+  risks:
+    - description: "LangChain enthusiasm could pull runx into framework dependence."
+      impact: "high"
+      mitigation: "Keep LangChain in optional bridge packages and preserve native provider adapters."
+    - description: "A vague integration plan could create docs noise without a clear product surface."
+      impact: "medium"
+      mitigation: "Specify concrete package APIs, demos, and official distribution goals."
+  acceptance:
+    validation_profile: "standard"
+    definition_of_done:
+      - id: "dod1"
+        description: "The main runx plan names LangChain as a year-1 adoption and tool-bridge path."
+      - id: "dod2"
+        description: "The Sourcey adoption plan includes a LangChain distribution lane that does not replace the native pipeline."
+      - id: "dod3"
+        description: "A concrete implementation path exists for an optional LangChain bridge package and demo surface."
+    validation:
+      - id: "v1"
+        type: "boundary"
+        description: "The product plan explicitly distinguishes native kernel vs optional LangChain bridge."
+        command: "rg -n \"LangChain|native kernel|optional LangChain bridge|distribution\" ../plans/runx.md ../plans/sourcey-adoption-engine.md"
+        cwd: "."
+        expected: "exit code 0"
+      - id: "v2"
+        type: "boundary"
+        description: "The framework docs still present a thin bridge and do not imply LangChain owns runx execution."
+        command: "rg -n \"thin|bridge|optional|tool bridge|does not\" ../docs/framework-adapters.md"
+        cwd: "."
+        expected: "exit code 0"
+
+planning_log:
+  - timestamp: "2026-04-24T03:10:00Z"
+    actor: "user"
+    summary: "Said the LangChain pathway is huge and must be included in the runx adoption plan."
+  - timestamp: "2026-04-24T03:10:00Z"
+    actor: "agent"
+    summary: "Scoped LangChain as a distribution and tool-bridge strategy rather than a kernel dependency."
+  - timestamp: "2026-04-24T11:20:00Z"
+    actor: "agent"
+    summary: "Landed the LangChain-grounded seed reset and adoption-positioning updates across plans and framework docs."
+
+phases:
+  - id: "phase1"
+    name: "Align strategy and package boundaries"
+    objective: "Make the plan and docs say exactly what LangChain is and is not for runx."
+    changes:
+      - file: "../plans/runx.md"
+        action: "update"
+        lines: "adoption and framework sections"
+        content_spec: >
+          Treat LangChain as a year-1 adoption and tool-bridge path, while
+          keeping runx-native execution, receipts, and policy in the kernel.
+      - file: "../plans/sourcey-adoption-engine.md"
+        action: "update"
+        lines: "public capability and pipeline sections"
+        content_spec: >
+          Add a LangChain distribution lane for Sourcey-facing workflows that
+          packages the existing pipeline instead of replacing it.
+      - file: "../docs/framework-adapters.md"
+        action: "update"
+        lines: "LangChain and supported-surface sections"
+        content_spec: >
+          Clarify that the current bridge is a thin response-shaping adapter and
+          that the broader opportunity is an optional LangChain tool bridge.
+    acceptance_criteria:
+      - id: "ac1_1"
+        type: "boundary"
+        description: "Plans and framework docs all express the same kernel-vs-bridge model."
+        command: "rg -n \"optional LangChain|native kernel|tool bridge|distribution\" ../plans/runx.md ../plans/sourcey-adoption-engine.md ../docs/framework-adapters.md"
+        cwd: "."
+        expected: "exit code 0"
+    status: "completed"
+
+  - id: "phase2"
+    name: "Define the optional LangChain bridge package"
+    objective: "Turn the strategy into a concrete implementation target for JS and Python consumers."
+    dependencies:
+      - "phase1"
+    changes:
+      - file: "packages/core/src/sdk/framework-adapters.ts"
+        action: "update"
+        lines: "all"
+        content_spec: >
+          Keep the current framework bridge stable while carving the LangChain
+          path into a clearer tool-oriented package surface and response model.
+      - file: "packages/sdk-python/runx/framework_adapters.py"
+        action: "update"
+        lines: "all"
+        content_spec: >
+          Preserve parity where Python needs the same pause/resume bridge
+          semantics for LangChain-adjacent hosts.
+      - file: "packages/langchain or packages/sdk-langchain"
+        action: "create"
+        lines: "all"
+        content_spec: >
+          Add an optional package that exposes runx skills/chains as
+          LangChain-callable tools and keeps resolution/approval pauses explicit.
+    acceptance_criteria:
+      - id: "ac2_1"
+        type: "compile"
+        description: "The optional LangChain bridge package builds without pulling LangChain into the kernel."
+        command: "pnpm build"
+        cwd: "."
+        expected: "exit code 0"
+    status: "completed"
+
+  - id: "phase3"
+    name: "Ship adoption assets and prove the path"
+    objective: "Use Sourcey and one governed mutation flow to prove the LangChain lane publicly."
+    dependencies:
+      - "phase2"
+    changes:
+      - file: "../docs/framework-adapters.md"
+        action: "update"
+        lines: "examples and supported surface"
+        content_spec: >
+          Add official examples showing Sourcey and one PR-oriented workflow as
+          LangChain-callable governed runx operations.
+      - file: "../plans/sourcey-adoption-engine.md"
+        action: "update"
+        lines: "adoption loop and public capability details"
+        content_spec: >
+          Name the LangChain demo and docs pathway as a real adoption asset for
+          Sourcey rather than a hypothetical future idea.
+      - file: "examples or docs examples"
+        action: "create"
+        lines: "all"
+        content_spec: >
+          Provide a minimal public example that wraps `sourcey` and a PR-capable
+          workflow through the LangChain bridge with explicit pause/resume
+          handling.
+    acceptance_criteria:
+      - id: "ac3_1"
+        type: "boundary"
+        description: "The public story includes a real Sourcey-shaped LangChain example."
+        command: "rg -n \"Sourcey|sourcey|LangChain\" ../plans/sourcey-adoption-engine.md ../docs/framework-adapters.md"
+        cwd: "."
+        expected: "exit code 0"
+    status: "completed"
+
+rollback:
+  strategy: "per_phase"
+  commands:
+    phase1: "git checkout HEAD -- ../plans/runx.md ../plans/sourcey-adoption-engine.md ../docs/framework-adapters.md"
+    phase2: "git checkout HEAD -- packages/core/src/sdk/framework-adapters.ts packages/sdk-python/runx/framework_adapters.py packages/langchain packages/sdk-langchain"
+    phase3: "git checkout HEAD -- ../docs/framework-adapters.md ../plans/sourcey-adoption-engine.md examples docs/examples"
+
+metadata:
+  estimated_effort_hours: 10
+  ai_model: "gpt-5"
+  tags:
+    - "langchain"
+    - "adoption"
+    - "frameworks"
+    - "distribution"
