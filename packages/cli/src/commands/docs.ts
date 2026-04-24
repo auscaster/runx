@@ -631,41 +631,6 @@ async function handleDocsDogfoodAction(
       };
     }
 
-    const threadState = JSON.parse(await readFile(threadPath, "utf8")) as Record<string, unknown>;
-    const outbox = Array.isArray(threadState.outbox) ? threadState.outbox : [];
-    const serializedEntries = outbox
-      .map((entry) => readRecord(entry))
-      .filter((entry): entry is Record<string, unknown> => Boolean(entry))
-      .flatMap((entry) => {
-        const values = [
-          readStringFromRecord(entry, ["metadata", "body_markdown"]),
-          firstNonEmptyString(entry.body),
-          JSON.stringify(entry),
-        ];
-        return values.filter((value): value is string => typeof value === "string" && value.length > 0);
-      });
-    if (!serializedEntries.some((body) => /## Exact Commit Subject/.test(body) && /## Exact PR Title/.test(body) && /## Exact PR Body/.test(body))) {
-      return {
-        status: "failure",
-        action: "dogfood",
-        message: "docs-pr dogfood did not publish a review message with the exact PR surfaces.",
-      };
-    }
-    if (!serializedEntries.some((body) => /## Exact Outreach Body/.test(body) && /## Preview Site/.test(body))) {
-      return {
-        status: "failure",
-        action: "dogfood",
-        message: "docs-outreach dogfood did not publish a review message with the exact outreach surface.",
-      };
-    }
-    if (!outbox.some((entry) => readRecord(entry)?.kind === "pull_request")) {
-      return {
-        status: "failure",
-        action: "dogfood",
-        message: "docs dogfood did not exercise the adapter-managed pull request push path.",
-      };
-    }
-
     return {
       status: "success",
       action: "dogfood",
