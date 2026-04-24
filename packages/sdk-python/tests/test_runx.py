@@ -10,9 +10,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from runx import (
     RunxClient,
     SkillSearchResult,
-    create_framework_bridge,
-    create_openai_adapter,
-    normalize_framework_result,
+    create_openai_surface_adapter,
+    create_surface_bridge,
+    normalize_surface_result,
 )
 
 
@@ -107,7 +107,7 @@ class RunxClientTests(unittest.TestCase):
             self.assertEqual(payload["answers"]["req-1"]["ok"], True)
             self.assertEqual(payload["approvals"]["gate-1"], True)
 
-    def test_framework_bridge_resumes_paused_runs(self) -> None:
+    def test_surface_bridge_resumes_paused_runs(self) -> None:
         class FakeClient:
             def __init__(self) -> None:
                 self.resume_calls: list[tuple[str, dict[str, object], dict[str, bool]]] = []
@@ -132,7 +132,7 @@ class RunxClientTests(unittest.TestCase):
                     "receipt": {"id": "receipt-123"},
                 }
 
-        bridge = create_framework_bridge(FakeClient())
+        bridge = create_surface_bridge(FakeClient())
         result = bridge.run(
             "skills/sourcey",
             resolver=lambda context: True if context.request.get("kind") == "approval" else {"draft": "apply docs update"},
@@ -141,7 +141,7 @@ class RunxClientTests(unittest.TestCase):
         self.assertEqual(result.status, "completed")
         self.assertEqual(result.receipt_id, "receipt-123")
 
-    def test_openai_adapter_formats_framework_result(self) -> None:
+    def test_openai_surface_adapter_formats_framework_result(self) -> None:
         class FakeClient:
             def run_skill(self, skill_path: str, inputs=None, non_interactive: bool = True):
                 return {
@@ -154,15 +154,15 @@ class RunxClientTests(unittest.TestCase):
             def resume_run(self, run_id: str, answers=None, approvals=None):
                 raise AssertionError("resume_run should not be called")
 
-        adapter = create_openai_adapter(create_framework_bridge(FakeClient()))
+        adapter = create_openai_surface_adapter(create_surface_bridge(FakeClient()))
         response = adapter.run("skills/sourcey")
 
         self.assertEqual(response["role"], "tool")
         self.assertEqual(response["structuredContent"]["runx"]["status"], "completed")
         self.assertEqual(response["structuredContent"]["runx"]["receipt_id"], "receipt-456")
 
-    def test_normalize_framework_result_maps_denial(self) -> None:
-        result = normalize_framework_result(
+    def test_normalize_surface_result_maps_denial(self) -> None:
+        result = normalize_surface_result(
             {
                 "status": "policy_denied",
                 "skill": {"name": "skills/sourcey"},
@@ -173,6 +173,19 @@ class RunxClientTests(unittest.TestCase):
 
         self.assertEqual(result.status, "denied")
         self.assertEqual(result.reasons, ("missing approval",))
+
+    def test_normalize_surface_result_maps_success(self) -> None:
+        surface = normalize_surface_result(
+            {
+                "status": "success",
+                "skill": {"name": "skills/sourcey"},
+                "execution": {"stdout": "done"},
+                "receipt": {"id": "receipt-321"},
+            }
+        )
+
+        self.assertEqual(surface.status, "completed")
+        self.assertEqual(surface.receipt_id, "receipt-321")
 
 
 if __name__ == "__main__":

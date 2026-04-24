@@ -1,22 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Mapping
 
 from . import RunxClient
 
 
 @dataclass(frozen=True)
-class FrameworkBoundaryContext:
+class SurfaceBoundaryContext:
     request: Mapping[str, Any]
     events: tuple[Mapping[str, Any], ...] = ()
 
 
-FrameworkBoundaryResolver = Callable[[FrameworkBoundaryContext], Any | None]
+SurfaceBoundaryResolver = Callable[[SurfaceBoundaryContext], Any | None]
 
 
 @dataclass(frozen=True)
-class FrameworkPausedResult:
+class SurfacePausedResult:
     status: str
     skill_name: str
     run_id: str
@@ -27,7 +27,7 @@ class FrameworkPausedResult:
 
 
 @dataclass(frozen=True)
-class FrameworkCompletedResult:
+class SurfaceCompletedResult:
     status: str
     skill_name: str
     receipt_id: str
@@ -36,7 +36,7 @@ class FrameworkCompletedResult:
 
 
 @dataclass(frozen=True)
-class FrameworkFailedResult:
+class SurfaceFailedResult:
     status: str
     skill_name: str
     error: str
@@ -45,7 +45,7 @@ class FrameworkFailedResult:
 
 
 @dataclass(frozen=True)
-class FrameworkDeniedResult:
+class SurfaceDeniedResult:
     status: str
     skill_name: str
     reasons: tuple[str, ...]
@@ -53,15 +53,15 @@ class FrameworkDeniedResult:
     events: tuple[Mapping[str, Any], ...] = ()
 
 
-FrameworkRunResult = (
-    FrameworkPausedResult
-    | FrameworkCompletedResult
-    | FrameworkFailedResult
-    | FrameworkDeniedResult
+SurfaceRunResult = (
+    SurfacePausedResult
+    | SurfaceCompletedResult
+    | SurfaceFailedResult
+    | SurfaceDeniedResult
 )
 
 
-class FrameworkBridge:
+class SurfaceBridge:
     def __init__(self, client: RunxClient) -> None:
         self.client = client
 
@@ -69,28 +69,28 @@ class FrameworkBridge:
         self,
         skill_path: str,
         inputs: Mapping[str, Any] | None = None,
-        resolver: FrameworkBoundaryResolver | None = None,
-    ) -> FrameworkRunResult:
+        resolver: SurfaceBoundaryResolver | None = None,
+    ) -> SurfaceRunResult:
         initial = self.client.run_skill(skill_path, inputs=inputs, non_interactive=True)
         return self._drive(initial, resolver=resolver)
 
     def resume(
         self,
         run_id: str,
-        resolver: FrameworkBoundaryResolver | None = None,
-    ) -> FrameworkRunResult:
+        resolver: SurfaceBoundaryResolver | None = None,
+    ) -> SurfaceRunResult:
         initial = self.client.resume_run(run_id)
         return self._drive(initial, resolver=resolver)
 
     def _drive(
         self,
         payload: Mapping[str, Any],
-        resolver: FrameworkBoundaryResolver | None,
-    ) -> FrameworkRunResult:
+        resolver: SurfaceBoundaryResolver | None,
+    ) -> SurfaceRunResult:
         current = dict(payload)
         while True:
-            result = normalize_framework_result(current)
-            if not isinstance(result, FrameworkPausedResult):
+            result = normalize_surface_result(current)
+            if not isinstance(result, SurfacePausedResult):
                 return result
             if resolver is None:
                 return result
@@ -98,7 +98,7 @@ class FrameworkBridge:
             answers: dict[str, Any] = {}
             approvals: dict[str, bool] = {}
             for request in result.requests:
-                reply = resolver(FrameworkBoundaryContext(request=request, events=result.events))
+                reply = resolver(SurfaceBoundaryContext(request=request, events=result.events))
                 normalized = _normalize_resolution_reply(request, reply)
                 if normalized is None:
                     continue
@@ -116,8 +116,8 @@ class FrameworkBridge:
             current = self.client.resume_run(result.run_id, answers=answers, approvals=approvals)
 
 
-class ProviderFrameworkAdapter:
-    def __init__(self, bridge: FrameworkBridge, formatter: Callable[[FrameworkRunResult], Mapping[str, Any]]) -> None:
+class ProviderSurfaceAdapter:
+    def __init__(self, bridge: SurfaceBridge, formatter: Callable[[SurfaceRunResult], Mapping[str, Any]]) -> None:
         self.bridge = bridge
         self.formatter = formatter
 
@@ -125,48 +125,48 @@ class ProviderFrameworkAdapter:
         self,
         skill_path: str,
         inputs: Mapping[str, Any] | None = None,
-        resolver: FrameworkBoundaryResolver | None = None,
+        resolver: SurfaceBoundaryResolver | None = None,
     ) -> Mapping[str, Any]:
         return self.formatter(self.bridge.run(skill_path, inputs=inputs, resolver=resolver))
 
     def resume(
         self,
         run_id: str,
-        resolver: FrameworkBoundaryResolver | None = None,
+        resolver: SurfaceBoundaryResolver | None = None,
     ) -> Mapping[str, Any]:
         return self.formatter(self.bridge.resume(run_id, resolver=resolver))
 
 
-def create_framework_bridge(client: RunxClient) -> FrameworkBridge:
-    return FrameworkBridge(client)
+def create_surface_bridge(client: RunxClient) -> SurfaceBridge:
+    return SurfaceBridge(client)
 
 
-def create_openai_adapter(bridge: FrameworkBridge) -> ProviderFrameworkAdapter:
-    return ProviderFrameworkAdapter(bridge, _to_openai_response)
+def create_openai_surface_adapter(bridge: SurfaceBridge) -> ProviderSurfaceAdapter:
+    return ProviderSurfaceAdapter(bridge, _to_openai_response)
 
 
-def create_anthropic_adapter(bridge: FrameworkBridge) -> ProviderFrameworkAdapter:
-    return ProviderFrameworkAdapter(bridge, _to_anthropic_response)
+def create_anthropic_surface_adapter(bridge: SurfaceBridge) -> ProviderSurfaceAdapter:
+    return ProviderSurfaceAdapter(bridge, _to_anthropic_response)
 
 
-def create_vercel_ai_adapter(bridge: FrameworkBridge) -> ProviderFrameworkAdapter:
-    return ProviderFrameworkAdapter(bridge, _to_vercel_response)
+def create_vercel_ai_surface_adapter(bridge: SurfaceBridge) -> ProviderSurfaceAdapter:
+    return ProviderSurfaceAdapter(bridge, _to_vercel_response)
 
 
-def create_langchain_adapter(bridge: FrameworkBridge) -> ProviderFrameworkAdapter:
-    return ProviderFrameworkAdapter(bridge, _to_langchain_response)
+def create_langchain_surface_adapter(bridge: SurfaceBridge) -> ProviderSurfaceAdapter:
+    return ProviderSurfaceAdapter(bridge, _to_langchain_response)
 
 
-def create_crewai_adapter(bridge: FrameworkBridge) -> ProviderFrameworkAdapter:
-    return ProviderFrameworkAdapter(bridge, _to_crewai_response)
+def create_crewai_surface_adapter(bridge: SurfaceBridge) -> ProviderSurfaceAdapter:
+    return ProviderSurfaceAdapter(bridge, _to_crewai_response)
 
 
-def normalize_framework_result(payload: Mapping[str, Any]) -> FrameworkRunResult:
+def normalize_surface_result(payload: Mapping[str, Any]) -> SurfaceRunResult:
     status = str(payload.get("status") or "")
     skill = payload.get("skill")
     skill_name = str(skill.get("name")) if isinstance(skill, Mapping) else str(skill or "")
     if status == "needs_resolution":
-        return FrameworkPausedResult(
+        return SurfacePausedResult(
             status="paused",
             skill_name=skill_name,
             run_id=str(payload.get("run_id") or ""),
@@ -177,7 +177,7 @@ def normalize_framework_result(payload: Mapping[str, Any]) -> FrameworkRunResult
     if status == "policy_denied":
         reasons = payload.get("reasons") or ()
         receipt = payload.get("receipt") or {}
-        return FrameworkDeniedResult(
+        return SurfaceDeniedResult(
             status="denied",
             skill_name=skill_name,
             reasons=tuple(str(item) for item in reasons),
@@ -186,7 +186,7 @@ def normalize_framework_result(payload: Mapping[str, Any]) -> FrameworkRunResult
     if status == "success":
         execution = payload.get("execution") or {}
         receipt = payload.get("receipt") or {}
-        return FrameworkCompletedResult(
+        return SurfaceCompletedResult(
             status="completed",
             skill_name=skill_name,
             receipt_id=str(receipt.get("id") or ""),
@@ -195,7 +195,7 @@ def normalize_framework_result(payload: Mapping[str, Any]) -> FrameworkRunResult
     execution = payload.get("execution") or {}
     receipt = payload.get("receipt") or {}
     error = str(execution.get("errorMessage") or execution.get("stderr") or execution.get("stdout") or "")
-    return FrameworkFailedResult(
+    return SurfaceFailedResult(
         status="failed",
         skill_name=skill_name,
         error=error,
@@ -231,17 +231,17 @@ def _default_actor_for_request(request: Mapping[str, Any]) -> str:
     return "agent" if request.get("kind") == "cognitive_work" else "human"
 
 
-def _summary(result: FrameworkRunResult) -> str:
-    if isinstance(result, FrameworkCompletedResult):
+def _summary(result: SurfaceRunResult) -> str:
+    if isinstance(result, SurfaceCompletedResult):
         return f"{result.skill_name} completed. Inspect receipt {result.receipt_id}."
-    if isinstance(result, FrameworkPausedResult):
+    if isinstance(result, SurfacePausedResult):
         return f"{result.skill_name} paused at {result.run_id}. Resume after resolving {len(result.requests)} request(s)."
-    if isinstance(result, FrameworkDeniedResult):
+    if isinstance(result, SurfaceDeniedResult):
         return f"{result.skill_name} was denied by policy."
     return f"{result.skill_name} failed. Inspect receipt {result.receipt_id or 'n/a'}."
 
 
-def _to_openai_response(result: FrameworkRunResult) -> Mapping[str, Any]:
+def _to_openai_response(result: SurfaceRunResult) -> Mapping[str, Any]:
     return {
         "role": "tool",
         "content": [{"type": "text", "text": _summary(result)}],
@@ -249,36 +249,36 @@ def _to_openai_response(result: FrameworkRunResult) -> Mapping[str, Any]:
     }
 
 
-def _to_anthropic_response(result: FrameworkRunResult) -> Mapping[str, Any]:
+def _to_anthropic_response(result: SurfaceRunResult) -> Mapping[str, Any]:
     return {
         "content": [{"type": "text", "text": _summary(result)}],
         "metadata": {"runx": _result_to_dict(result)},
     }
 
 
-def _to_vercel_response(result: FrameworkRunResult) -> Mapping[str, Any]:
+def _to_vercel_response(result: SurfaceRunResult) -> Mapping[str, Any]:
     return {
         "messages": [{"role": "assistant", "content": _summary(result)}],
         "data": {"runx": _result_to_dict(result)},
     }
 
 
-def _to_langchain_response(result: FrameworkRunResult) -> Mapping[str, Any]:
+def _to_langchain_response(result: SurfaceRunResult) -> Mapping[str, Any]:
     return {
         "content": _summary(result),
         "additional_kwargs": {"runx": _result_to_dict(result)},
     }
 
 
-def _to_crewai_response(result: FrameworkRunResult) -> Mapping[str, Any]:
+def _to_crewai_response(result: SurfaceRunResult) -> Mapping[str, Any]:
     return {
         "raw": _summary(result),
         "json_dict": {"runx": _result_to_dict(result)},
     }
 
 
-def _result_to_dict(result: FrameworkRunResult) -> Mapping[str, Any]:
-    if isinstance(result, FrameworkPausedResult):
+def _result_to_dict(result: SurfaceRunResult) -> Mapping[str, Any]:
+    if isinstance(result, SurfacePausedResult):
         return {
             "status": result.status,
             "skill_name": result.skill_name,
@@ -288,7 +288,7 @@ def _result_to_dict(result: FrameworkRunResult) -> Mapping[str, Any]:
             "step_labels": list(result.step_labels),
             "events": list(result.events),
         }
-    if isinstance(result, FrameworkCompletedResult):
+    if isinstance(result, SurfaceCompletedResult):
         return {
             "status": result.status,
             "skill_name": result.skill_name,
@@ -296,7 +296,7 @@ def _result_to_dict(result: FrameworkRunResult) -> Mapping[str, Any]:
             "output": result.output,
             "events": list(result.events),
         }
-    if isinstance(result, FrameworkDeniedResult):
+    if isinstance(result, SurfaceDeniedResult):
         return {
             "status": result.status,
             "skill_name": result.skill_name,
@@ -313,6 +313,6 @@ def _result_to_dict(result: FrameworkRunResult) -> Mapping[str, Any]:
     }
 
 
-def _nested_str(record: Mapping[str, Any], key: str) -> str | None:
-    value = record.get(key)
+def _nested_str(payload: Mapping[str, Any], key: str) -> str | None:
+    value = payload.get(key)
     return None if value is None else str(value)

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createLangChainAdapter } from "@runxhq/core/sdk";
-import { createFrameworkHarness } from "./framework-adapter-test-utils.js";
+import { createLangChainSurfaceAdapter } from "@runxhq/core/sdk";
+import { createSurfaceHarness } from "./surface-protocol-test-utils.js";
 
 const cleanups: Array<() => Promise<void>> = [];
 
@@ -14,11 +14,11 @@ afterEach(async () => {
   }
 });
 
-describe("LangChain adapter", () => {
+describe("LangChain surface adapter", () => {
   it("wraps paused and resumed runs in a LangChain-style response", async () => {
-    const harness = await createFrameworkHarness();
+    const harness = await createSurfaceHarness();
     cleanups.push(harness.cleanup);
-    const adapter = createLangChainAdapter(harness.bridge);
+    const adapter = createLangChainSurfaceAdapter(harness.bridge);
 
     const paused = await adapter.run({
       skillPath: "fixtures/skills/echo",
@@ -31,12 +31,12 @@ describe("LangChain adapter", () => {
 
     const resumed = await adapter.resume(paused.additional_kwargs.runx.runId, {
       skillPath: "fixtures/skills/echo",
-      resolver: ({ request }) => (request.kind === "input" ? { message: "from-langchain-adapter" } : undefined),
+      resolver: ({ request }) => (request.kind === "input" ? { message: "from-langchain-surface-adapter" } : undefined),
     });
 
     expect(resumed.additional_kwargs.runx).toMatchObject({
       status: "completed",
-      output: "from-langchain-adapter",
+      output: "from-langchain-surface-adapter",
     });
   });
 });

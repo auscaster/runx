@@ -1,10 +1,10 @@
-from runx import RunxClient, create_framework_bridge, create_openai_adapter
+from runx import RunxClient, create_openai_surface_adapter, create_surface_bridge
 
 
 def main() -> None:
     client = RunxClient()
-    bridge = create_framework_bridge(client)
-    adapter = create_openai_adapter(bridge)
+    bridge = create_surface_bridge(client)
+    adapter = create_openai_surface_adapter(bridge)
     response = adapter.run(
         "skills/sourcey",
         inputs={"project": "."},

@@ -1,10 +1,37 @@
 [project]
-name = "runx"
-version = "0.0.0"
-description = "Thin Python client for runx CLI/hosted JSON surfaces."
+name = "runx-py"
+version = "0.1.0"
+description = "Python SDK for runx — the governed runtime for agent skills, tools, and chains."
+readme = "README.md"
 requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Kam", email = "hello@sourcey.com" }]
+keywords = ["runx", "agents", "skills", "sdk", "ai-agents", "llm", "anthropic", "openai", "crewai", "langchain", "governance"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = []
 
+[project.urls]
+Homepage = "https://runx.ai"
+Documentation = "https://runx.ai/docs"
+Repository = "https://github.com/runxhq/runx"
+Issues = "https://github.com/runxhq/runx/issues"
+
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["runx*"]
+exclude = ["tests*"]

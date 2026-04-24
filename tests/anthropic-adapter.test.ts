@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createAnthropicAdapter } from "@runxhq/core/sdk";
-import { createFrameworkHarness } from "./framework-adapter-test-utils.js";
+import { createAnthropicSurfaceAdapter } from "@runxhq/core/sdk";
+import { createSurfaceHarness } from "./surface-protocol-test-utils.js";
 
 const cleanups: Array<() => Promise<void>> = [];
 
@@ -14,11 +14,11 @@ afterEach(async () => {
   }
 });
 
-describe("Anthropic adapter", () => {
+describe("Anthropic surface adapter", () => {
   it("wraps paused and resumed runs in an Anthropic-style response", async () => {
-    const harness = await createFrameworkHarness();
+    const harness = await createSurfaceHarness();
     cleanups.push(harness.cleanup);
-    const adapter = createAnthropicAdapter(harness.bridge);
+    const adapter = createAnthropicSurfaceAdapter(harness.bridge);
 
     const paused = await adapter.run({
       skillPath: "fixtures/skills/echo",
@@ -31,12 +31,12 @@ describe("Anthropic adapter", () => {
 
     const resumed = await adapter.resume(paused.metadata.runx.runId, {
       skillPath: "fixtures/skills/echo",
-      resolver: ({ request }) => (request.kind === "input" ? { message: "from-anthropic-adapter" } : undefined),
+      resolver: ({ request }) => (request.kind === "input" ? { message: "from-anthropic-surface-adapter" } : undefined),
     });
 
     expect(resumed.metadata.runx).toMatchObject({
       status: "completed",
-      output: "from-anthropic-adapter",
+      output: "from-anthropic-surface-adapter",
     });
   });
 });

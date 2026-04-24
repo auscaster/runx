@@ -1,9 +1,9 @@
-import { createFrameworkBridge, createOpenAiAdapter, createRunxSdk } from "@runx/sdk";
+import { createOpenAiSurfaceAdapter, createRunxSdk, createSurfaceBridge } from "@runx/sdk";
 
 async function main(): Promise<void> {
   const sdk = createRunxSdk({ callerOptions: { maxAttempts: 1 } });
-  const bridge = createFrameworkBridge({ execute: sdk.runSkill.bind(sdk) });
-  const openai = createOpenAiAdapter(bridge);
+  const bridge = createSurfaceBridge({ execute: sdk.runSkill.bind(sdk) });
+  const openai = createOpenAiSurfaceAdapter(bridge);
 
   const response = await openai.run({
     skillPath: "skills/sourcey",

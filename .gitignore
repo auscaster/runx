@@ -19,6 +19,10 @@ coverage/
 *.tsbuildinfo
 __pycache__/
 *.py[cod]
+build/
+*.egg-info/
+*.egg
+.eggs/
 packages/cli/*.tgz
 packages/cli/skills/
 packages/cli/tools/
