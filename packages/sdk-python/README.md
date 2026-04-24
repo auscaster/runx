@@ -52,6 +52,10 @@ The bridge translates paused runs (required inputs, approval gates) into framewo
 - Source: <https://github.com/runxhq/runx>
 - Issues: <https://github.com/runxhq/runx/issues>
 
+## Releasing
+
+See [RELEASING.md](RELEASING.md) for the automated tag-driven publish flow.
+
 ## License
 
 Apache-2.0
