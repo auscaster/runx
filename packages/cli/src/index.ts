@@ -61,6 +61,9 @@ export interface ParsedArgs {
   readonly publishPath?: string;
   readonly receiptId?: string;
   readonly resumeReceiptId?: string;
+  readonly replayRef?: string;
+  readonly diffLeft?: string;
+  readonly diffRight?: string;
   readonly historyQuery?: string;
   readonly historySkill?: string;
   readonly historyStatus?: string;
@@ -116,6 +119,8 @@ const builtinRootCommands = new Set([
   "skill",
   "evolve",
   "resume",
+  "replay",
+  "diff",
   "search",
   "add",
   "inspect",
@@ -238,6 +243,8 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   const isNew = command === "new";
   const isInit = command === "init";
   const isResume = command === "resume";
+  const isReplay = command === "replay";
+  const isDiff = command === "diff";
   const isDoctor = command === "doctor";
   const isTool = command === "tool";
   const isToolSearch = isTool && positionals[0] === "search";
@@ -371,6 +378,9 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     skillRef: isSkillAdd ? addPositionals.join(" ") || undefined : undefined,
     publishPath: isSkillPublish ? positionals[1] : undefined,
     receiptId: isSkillInspect ? inspectPositionals[0] : undefined,
+    replayRef: isReplay ? positionals[0] : undefined,
+    diffLeft: isDiff ? positionals[0] : undefined,
+    diffRight: isDiff ? positionals[1] : undefined,
     historyQuery: command === "history" ? positionals.join(" ") || undefined : undefined,
     historySkill: command === "history" && typeof inputs.skill === "string" ? inputs.skill : undefined,
     historyStatus: command === "history" && typeof inputs.status === "string" ? inputs.status : undefined,
@@ -468,6 +478,12 @@ function isSupportedCommand(parsed: ParsedArgs): boolean {
     return true;
   }
   if (parsed.command === "resume" && parsed.resumeReceiptId) {
+    return true;
+  }
+  if (parsed.command === "replay" && parsed.replayRef) {
+    return true;
+  }
+  if (parsed.command === "diff" && parsed.diffLeft && parsed.diffRight) {
     return true;
   }
   if (parsed.command === "history") {

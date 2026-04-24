@@ -217,11 +217,14 @@ export interface RunLocalSkillOptions {
   readonly voiceProfile?: ContextDocument;
   readonly voiceProfilePath?: string;
   readonly workspacePolicy?: RunxWorkspacePolicy;
+  readonly lineage?: RunLineageMetadata;
 }
 
 interface RunResolvedSkillOptions {
   readonly skill: ValidatedSkill;
   readonly skillDirectory: string;
+  readonly requestedSkillPath: string;
+  readonly runId?: string;
   readonly inputs: Readonly<Record<string, unknown>>;
   readonly caller: Caller;
   readonly env?: NodeJS.ProcessEnv;
@@ -248,6 +251,7 @@ interface RunResolvedSkillOptions {
   readonly voiceProfilePath?: string;
   readonly selectedRunnerName?: string;
   readonly workspacePolicy?: RunxWorkspacePolicy;
+  readonly lineage?: RunLineageMetadata;
 }
 
 export interface AuthResolver {
@@ -271,6 +275,36 @@ export interface AuthCredentialRequest extends AuthGrantRequest {
 export interface AuthCredentialResolution {
   readonly credential?: CredentialEnvelope;
   readonly receiptMetadata?: Readonly<Record<string, unknown>>;
+}
+
+export interface RunLineageMetadata {
+  readonly kind: "rerun";
+  readonly sourceRunId: string;
+  readonly sourceReceiptId?: string;
+}
+
+function runxReceiptMetadata(options: {
+  readonly requestedSkillPath: string;
+  readonly resolvedSkillPath: string;
+  readonly selectedRunnerName?: string;
+  readonly lineage?: RunLineageMetadata;
+}): Readonly<Record<string, unknown>> {
+  return {
+    runx: {
+      skill_ref: {
+        requested_path: options.requestedSkillPath,
+        resolved_path: options.resolvedSkillPath,
+      },
+      selected_runner: options.selectedRunnerName,
+      lineage: options.lineage
+        ? {
+            kind: options.lineage.kind,
+            source_run_id: options.lineage.sourceRunId,
+            source_receipt_id: options.lineage.sourceReceiptId,
+          }
+        : undefined,
+    },
+  };
 }
 
 export type RunLocalSkillResult =
@@ -434,6 +468,7 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
       kind: "resolution_requested",
       detail: {
         skill_path: resolvedSkill.requestedPath,
+        resolved_path: resolvedSkill.skillPath,
         selected_runner: runnerSelection.selectedRunnerName,
         request_ids: [inputResolution.request.id],
         resolution_kinds: [inputResolution.request.kind],
@@ -441,6 +476,13 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
         step_ids: [],
         step_labels: [],
         inputs: pendingResult.inputs,
+        lineage: options.lineage
+          ? {
+              kind: options.lineage.kind,
+              source_run_id: options.lineage.sourceRunId,
+              source_receipt_id: options.lineage.sourceReceiptId,
+            }
+          : undefined,
       },
       includeRunStarted: !options.resumeFromRunId,
     });
@@ -455,6 +497,7 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
   const result = await runResolvedSkill({
     skill,
     skillDirectory: resolvedSkill.skillDirectory,
+    runId,
     inputs: inputResolution.inputs,
     caller: options.caller,
     env: options.env,
@@ -467,7 +510,8 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
     allowedSourceTypes: options.allowedSourceTypes,
     authResolver: options.authResolver,
     receiptMetadata: options.receiptMetadata,
-    resumeFromRunId: runId,
+    resumeFromRunId: options.resumeFromRunId,
+    requestedSkillPath: resolvedSkill.requestedPath,
     skillPathForMissingContext: resolvedSkill.skillPath,
     executionSemantics: options.executionSemantics,
     registryStore: options.registryStore,
@@ -478,6 +522,7 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
     voiceProfilePath: options.voiceProfilePath,
     selectedRunnerName: runnerSelection.selectedRunnerName,
     workspacePolicy,
+    lineage: options.lineage,
   });
 
   if (result.status === "needs_resolution") {
@@ -493,6 +538,7 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
       kind: "resolution_requested",
       detail: {
         skill_path: resolvedSkill.requestedPath,
+        resolved_path: resolvedSkill.skillPath,
         selected_runner: runnerSelection.selectedRunnerName,
         request_ids: pendingResult.requests.map((request) => request.id),
         resolution_kinds: Array.from(new Set(pendingResult.requests.map((request) => request.kind))),
@@ -500,6 +546,13 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
         step_ids: pendingResult.stepIds ?? [],
         step_labels: pendingResult.stepLabels ?? [],
         inputs: pendingResult.inputs,
+        lineage: options.lineage
+          ? {
+              kind: options.lineage.kind,
+              source_run_id: options.lineage.sourceRunId,
+              source_receipt_id: options.lineage.sourceReceiptId,
+            }
+          : undefined,
       },
       includeRunStarted: !options.resumeFromRunId,
     });
@@ -511,7 +564,7 @@ export async function runLocalSkill(options: RunLocalSkillOptions): Promise<RunL
 
 async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLocalSkillResult> {
   const { skill } = options;
-  const runId = options.resumeFromRunId ?? uniqueReceiptId("rx");
+  const runId = options.runId ?? options.resumeFromRunId ?? uniqueReceiptId("rx");
   const contextEnvelopeRunId = options.orchestrationRunId ?? runId;
   const workspacePolicy = options.workspacePolicy ?? await loadRunxWorkspacePolicy(options.env ?? process.env);
   const contextSnapshot =
@@ -528,6 +581,12 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
       voiceProfilePath: options.voiceProfilePath,
     }));
   const inheritedReceiptMetadata = mergeMetadata(
+    runxReceiptMetadata({
+      requestedSkillPath: options.requestedSkillPath,
+      resolvedSkillPath: options.skillPathForMissingContext ?? options.requestedSkillPath,
+      selectedRunnerName: options.selectedRunnerName,
+      lineage: options.lineage,
+    }),
     contextReceiptMetadata(contextSnapshot),
     voiceProfileReceiptMetadata(voiceProfile),
     skillQualityProfileReceiptMetadata(skill),
@@ -842,6 +901,19 @@ async function runResolvedSkill(options: RunResolvedSkillOptions): Promise<RunLo
     artifactEnvelopes: artifactResult.envelopes,
     receiptId: receipt.id,
     includeRunStarted: !options.resumeFromRunId,
+    runStartedDetail: {
+      skill_path: options.requestedSkillPath,
+      resolved_path: options.skillPathForMissingContext ?? options.requestedSkillPath,
+      selected_runner: options.selectedRunnerName,
+      inputs: options.inputs,
+      lineage: options.lineage
+        ? {
+            kind: options.lineage.kind,
+            source_run_id: options.lineage.sourceRunId,
+            source_receipt_id: options.lineage.sourceReceiptId,
+          }
+        : undefined,
+    },
   });
   try {
     await indexReceiptIfEnabled(receipt, options.receiptDir ?? defaultReceiptDir(options.env), options);
@@ -1120,6 +1192,7 @@ export async function runLocalGraph(options: RunLocalGraphOptions): Promise<RunL
           return await runResolvedSkill({
             skill: prep.stepSkill,
             skillDirectory: graphStepExecutionDirectory(prep.step, prep.stepSkillPath, graphDirectory),
+            requestedSkillPath: prep.stepReference,
             inputs: prep.stepInputs,
             caller: options.caller,
             env: options.env,
@@ -1489,6 +1562,7 @@ export async function runLocalGraph(options: RunLocalGraphOptions): Promise<RunL
     const stepResult = await runResolvedSkill({
       skill: stepSkill,
       skillDirectory: graphStepExecutionDirectory(step, stepSkillPath, graphDirectory),
+      requestedSkillPath: resolvedStep.reference,
       inputs: stepInputs,
       caller: options.caller,
       env: options.env,

@@ -74,6 +74,7 @@ export async function readResumedSelectedRunner(receiptDir: string, runId: strin
 
 export interface PendingRunState {
   readonly skillPath?: string;
+  readonly resolvedSkillPath?: string;
   readonly selectedRunner?: string;
   readonly inputs: Readonly<Record<string, unknown>>;
   readonly requestIds: readonly string[];
@@ -81,6 +82,7 @@ export interface PendingRunState {
   readonly requests?: readonly ResolutionRequest[];
   readonly stepIds: readonly string[];
   readonly stepLabels: readonly string[];
+  readonly lineage?: RunLocalSkillOptions["lineage"];
 }
 
 export async function readPendingRunState(receiptDir: string, runId: string): Promise<PendingRunState | undefined> {
@@ -98,6 +100,7 @@ export async function readPendingRunState(receiptDir: string, runId: string): Pr
     const requests = parseRecordedRequests(detail.requests, `ledger(${runId}).detail.requests`);
     return {
       skillPath: typeof detail.skill_path === "string" ? detail.skill_path : undefined,
+      resolvedSkillPath: typeof detail.resolved_path === "string" ? detail.resolved_path : undefined,
       selectedRunner: typeof detail.selected_runner === "string" ? detail.selected_runner : undefined,
       inputs: isPlainRecord(detail.inputs) ? { ...detail.inputs } : {},
       requestIds: requests ? requests.map((request) => request.id) : normalizeStringArray(detail.request_ids),
@@ -107,6 +110,7 @@ export async function readPendingRunState(receiptDir: string, runId: string): Pr
       requests,
       stepIds: normalizeStringArray(detail.step_ids),
       stepLabels: normalizeStringArray(detail.step_labels),
+      lineage: parseRunLineage(detail.lineage),
     };
   }
   return undefined;
@@ -210,6 +214,21 @@ function resolveDeclaredInputAliasKey(
     return snakeCase;
   }
   return key;
+}
+
+function parseRunLineage(value: unknown): RunLocalSkillOptions["lineage"] | undefined {
+  if (!isPlainRecord(value)) {
+    return undefined;
+  }
+  const sourceRunId = typeof value.source_run_id === "string" ? value.source_run_id : undefined;
+  if (!sourceRunId) {
+    return undefined;
+  }
+  return {
+    kind: "rerun",
+    sourceRunId,
+    sourceReceiptId: typeof value.source_receipt_id === "string" ? value.source_receipt_id : undefined,
+  };
 }
 
 async function readResumedInputs(receiptDir: string, runId: string): Promise<Record<string, unknown>> {

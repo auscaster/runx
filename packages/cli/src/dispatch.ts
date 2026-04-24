@@ -25,9 +25,11 @@ import {
 } from "@runxhq/core/registry";
 import {
   installLocalSkill,
+  readPendingRunState,
   readPendingSkillPath,
   runLocalSkill,
   type Caller,
+  type RunLineageMetadata,
   type RunLocalSkillResult,
 } from "@runxhq/core/runner-local";
 
@@ -64,10 +66,13 @@ import {
   renderDoctorResult,
 } from "./commands/doctor.js";
 import {
+  handleDiffCommand,
   handleHistoryCommand,
   handleInspectCommand,
+  handleReplaySeedCommand,
   renderHistory,
   renderReceiptInspection,
+  renderRunDiff,
 } from "./commands/history.js";
 import { handleInitCommand } from "./commands/init.js";
 import { handleListCommand } from "./commands/list.js";
@@ -372,6 +377,39 @@ export async function dispatchCli(
     return 0;
   }
 
+  if (parsed.command === "replay" && parsed.replayRef) {
+    const replaySeed = await handleReplaySeedCommand({
+      replayRef: parsed.replayRef,
+      receiptDir: parsed.receiptDir,
+    }, env);
+    const result = await executeLocalSkillCommand({
+      skillPath: replaySeed.skillPath,
+      inputs: replaySeed.inputs,
+      parsed: {
+        ...parsed,
+        runner: parsed.runner ?? replaySeed.selectedRunner,
+      },
+      caller,
+      env,
+      lineage: replaySeed.lineage,
+    });
+    return writeLocalSkillResult(io, env, parsed, result);
+  }
+
+  if (parsed.command === "diff" && parsed.diffLeft && parsed.diffRight) {
+    const diff = await handleDiffCommand({
+      diffLeft: parsed.diffLeft,
+      diffRight: parsed.diffRight,
+      receiptDir: parsed.receiptDir,
+    }, env);
+    if (parsed.json) {
+      io.stdout.write(`${JSON.stringify({ status: "success", diff }, null, 2)}\n`);
+    } else {
+      io.stdout.write(renderRunDiff(diff, env));
+    }
+    return 0;
+  }
+
   if (parsed.command === "history") {
     const history = await handleHistoryCommand(parsed, env);
     if (parsed.json) {
@@ -496,21 +534,34 @@ async function executeLocalSkillCommand(options: {
   readonly parsed: ParsedArgs;
   readonly caller: Caller;
   readonly env: NodeJS.ProcessEnv;
+  readonly lineage?: RunLineageMetadata;
 }): Promise<RunLocalSkillResult> {
   const adapters = await resolveDefaultSkillAdapters(options.env);
+  const resolvedReceiptDir = options.parsed.receiptDir ? resolvePathFromUserInput(options.parsed.receiptDir, options.env) : undefined;
+  const hydratedLineage =
+    options.lineage
+    ?? (
+      options.parsed.resumeReceiptId
+        ? (await readPendingRunState(
+          resolvedReceiptDir ?? resolveDefaultReceiptDir(options.env),
+          options.parsed.resumeReceiptId,
+        ))?.lineage
+        : undefined
+    );
   return await runLocalSkill({
     skillPath: options.skillPath,
     inputs: options.inputs,
     answersPath: options.parsed.answersPath ? resolvePathFromUserInput(options.parsed.answersPath, options.env) : undefined,
     caller: options.caller,
     env: options.env,
-    receiptDir: options.parsed.receiptDir ? resolvePathFromUserInput(options.parsed.receiptDir, options.env) : undefined,
+    receiptDir: resolvedReceiptDir,
     runner: options.parsed.runner,
     resumeFromRunId: options.parsed.resumeReceiptId,
     registryStore: await resolveRegistryStoreForChains(options.env),
     adapters,
     toolCatalogAdapters: resolveEnvToolCatalogAdapters(options.env),
     voiceProfilePath: await resolveBundledCliVoiceProfilePath(),
+    lineage: hydratedLineage,
   });
 }
 

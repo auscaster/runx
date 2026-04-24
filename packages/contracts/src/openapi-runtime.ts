@@ -293,6 +293,7 @@ export function buildHostedOpenApiRuntimeSchemas(): Readonly<Record<string, unkn
     },
     HostedRunSummary: protocolArtifactRef("hosted/hosted-run-summary.schema.json"),
     CreateRunRequest: protocolArtifactRef("hosted/create-run.request.schema.json"),
+    RerunRunRequest: protocolArtifactRef("hosted/run-rerun.request.schema.json"),
     PutAgentConfigRequest: protocolArtifactRef("hosted/agent-config.request.schema.json"),
     ServiceTokenExchangeRequest: protocolArtifactRef("hosted/service-token-exchange.request.schema.json"),
     PutKnowledgeNamespaceRequest: {
@@ -364,6 +365,7 @@ export function buildHostedOpenApiRuntimeSchemas(): Readonly<Record<string, unkn
       additionalProperties: false,
     },
     CreateRunResponse: protocolArtifactRef("hosted/create-run.response.schema.json"),
+    RerunRunResponse: protocolArtifactRef("hosted/run-rerun.response.schema.json"),
     RunListEnvelope: {
       type: "object",
       properties: {
@@ -377,6 +379,7 @@ export function buildHostedOpenApiRuntimeSchemas(): Readonly<Record<string, unkn
       additionalProperties: false,
     },
     RunDetailEnvelope: protocolArtifactRef("hosted/hosted-run-detail.schema.json"),
+    RunDiffEnvelope: protocolArtifactRef("hosted/run-diff.response.schema.json"),
     RunRequestSummary: protocolArtifactRef("hosted/run-request-summary.schema.json"),
     RunRequestsEnvelope: protocolArtifactRef("hosted/run-requests.response.schema.json"),
     RunRequestResponseRequest: protocolArtifactRef("hosted/run-request-response.request.schema.json"),

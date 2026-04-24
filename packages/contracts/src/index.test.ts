@@ -98,6 +98,15 @@ describe("@runxhq/contracts", () => {
     expect(schemas).toHaveProperty("CreateRunRequest", {
       $ref: "../../spec/hosted/create-run.request.schema.json",
     });
+    expect(schemas).toHaveProperty("RerunRunRequest", {
+      $ref: "../../spec/hosted/run-rerun.request.schema.json",
+    });
+    expect(schemas).toHaveProperty("RerunRunResponse", {
+      $ref: "../../spec/hosted/run-rerun.response.schema.json",
+    });
+    expect(schemas).toHaveProperty("RunDiffEnvelope", {
+      $ref: "../../spec/hosted/run-diff.response.schema.json",
+    });
     expect(schemas).toHaveProperty("PublicSkillDetailEnvelope");
     expect(schemas).toHaveProperty("KnowledgeEntryEnvelope");
   });

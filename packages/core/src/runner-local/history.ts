@@ -1,4 +1,5 @@
 import {
+  type ArtifactEnvelope,
   SYSTEM_ARTIFACT_TYPES,
   readLedgerEntries,
 } from "../artifacts/index.js";
@@ -7,9 +8,11 @@ import {
   readVerifiedLocalReceipt,
   type LocalGraphReceipt,
   type LocalReceipt,
+  type LocalSkillReceipt,
   type ReceiptVerification,
 } from "../receipts/index.js";
 import { defaultReceiptDir } from "./receipt-paths.js";
+import { readPendingRunState } from "./inputs.js";
 
 export interface InspectLocalGraphOptions {
   readonly graphId: string;
@@ -50,17 +53,86 @@ export interface ListLocalHistoryResult {
   readonly receipts: readonly LocalReceiptSummary[];
 }
 
-export interface LocalReceiptSummary {
+export interface RunLineageSummary {
+  readonly kind: "rerun";
+  readonly sourceRunId: string;
+  readonly sourceReceiptId?: string;
+}
+
+export interface RunApprovalSummary {
+  readonly gateId?: string;
+  readonly gateType?: string;
+  readonly decision?: "approved" | "denied";
+  readonly reason?: string;
+}
+
+export interface ComparableRunSummary {
   readonly id: string;
-  readonly kind: LocalReceipt["kind"];
-  readonly status: LocalReceipt["status"];
-  readonly verification: ReceiptVerification;
   readonly name: string;
+  readonly kind: string;
+  readonly status: string;
   readonly sourceType?: string;
   readonly startedAt?: string;
   readonly completedAt?: string;
   readonly actors?: readonly string[];
   readonly artifactTypes?: readonly string[];
+  readonly disposition?: string;
+  readonly outcomeState?: string;
+  readonly runnerProvider?: string;
+  readonly approval?: RunApprovalSummary;
+  readonly lineage?: RunLineageSummary;
+  readonly error?: string;
+}
+
+export interface LocalReceiptSummary extends ComparableRunSummary {
+  readonly kind: LocalReceipt["kind"];
+  readonly status: LocalReceipt["status"];
+  readonly verification: ReceiptVerification;
+}
+
+export interface RunSummaryFieldDelta {
+  readonly left?: unknown;
+  readonly right?: unknown;
+}
+
+export interface RunSummaryCollectionDelta {
+  readonly added: readonly string[];
+  readonly removed: readonly string[];
+}
+
+export interface RunSummaryDiff {
+  readonly left: ComparableRunSummary;
+  readonly right: ComparableRunSummary;
+  readonly changed: boolean;
+  readonly fields: Readonly<Record<string, RunSummaryFieldDelta>>;
+  readonly actors: RunSummaryCollectionDelta;
+  readonly artifactTypes: RunSummaryCollectionDelta;
+}
+
+export interface ReadLocalReplaySeedOptions {
+  readonly referenceId: string;
+  readonly receiptDir?: string;
+  readonly runxHome?: string;
+  readonly env?: NodeJS.ProcessEnv;
+}
+
+export interface LocalReplaySeed {
+  readonly runId: string;
+  readonly receiptId: string;
+  readonly receipt: LocalSkillReceipt;
+  readonly verification: ReceiptVerification;
+  readonly skillPath: string;
+  readonly selectedRunner?: string;
+  readonly inputs: Readonly<Record<string, unknown>>;
+  readonly lineage: RunLineageSummary;
+}
+
+export interface DiffLocalRunsOptions {
+  readonly left: string;
+  readonly right: string;
+  readonly receiptDir?: string;
+  readonly runxHome?: string;
+  readonly env?: NodeJS.ProcessEnv;
 }
 
 export interface InspectLocalGraphResult {
@@ -202,13 +274,90 @@ export async function listLocalHistory(options: ListLocalHistoryOptions = {}): P
   };
 }
 
+export async function readLocalReplaySeed(options: ReadLocalReplaySeedOptions): Promise<LocalReplaySeed> {
+  const receiptDir = options.receiptDir ?? defaultReceiptDir(options.env);
+  const pending = await readPendingRunState(receiptDir, options.referenceId);
+  if (pending) {
+    throw new Error(`Run '${options.referenceId}' is paused. Use 'runx resume ${options.referenceId}' instead of replay.`);
+  }
+
+  const resolved = await resolveLocalRunReference(options.referenceId, receiptDir, options.runxHome ?? options.env?.RUNX_HOME);
+  if (resolved.receipt.kind !== "skill_execution") {
+    throw new Error(`Run '${options.referenceId}' is a ${resolved.receipt.kind} receipt. Replay currently supports skill executions only.`);
+  }
+  const seed = extractReplaySeed(resolved.ledgerEntries);
+  if (!seed?.skillPath || !seed.inputs) {
+    throw new Error(
+      `Run '${options.referenceId}' is missing replay seed details. Replay requires a local ledger with recorded skill_path and inputs.`,
+    );
+  }
+  return {
+    runId: resolved.runId,
+    receiptId: resolved.receipt.id,
+    receipt: resolved.receipt,
+    verification: resolved.verification,
+    skillPath: seed.skillPath,
+    selectedRunner: seed.selectedRunner,
+    inputs: seed.inputs,
+    lineage: {
+      kind: "rerun",
+      sourceRunId: resolved.runId,
+      sourceReceiptId: resolved.receipt.id,
+    },
+  };
+}
+
+export async function diffLocalRuns(options: DiffLocalRunsOptions): Promise<RunSummaryDiff> {
+  const receiptDir = options.receiptDir ?? defaultReceiptDir(options.env);
+  const runxHome = options.runxHome ?? options.env?.RUNX_HOME;
+  const [left, right] = await Promise.all([
+    resolveLocalRunReference(options.left, receiptDir, runxHome),
+    resolveLocalRunReference(options.right, receiptDir, runxHome),
+  ]);
+  return diffRunSummaries(
+    await summarizeLocalReceipt(left.receipt, left.verification, receiptDir, left.ledgerEntries),
+    await summarizeLocalReceipt(right.receipt, right.verification, receiptDir, right.ledgerEntries),
+  );
+}
+
+export function diffRunSummaries(left: ComparableRunSummary, right: ComparableRunSummary): RunSummaryDiff {
+  const fields = compactFieldDiff({
+    status: diffScalar(left.status, right.status),
+    kind: diffScalar(left.kind, right.kind),
+    name: diffScalar(left.name, right.name),
+    source_type: diffScalar(left.sourceType, right.sourceType),
+    disposition: diffScalar(left.disposition, right.disposition),
+    outcome_state: diffScalar(left.outcomeState, right.outcomeState),
+    runner_provider: diffScalar(left.runnerProvider, right.runnerProvider),
+    approval: diffScalar(left.approval, right.approval),
+    lineage: diffScalar(left.lineage, right.lineage),
+    error: diffScalar(left.error, right.error),
+  });
+  const actors = diffStringCollections(left.actors, right.actors);
+  const artifactTypes = diffStringCollections(left.artifactTypes, right.artifactTypes);
+  return {
+    left,
+    right,
+    changed: Object.keys(fields).length > 0 || actors.added.length > 0 || actors.removed.length > 0 || artifactTypes.added.length > 0 || artifactTypes.removed.length > 0,
+    fields,
+    actors,
+    artifactTypes,
+  };
+}
+
 async function summarizeLocalReceipt(
   receipt: LocalReceipt,
   verification: ReceiptVerification,
   receiptDir: string,
+  preloadedLedgerEntries?: readonly ArtifactEnvelope[],
 ): Promise<LocalReceiptSummary> {
+  const ledgerEntries = preloadedLedgerEntries ?? await readLedgerEntries(receiptDir, receipt.id);
   const actors = extractReceiptActors(receipt);
-  const artifactTypes = await extractReceiptArtifactTypes(receipt, receiptDir);
+  const artifactTypes = extractReceiptArtifactTypes(receipt, ledgerEntries);
+  const metadata = isRecord(receipt.metadata) ? receipt.metadata : undefined;
+  const approval = extractReceiptApproval(receipt);
+  const lineage = extractReceiptLineage(receipt);
+  const runnerProvider = metadata ? readNestedString(metadata, ["runner", "provider"]) : undefined;
   if (receipt.kind === "skill_execution") {
     return {
       id: receipt.id,
@@ -221,6 +370,11 @@ async function summarizeLocalReceipt(
       completedAt: receipt.completed_at,
       actors,
       artifactTypes,
+      disposition: receipt.disposition,
+      outcomeState: receipt.outcome_state,
+      approval,
+      lineage,
+      runnerProvider,
     };
   }
 
@@ -234,6 +388,11 @@ async function summarizeLocalReceipt(
     completedAt: receipt.completed_at,
     actors,
     artifactTypes,
+    disposition: receipt.disposition,
+    outcomeState: receipt.outcome_state,
+    approval,
+    lineage,
+    runnerProvider,
   };
 }
 
@@ -252,8 +411,10 @@ function extractReceiptActors(receipt: LocalReceipt): readonly string[] | undefi
   return actors.length > 0 ? Array.from(new Set(actors)) : undefined;
 }
 
-async function extractReceiptArtifactTypes(receipt: LocalReceipt, receiptDir: string): Promise<readonly string[] | undefined> {
-  const ledgerEntries = await readLedgerEntries(receiptDir, receipt.id);
+function extractReceiptArtifactTypes(
+  receipt: LocalReceipt,
+  ledgerEntries: readonly ArtifactEnvelope[],
+): readonly string[] | undefined {
   const directArtifactIds = receipt.kind === "skill_execution" && Array.isArray(receipt.artifact_ids)
     ? new Set(receipt.artifact_ids)
     : undefined;
@@ -262,6 +423,163 @@ async function extractReceiptArtifactTypes(receipt: LocalReceipt, receiptDir: st
     .filter((entry) => !directArtifactIds || directArtifactIds.has(entry.meta.artifact_id))
     .map((entry) => entry.type as string);
   return artifactTypes.length > 0 ? Array.from(new Set(artifactTypes)) : undefined;
+}
+
+function extractReceiptApproval(receipt: LocalReceipt): RunApprovalSummary | undefined {
+  const metadata = isRecord(receipt.metadata) ? receipt.metadata : undefined;
+  if (!metadata) {
+    return undefined;
+  }
+  const approval = metadata.approval;
+  if (!isRecord(approval)) {
+    return undefined;
+  }
+  const decision = approval.decision === "approved" || approval.decision === "denied"
+    ? approval.decision
+    : undefined;
+  return {
+    gateId: typeof approval.gate_id === "string" ? approval.gate_id : undefined,
+    gateType: typeof approval.gate_type === "string" ? approval.gate_type : undefined,
+    decision,
+    reason: typeof approval.reason === "string" ? approval.reason : undefined,
+  };
+}
+
+function extractReceiptLineage(receipt: LocalReceipt): RunLineageSummary | undefined {
+  const metadata = isRecord(receipt.metadata) ? receipt.metadata : undefined;
+  if (!metadata) {
+    return undefined;
+  }
+  const runx = metadata.runx;
+  if (!isRecord(runx) || !isRecord(runx.lineage)) {
+    return undefined;
+  }
+  const sourceRunId = typeof runx.lineage.source_run_id === "string" ? runx.lineage.source_run_id : undefined;
+  if (!sourceRunId) {
+    return undefined;
+  }
+  return {
+    kind: "rerun",
+    sourceRunId,
+    sourceReceiptId: typeof runx.lineage.source_receipt_id === "string" ? runx.lineage.source_receipt_id : undefined,
+  };
+}
+
+async function resolveLocalRunReference(
+  referenceId: string,
+  receiptDir: string,
+  runxHome: string | undefined,
+): Promise<{
+  readonly runId: string;
+  readonly receipt: LocalReceipt;
+  readonly verification: ReceiptVerification;
+  readonly ledgerEntries: readonly ArtifactEnvelope[];
+}> {
+  const direct = await tryReadLocalReceipt(referenceId, receiptDir, runxHome);
+  if (direct) {
+    return {
+      runId: referenceId,
+      receipt: direct.receipt,
+      verification: direct.verification,
+      ledgerEntries: await readLedgerEntries(receiptDir, referenceId),
+    };
+  }
+
+  const receiptId = await findReceiptIdForRunId(receiptDir, referenceId);
+  if (!receiptId) {
+    throw new Error(`Run or receipt '${referenceId}' was not found.`);
+  }
+  const resolved = await readVerifiedLocalReceipt(receiptDir, receiptId, runxHome);
+  return {
+    runId: referenceId,
+    receipt: resolved.receipt,
+    verification: resolved.verification,
+    ledgerEntries: await readLedgerEntries(receiptDir, referenceId),
+  };
+}
+
+async function tryReadLocalReceipt(
+  receiptId: string,
+  receiptDir: string,
+  runxHome: string | undefined,
+): Promise<{ readonly receipt: LocalReceipt; readonly verification: ReceiptVerification } | undefined> {
+  try {
+    return await readVerifiedLocalReceipt(receiptDir, receiptId, runxHome);
+  } catch {
+    return undefined;
+  }
+}
+
+async function findReceiptIdForRunId(receiptDir: string, runId: string): Promise<string | undefined> {
+  const ledgerEntries = await readLedgerEntries(receiptDir, runId);
+  for (let index = ledgerEntries.length - 1; index >= 0; index -= 1) {
+    const entry = ledgerEntries[index]!;
+    if (entry.type !== "run_event") {
+      continue;
+    }
+    const kind = typeof entry.data.kind === "string" ? entry.data.kind : "";
+    const detail = isRecord(entry.data.detail) ? entry.data.detail : undefined;
+    if ((kind === "run_completed" || kind === "run_failed") && detail && typeof detail.receipt_id === "string") {
+      return detail.receipt_id;
+    }
+  }
+  return undefined;
+}
+
+function extractReplaySeed(entries: readonly ArtifactEnvelope[]): {
+  readonly skillPath?: string;
+  readonly selectedRunner?: string;
+  readonly inputs?: Readonly<Record<string, unknown>>;
+} | undefined {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]!;
+    if (entry.type !== "run_event") {
+      continue;
+    }
+    const kind = typeof entry.data.kind === "string" ? entry.data.kind : "";
+    if (kind !== "resolution_requested" && kind !== "run_started") {
+      continue;
+    }
+    const detail = isRecord(entry.data.detail) ? entry.data.detail : undefined;
+    if (!detail) {
+      continue;
+    }
+    const inputs = isRecord(detail.inputs) ? detail.inputs : undefined;
+    const skillPath = typeof detail.skill_path === "string" ? detail.skill_path : undefined;
+    const selectedRunner = typeof detail.selected_runner === "string" ? detail.selected_runner : undefined;
+    if (skillPath || inputs) {
+      return { skillPath, selectedRunner, inputs };
+    }
+  }
+  return undefined;
+}
+
+function diffScalar(left: unknown, right: unknown): RunSummaryFieldDelta | undefined {
+  if (stableDiffValue(left) === stableDiffValue(right)) {
+    return undefined;
+  }
+  return { left, right };
+}
+
+function diffStringCollections(left: readonly string[] | undefined, right: readonly string[] | undefined): RunSummaryCollectionDelta {
+  const leftSet = new Set(left ?? []);
+  const rightSet = new Set(right ?? []);
+  return {
+    added: Array.from(rightSet).filter((entry) => !leftSet.has(entry)),
+    removed: Array.from(leftSet).filter((entry) => !rightSet.has(entry)),
+  };
+}
+
+function compactFieldDiff(
+  fields: Readonly<Record<string, RunSummaryFieldDelta | undefined>>,
+): Readonly<Record<string, RunSummaryFieldDelta>> {
+  return Object.fromEntries(
+    Object.entries(fields).filter((entry): entry is [string, RunSummaryFieldDelta] => entry[1] !== undefined),
+  );
+}
+
+function stableDiffValue(value: unknown): string {
+  return JSON.stringify(value ?? null);
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

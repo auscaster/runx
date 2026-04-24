@@ -18,6 +18,7 @@ export async function appendSkillLedgerEntries(options: {
   readonly artifactEnvelopes: readonly ArtifactEnvelope[];
   readonly receiptId: string;
   readonly includeRunStarted?: boolean;
+  readonly runStartedDetail?: Readonly<Record<string, unknown>>;
 }): Promise<void> {
   const producer = {
     skill: options.skill.name,
@@ -36,6 +37,7 @@ export async function appendSkillLedgerEntries(options: {
               kind: "run_started",
               status: "started",
               createdAt: options.startedAt,
+              detail: options.runStartedDetail,
             }),
           ]),
       ...options.artifactEnvelopes,
