@@ -558,6 +558,8 @@ export function pushGitHubMessage({
     state.canonical_uri,
     state.thread_locator,
   );
+  const existingEntry = selectExistingGitHubMessageOutboxEntry(state, outbox);
+  const existingMetadata = optionalRecord(existingEntry?.metadata) ?? {};
   const repoSlug = firstNonEmptyString(optionalRecord(state.metadata)?.repo, issueRef.repo_slug);
   const bodyMarkdown = firstNonEmptyText(metadata.body_markdown, metadata.body);
   const commentId = firstNonEmptyString(
@@ -566,9 +568,12 @@ export function pushGitHubMessage({
     normalizeGitHubIssueCommentId(optionalRecord(metadata.message)?.comment_id),
     normalizeGitHubIssueCommentId(optionalRecord(metadata.comment)?.id),
     normalizeGitHubIssueCommentId(optionalRecord(metadata.comment)?.database_id),
+    parseGitHubIssueCommentId(existingEntry?.locator),
+    normalizeGitHubIssueCommentId(existingMetadata.comment_id),
   );
   const locator = firstNonEmptyString(
     outbox.locator,
+    existingEntry?.locator,
     commentId ? `${issueRef.issue_url}#issuecomment-${commentId}` : undefined,
   );
   const commentBody = ensureGitHubOutboxEntryMarker(bodyMarkdown, outbox.entry_id);
@@ -630,6 +635,72 @@ export function pushGitHubMessage({
       comment_id: commentId,
     }),
   };
+}
+
+function selectExistingGitHubMessageOutboxEntry(thread, outboxEntry) {
+  const existingOutbox = Array.isArray(thread.outbox) ? thread.outbox.filter(isRecord) : [];
+  const matches = existingOutbox
+    .filter((entry) => firstNonEmptyString(entry.kind) === "message")
+    .filter((entry) => {
+      const sameLocator =
+        firstNonEmptyString(outboxEntry.locator) &&
+        firstNonEmptyString(entry.locator) === firstNonEmptyString(outboxEntry.locator);
+      if (sameLocator) {
+        return true;
+      }
+      const sameEntryId =
+        firstNonEmptyString(outboxEntry.entry_id) &&
+        firstNonEmptyString(entry.entry_id) === firstNonEmptyString(outboxEntry.entry_id);
+      return Boolean(sameEntryId);
+    });
+
+  return matches
+    .slice()
+    .sort((left, right) => {
+      const leftScore = gitHubMessageOutboxMatchScore(left, outboxEntry);
+      const rightScore = gitHubMessageOutboxMatchScore(right, outboxEntry);
+      if (leftScore !== rightScore) {
+        return rightScore - leftScore;
+      }
+      const leftCommentId = Number.parseInt(firstNonEmptyString(
+        optionalRecord(left.metadata)?.comment_id,
+        parseGitHubIssueCommentId(left.locator),
+      ) ?? "", 10);
+      const rightCommentId = Number.parseInt(firstNonEmptyString(
+        optionalRecord(right.metadata)?.comment_id,
+        parseGitHubIssueCommentId(right.locator),
+      ) ?? "", 10);
+      if (Number.isFinite(leftCommentId) && Number.isFinite(rightCommentId) && leftCommentId !== rightCommentId) {
+        return leftCommentId - rightCommentId;
+      }
+      const leftUpdated = firstNonEmptyString(
+        optionalRecord(left.metadata)?.updated_at,
+        optionalRecord(left.metadata)?.pushed_at,
+        left.locator,
+        left.entry_id,
+      );
+      const rightUpdated = firstNonEmptyString(
+        optionalRecord(right.metadata)?.updated_at,
+        optionalRecord(right.metadata)?.pushed_at,
+        right.locator,
+        right.entry_id,
+      );
+      return String(leftUpdated).localeCompare(String(rightUpdated));
+    })[0];
+}
+
+function gitHubMessageOutboxMatchScore(candidate, outboxEntry) {
+  const candidateLocator = firstNonEmptyString(candidate.locator);
+  const requestedLocator = firstNonEmptyString(outboxEntry.locator);
+  if (candidateLocator && requestedLocator && candidateLocator === requestedLocator) {
+    return 3;
+  }
+  const candidateEntryId = firstNonEmptyString(candidate.entry_id);
+  const requestedEntryId = firstNonEmptyString(outboxEntry.entry_id);
+  if (candidateEntryId && requestedEntryId && candidateEntryId === requestedEntryId) {
+    return 2;
+  }
+  return 1;
 }
 
 export function resolveGhBinary(env) {

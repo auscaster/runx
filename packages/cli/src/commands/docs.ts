@@ -396,6 +396,15 @@ async function handleDocsRerunAction(
   const packageSummary = readRecord(reviewPacket.data.package_summary);
   const outboxEntry = readRecord(reviewPacket.data.review_outbox_entry);
   const push = readRecord(reviewPacket.data.push);
+  const refreshedControl = await withDocsRepoBinding(
+    await loadDocsControlState(control.issueRef.adapter_ref, env, sourceyRoot),
+    sourceyRoot,
+  );
+  await refreshDocsStatusComment(refreshedControl, env, sourceyRoot);
+  const finalControl = await withDocsRepoBinding(
+    await loadDocsControlState(control.issueRef.adapter_ref, env, sourceyRoot),
+    sourceyRoot,
+  );
   return {
     status: "success",
     action: parsed.docsAction ?? "rerun",
@@ -426,7 +435,7 @@ async function handleDocsRerunAction(
       readStringFromRecord(buildPacket.data, ["operator_summary", "rationale"]),
       "Docs review refreshed successfully.",
     ) ?? "Docs review refreshed successfully.",
-    thread: control.thread,
+    thread: finalControl.thread,
   };
 }
 
@@ -514,7 +523,12 @@ async function handleDocsSignalAction(
   }
 
   const handoffState = readRecord(signalPacket.data.handoff_state);
-  const signalOutboxEntry = buildDocsSignalOutboxEntry(control, signalPacket.data);
+  const signalOutboxEntry = buildDocsSignalOutboxEntry(control, {
+    handoffRef: readRecord(signalPacket.data.handoff_ref),
+    handoffSignal: readRecord(signalPacket.data.handoff_signal),
+    handoffState: readRecord(signalPacket.data.handoff_state),
+    suppressionRecord: readRecord(signalPacket.data.suppression_record),
+  });
   if (signalOutboxEntry) {
     const threadAdapter = await loadThreadAdapterModule(env);
     threadAdapter.pushGitHubMessage({
@@ -1158,18 +1172,23 @@ function synthesizeHandoffRef(control: DocsControlState): Record<string, unknown
 
 function buildDocsSignalOutboxEntry(
   control: DocsControlState,
-  signalPacket: Readonly<Record<string, unknown>>,
+  artifacts: {
+    readonly handoffRef?: Record<string, unknown>;
+    readonly handoffSignal?: Record<string, unknown>;
+    readonly handoffState?: Record<string, unknown>;
+    readonly suppressionRecord?: Record<string, unknown>;
+  },
 ): Record<string, unknown> | undefined {
   if (!control.taskId) {
     return undefined;
   }
-  const handoffRef = readRecord(signalPacket.handoff_ref);
-  const handoffSignal = readRecord(signalPacket.handoff_signal);
-  const handoffState = readRecord(signalPacket.handoff_state);
+  const handoffRef = readRecord(artifacts.handoffRef);
+  const handoffSignal = readRecord(artifacts.handoffSignal);
+  const handoffState = readRecord(artifacts.handoffState);
   if (!handoffRef || !handoffSignal || !handoffState) {
     return undefined;
   }
-  const suppressionRecord = readRecord(signalPacket.suppression_record);
+  const suppressionRecord = readRecord(artifacts.suppressionRecord);
   const sourceRef = readRecord(handoffSignal.source_ref);
   const existing = control.latestSignal;
   const previewUrl = deriveDocsPreviewUrl(control.latestReview);
@@ -1235,7 +1254,7 @@ function buildDocsSignalOutboxEntry(
 function describeDocsNextAction(status: string): string {
   switch (status) {
     case "needs_revision":
-      return "Revise the docs draft, rerun the review refresh, and keep the upstream PR gated until the thread is accepted.";
+      return "The refreshed draft is still gated by requested changes. Keep reviewing in-thread, leave more feedback if needed, or record acceptance once the draft is ready.";
     case "accepted":
       return "The control thread is approved. Trigger the upstream PR push when ready.";
     case "sent":
@@ -1245,6 +1264,46 @@ function describeDocsNextAction(status: string): string {
     default:
       return "Review the current handoff state and decide whether to revise, approve, or suppress the next outbound step.";
   }
+}
+
+function readDocsSignalArtifactsFromControl(control: DocsControlState): {
+  readonly handoffRef?: Record<string, unknown>;
+  readonly handoffSignal?: Record<string, unknown>;
+  readonly handoffState?: Record<string, unknown>;
+  readonly suppressionRecord?: Record<string, unknown>;
+} {
+  const latestSignalControl = readDocsControlMetadata(control.latestSignal);
+  return {
+    handoffRef: readRecord(latestSignalControl?.handoff_ref),
+    handoffSignal: readRecord(latestSignalControl?.handoff_signal),
+    handoffState: readRecord(latestSignalControl?.handoff_state),
+    suppressionRecord: readRecord(latestSignalControl?.suppression_record),
+  };
+}
+
+async function refreshDocsStatusComment(
+  control: DocsControlState,
+  env: NodeJS.ProcessEnv,
+  sourceyRoot: string,
+): Promise<void> {
+  if (!control.latestSignal) {
+    return;
+  }
+  const signalOutboxEntry = buildDocsSignalOutboxEntry(
+    control,
+    readDocsSignalArtifactsFromControl(control),
+  );
+  if (!signalOutboxEntry) {
+    return;
+  }
+  const threadAdapter = await loadThreadAdapterModule(env);
+  threadAdapter.pushGitHubMessage({
+    thread: control.thread,
+    outboxEntry: signalOutboxEntry,
+    nextStatus: "published",
+    env,
+    workspacePath: sourceyRoot,
+  });
 }
 
 function deriveDocsPreviewUrl(entry: Record<string, unknown> | undefined): string | undefined {
