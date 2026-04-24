@@ -1,6 +1,6 @@
 {
   "name": "@runxhq/langchain",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Optional LangChain bridge for runx tool catalogs and governed workflow tools.",
   "private": false,
   "license": "Apache-2.0",

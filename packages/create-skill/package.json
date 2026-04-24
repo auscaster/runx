@@ -1,6 +1,6 @@
 {
   "name": "@runxhq/create-skill",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Cold-start scaffolder for runx standalone skill packages.",
   "private": false,
   "license": "Apache-2.0",
