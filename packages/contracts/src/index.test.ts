@@ -15,10 +15,13 @@ import {
   validateCredentialEnvelopeContract,
   validateDevReportContract,
   validateDoctorReportContract,
+  validateHandoffSignalContract,
+  validateHandoffStateContract,
   validateRegistryBindingContract,
   validateRunxListReportContract,
   validateReviewReceiptOutputContract,
   validateScopeAdmissionContract,
+  validateSuppressionRecordContract,
 } from "./index.js";
 
 describe("@runxhq/contracts", () => {
@@ -83,6 +86,9 @@ describe("@runxhq/contracts", () => {
     expect(reviewReceiptOutputSchema.$id).toBe(RUNX_AUXILIARY_SCHEMA_IDS.reviewReceiptOutput);
     expect(runxAuxiliarySchemas.reviewReceiptOutput).toBe(reviewReceiptOutputSchema);
     expect(runxGeneratedSchemaArtifacts["doctor.schema.json"]).toBe(runxContractSchemas.doctor);
+    expect(runxGeneratedSchemaArtifacts["handoff-signal.schema.json"]).toBe(runxContractSchemas.handoffSignal);
+    expect(runxGeneratedSchemaArtifacts["handoff-state.schema.json"]).toBe(runxContractSchemas.handoffState);
+    expect(runxGeneratedSchemaArtifacts["suppression-record.schema.json"]).toBe(runxContractSchemas.suppressionRecord);
     expect(runxGeneratedSchemaArtifacts["review-receipt-output.schema.json"]).toBe(reviewReceiptOutputSchema);
   });
 
@@ -133,6 +139,62 @@ describe("@runxhq/contracts", () => {
         case_count: 1,
       },
     })).toMatchObject({ schema: "runx.registry_binding.v1" });
+  });
+
+  it("owns generic post-handoff contracts for reusable outreach state", () => {
+    expect(RUNX_CONTRACT_IDS.handoffSignal).toBe("https://schemas.runx.dev/runx/handoff-signal/v1.json");
+    expect(runxContractSchemas.handoffSignal.$id).toBe(RUNX_CONTRACT_IDS.handoffSignal);
+    expect(validateHandoffSignalContract({
+      schema: "runx.handoff_signal.v1",
+      signal_id: "sig_1",
+      handoff_id: "docs-pr:example/repo:001",
+      boundary_kind: "external_maintainer",
+      target_repo: "example/repo",
+      target_locator: "github://example/repo/pulls/42",
+      thread_locator: "github://example/repo/pulls/42",
+      outbox_entry_id: "pull_request:docs-refresh-example-repo",
+      source: "pull_request_comment",
+      disposition: "requested_changes",
+      recorded_at: "2026-04-24T02:30:00Z",
+      actor: {
+        actor_id: "maintainer",
+        role: "maintainer",
+      },
+      source_ref: {
+        type: "provider_comment",
+        uri: "https://github.com/example/repo/pull/42#issuecomment-1",
+      },
+    })).toMatchObject({
+      handoff_id: "docs-pr:example/repo:001",
+      disposition: "requested_changes",
+    });
+
+    expect(validateHandoffStateContract({
+      schema: "runx.handoff_state.v1",
+      handoff_id: "docs-pr:example/repo:001",
+      target_repo: "example/repo",
+      status: "needs_revision",
+      signal_count: 2,
+      last_signal_id: "sig_1",
+      last_signal_at: "2026-04-24T02:30:00Z",
+      last_signal_disposition: "requested_changes",
+    })).toMatchObject({
+      status: "needs_revision",
+      signal_count: 2,
+    });
+
+    expect(validateSuppressionRecordContract({
+      schema: "runx.suppression_record.v1",
+      record_id: "sup_1",
+      scope: "contact",
+      key: "mailto:maintainer@example.org",
+      reason: "requested_no_contact",
+      recorded_at: "2026-04-24T02:31:00Z",
+      source_signal_id: "sig_2",
+    })).toMatchObject({
+      scope: "contact",
+      reason: "requested_no_contact",
+    });
   });
 
   it("validates machine report payloads from TypeBox-owned contracts", () => {

@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.runx.dev/runx/handoff-state/v1.json",
+  "x-runx-schema": "runx.handoff_state.v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schema",
+    "handoff_id",
+    "status",
+    "signal_count"
+  ],
+  "properties": {
+    "schema": {
+      "const": "runx.handoff_state.v1",
+      "type": "string"
+    },
+    "handoff_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "boundary_kind": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "target_repo": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "target_locator": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "contact_locator": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "status": {
+      "anyOf": [
+        {
+          "const": "awaiting_response",
+          "type": "string"
+        },
+        {
+          "const": "engaged",
+          "type": "string"
+        },
+        {
+          "const": "needs_revision",
+          "type": "string"
+        },
+        {
+          "const": "accepted",
+          "type": "string"
+        },
+        {
+          "const": "completed",
+          "type": "string"
+        },
+        {
+          "const": "declined",
+          "type": "string"
+        },
+        {
+          "const": "rerouted",
+          "type": "string"
+        },
+        {
+          "const": "suppressed",
+          "type": "string"
+        }
+      ]
+    },
+    "signal_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "last_signal_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "last_signal_at": {
+      "minLength": 1,
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$",
+      "type": "string"
+    },
+    "last_signal_disposition": {
+      "anyOf": [
+        {
+          "const": "acknowledged",
+          "type": "string"
+        },
+        {
+          "const": "interested",
+          "type": "string"
+        },
+        {
+          "const": "requested_changes",
+          "type": "string"
+        },
+        {
+          "const": "accepted",
+          "type": "string"
+        },
+        {
+          "const": "merged",
+          "type": "string"
+        },
+        {
+          "const": "declined",
+          "type": "string"
+        },
+        {
+          "const": "requested_no_contact",
+          "type": "string"
+        },
+        {
+          "const": "rerouted",
+          "type": "string"
+        }
+      ]
+    },
+    "suppression_record_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "suppression_reason": {
+      "anyOf": [
+        {
+          "const": "requested_no_contact",
+          "type": "string"
+        },
+        {
+          "const": "remove_request",
+          "type": "string"
+        },
+        {
+          "const": "operator_block",
+          "type": "string"
+        },
+        {
+          "const": "legal_request",
+          "type": "string"
+        }
+      ]
+    },
+    "summary": {
+      "type": "string"
+    }
+  }
+}

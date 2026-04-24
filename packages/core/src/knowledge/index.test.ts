@@ -10,10 +10,16 @@ import {
   createFileKnowledgeStore,
   fetchThreadViaAdapter,
   findOutboxEntry,
+  findActiveSuppressionRecord,
+  handoffIsSuppressed,
   latestDecisionForGate,
+  latestHandoffSignal,
   pushOutboxEntryViaAdapter,
+  reduceHandoffState,
   threadAllowsGate,
   summarizeThread,
+  validateHandoffSignal,
+  validateSuppressionRecord,
   validateThread,
 } from "./index.js";
 
@@ -284,6 +290,91 @@ describe("thread contract", () => {
         kind: "pull_request",
       },
       thread: state,
+    });
+  });
+});
+
+describe("handoff state reduction", () => {
+  it("keeps the post-boundary model generic instead of docs-specific", () => {
+    const firstSignal = validateHandoffSignal({
+      schema: "runx.handoff_signal.v1",
+      signal_id: "sig_1",
+      handoff_id: "docs-pr:example/repo:001",
+      boundary_kind: "external_maintainer",
+      target_repo: "example/repo",
+      target_locator: "github://example/repo/pulls/42",
+      thread_locator: "github://example/repo/pulls/42",
+      source: "pull_request_comment",
+      disposition: "acknowledged",
+      recorded_at: "2026-04-24T03:00:00Z",
+    });
+    const secondSignal = validateHandoffSignal({
+      schema: "runx.handoff_signal.v1",
+      signal_id: "sig_2",
+      handoff_id: "docs-pr:example/repo:001",
+      boundary_kind: "external_maintainer",
+      target_repo: "example/repo",
+      target_locator: "github://example/repo/pulls/42",
+      source: "pull_request_review",
+      disposition: "requested_changes",
+      recorded_at: "2026-04-24T03:05:00Z",
+    });
+
+    expect(latestHandoffSignal([firstSignal, secondSignal], "docs-pr:example/repo:001")?.signal_id).toBe("sig_2");
+    expect(reduceHandoffState({
+      handoff_id: "docs-pr:example/repo:001",
+      boundary_kind: "external_maintainer",
+      target_repo: "example/repo",
+      target_locator: "github://example/repo/pulls/42",
+      signals: [firstSignal, secondSignal],
+    })).toMatchObject({
+      schema: "runx.handoff_state.v1",
+      status: "needs_revision",
+      signal_count: 2,
+      last_signal_id: "sig_2",
+      last_signal_disposition: "requested_changes",
+    });
+  });
+
+  it("applies scoped suppression records across future outreach attempts", () => {
+    const repoSuppression = validateSuppressionRecord({
+      schema: "runx.suppression_record.v1",
+      record_id: "sup_repo",
+      scope: "repo",
+      key: "example/repo",
+      reason: "operator_block",
+      recorded_at: "2026-04-24T03:10:00Z",
+    });
+    const contactSuppression = validateSuppressionRecord({
+      schema: "runx.suppression_record.v1",
+      record_id: "sup_contact",
+      scope: "contact",
+      key: "mailto:maintainer@example.org",
+      reason: "requested_no_contact",
+      recorded_at: "2026-04-24T03:12:00Z",
+    });
+
+    expect(findActiveSuppressionRecord({
+      handoff_id: "docs-outreach:charity:001",
+      target_repo: "example/repo",
+      contact_locator: "mailto:maintainer@example.org",
+    }, [repoSuppression, contactSuppression], "2026-04-24T03:20:00Z")?.record_id).toBe("sup_contact");
+    expect(handoffIsSuppressed({
+      handoff_id: "docs-outreach:charity:001",
+      target_repo: "example/repo",
+      contact_locator: "mailto:maintainer@example.org",
+    }, [repoSuppression, contactSuppression], "2026-04-24T03:20:00Z")).toBe(true);
+    expect(reduceHandoffState({
+      handoff_id: "docs-outreach:charity:001",
+      boundary_kind: "external_contact",
+      target_repo: "example/repo",
+      contact_locator: "mailto:maintainer@example.org",
+      suppressions: [repoSuppression, contactSuppression],
+      now: "2026-04-24T03:20:00Z",
+    })).toMatchObject({
+      status: "suppressed",
+      suppression_record_id: "sup_contact",
+      suppression_reason: "requested_no_contact",
     });
   });
 });

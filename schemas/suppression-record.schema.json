@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.runx.dev/runx/suppression-record/v1.json",
+  "x-runx-schema": "runx.suppression_record.v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schema",
+    "record_id",
+    "scope",
+    "key",
+    "reason",
+    "recorded_at"
+  ],
+  "properties": {
+    "schema": {
+      "const": "runx.suppression_record.v1",
+      "type": "string"
+    },
+    "record_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "scope": {
+      "anyOf": [
+        {
+          "const": "handoff",
+          "type": "string"
+        },
+        {
+          "const": "target",
+          "type": "string"
+        },
+        {
+          "const": "repo",
+          "type": "string"
+        },
+        {
+          "const": "contact",
+          "type": "string"
+        }
+      ]
+    },
+    "key": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "const": "requested_no_contact",
+          "type": "string"
+        },
+        {
+          "const": "remove_request",
+          "type": "string"
+        },
+        {
+          "const": "operator_block",
+          "type": "string"
+        },
+        {
+          "const": "legal_request",
+          "type": "string"
+        }
+      ]
+    },
+    "recorded_at": {
+      "minLength": 1,
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$",
+      "type": "string"
+    },
+    "expires_at": {
+      "minLength": 1,
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$",
+      "type": "string"
+    },
+    "source_signal_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { runxGeneratedSchemaArtifacts } from "@runxhq/contracts";
+import { runxGeneratedSchemaArtifacts } from "../packages/contracts/src/index.js";
 
 const workspaceRoot = process.cwd();
 
