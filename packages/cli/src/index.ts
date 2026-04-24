@@ -41,7 +41,7 @@ export interface ParsedArgs {
   readonly doctorFix: boolean;
   readonly doctorExplainId?: string;
   readonly doctorListDiagnostics: boolean;
-  readonly docsAction?: "rerun" | "push-pr" | "signal" | "status" | "doctor" | "dogfood";
+  readonly docsAction?: "rerun" | "push-pr" | "signal" | "status" | "doctor" | "dogfood" | "bind-repo";
   readonly toolAction?: "build" | "migrate" | "search" | "inspect";
   readonly toolPath?: string;
   readonly toolRef?: string;
@@ -367,6 +367,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       || positionals[0] === "status"
       || positionals[0] === "doctor"
       || positionals[0] === "dogfood"
+      || positionals[0] === "bind-repo"
     )
       ? positionals[0]
       : undefined,

@@ -288,6 +288,25 @@ runners:
     });
   });
 
+  it("parses docs bind-repo as a dedicated CLI action", () => {
+    const parsed = parseArgs([
+      "docs",
+      "bind-repo",
+      "--issue",
+      "sourcey/sourcey.com#issue/2",
+      "--repo-root",
+      "../easyllm",
+    ]);
+
+    expect(parsed.command).toBe("docs");
+    expect(parsed.docsAction).toBe("bind-repo");
+    expect(parsed.skillPath).toBeUndefined();
+    expect(parsed.inputs).toEqual({
+      issue: "sourcey/sourcey.com#issue/2",
+      "repo-root": "../easyllm",
+    });
+  });
+
   it("parses trainable export filters without leaking them into skill inputs", () => {
     const parsed = parseArgs([
       "export-receipts",

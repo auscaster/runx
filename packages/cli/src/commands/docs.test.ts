@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -48,6 +48,9 @@ afterEach(async () => {
 describe("handleDocsCommand", () => {
   it("rebuilds and refreshes the same docs PR review thread through rerun", async () => {
     const sourceyRoot = await mkDocsRoot();
+    const repoRoot = await mkdtemp(path.join(os.tmpdir(), "runx-docs-rerun-"));
+    tempDirs.push(repoRoot);
+    execFileSync("git", ["init", "-q"], { cwd: repoRoot });
     const thread = {
       thread_locator: "github://sourcey/sourcey.com/issues/2",
       canonical_uri: "https://github.com/sourcey/sourcey.com/issues/2",
@@ -100,7 +103,7 @@ describe("handleDocsCommand", () => {
         docsAction: "rerun",
         inputs: {
           issue: "sourcey/sourcey.com#issue/2",
-          "repo-root": "/tmp/example-repo",
+          "repo-root": repoRoot,
           "sourcey-root": sourceyRoot,
         },
       } satisfies DocsCommandArgs,
@@ -118,6 +121,7 @@ describe("handleDocsCommand", () => {
       action: "rerun",
       task_id: "docs-refresh-example-repo",
       lane: "pull_request",
+      repo_root: repoRoot,
       preview_url: "https://sourcey.com/previews/example/repo/index.html",
       review_comment_url: "https://github.com/sourcey/sourcey.com/issues/2#issuecomment-1",
     });
@@ -127,6 +131,130 @@ describe("handleDocsCommand", () => {
       inputs: expect.objectContaining({
         task_id: "docs-refresh-example-repo",
         push_pr: false,
+      }),
+    });
+  });
+
+  it("binds a repo clone to the control thread and reuses it on rerun", async () => {
+    const sourceyRoot = await mkDocsRoot();
+    const repoRoot = await mkdtemp(path.join(os.tmpdir(), "runx-docs-bound-repo-"));
+    tempDirs.push(repoRoot);
+    execFileSync("git", ["init", "-q"], { cwd: repoRoot });
+    const nestedRoot = path.join(repoRoot, "packages", "easyllm");
+    await mkdir(nestedRoot, { recursive: true });
+    const thread = {
+      thread_locator: "github://sourcey/sourcey.com/issues/2",
+      canonical_uri: "https://github.com/sourcey/sourcey.com/issues/2",
+      outbox: [
+        {
+          entry_id: "message:docs-refresh-example-repo:review",
+          kind: "message",
+          locator: "https://github.com/sourcey/sourcey.com/issues/2#issuecomment-1",
+          metadata: {
+            control: {
+              workflow: "docs",
+              lane: "pr_review",
+              task_id: "docs-refresh-example-repo",
+              handoff_ref: {
+                handoff_id: "sourcey.docs-pr:docs-refresh-example-repo",
+                boundary_kind: "external_maintainer",
+                target_repo: "example/repo",
+                thread_locator: "github://sourcey/sourcey.com/issues/2",
+              },
+            },
+          },
+        },
+      ],
+    };
+    vi.stubGlobal("__runxDocsThreadFixture", thread);
+
+    const bindResult = await handleDocsCommand(
+      {
+        command: "docs",
+        docsAction: "bind-repo",
+        inputs: {
+          issue: "sourcey/sourcey.com#issue/2",
+          "repo-root": nestedRoot,
+          "sourcey-root": sourceyRoot,
+        },
+      } satisfies DocsCommandArgs,
+      {
+        ...process.env,
+        RUNX_CWD: process.cwd(),
+        RUNX_DOCS_THREAD_ADAPTER_PATH: path.join(sourceyRoot, "adapter.mjs"),
+      },
+      caller,
+      deps,
+    );
+
+    expect(bindResult).toMatchObject({
+      status: "success",
+      action: "bind-repo",
+      target_repo: "example/repo",
+      repo_root: repoRoot,
+    });
+    const bindings = JSON.parse(await readFile(path.join(sourceyRoot, ".runx", "state", "docs-control-bindings.json"), "utf8"));
+    expect(bindings).toMatchObject({
+      schema_version: "runx.docs-control-bindings.v1",
+      bindings: {
+        "github://sourcey/sourcey.com/issues/2": {
+          target_repo: "example/repo",
+          repo_root: repoRoot,
+        },
+      },
+    });
+
+    runLocalSkill
+      .mockResolvedValueOnce(successSkillResult({
+        target: { repo_slug: "example/repo" },
+      }))
+      .mockResolvedValueOnce(successSkillResult({
+        operator_summary: {
+          should_open_pr: true,
+          rationale: "ready",
+        },
+        before_after_evidence: {
+          build_url: "https://sourcey.com/previews/example/repo/index.html",
+        },
+      }))
+      .mockResolvedValueOnce(successSkillResult({
+        package_summary: {
+          should_push: false,
+        },
+        review_outbox_entry: {
+          entry_id: "message:docs-refresh-example-repo:review",
+          locator: "https://github.com/sourcey/sourcey.com/issues/2#issuecomment-1",
+        },
+      }));
+
+    const rerunResult = await handleDocsCommand(
+      {
+        command: "docs",
+        docsAction: "rerun",
+        inputs: {
+          issue: "sourcey/sourcey.com#issue/2",
+          "sourcey-root": sourceyRoot,
+        },
+      } satisfies DocsCommandArgs,
+      {
+        ...process.env,
+        RUNX_CWD: process.cwd(),
+        RUNX_DOCS_THREAD_ADAPTER_PATH: path.join(sourceyRoot, "adapter.mjs"),
+      },
+      caller,
+      deps,
+    );
+
+    expect(rerunResult).toMatchObject({
+      status: "success",
+      action: "rerun",
+      target_repo: "example/repo",
+      repo_root: repoRoot,
+    });
+    expect(runLocalSkill.mock.calls[0]?.[0]).toMatchObject({
+      runner: "docs-scan",
+      inputs: expect.objectContaining({
+        repo_root: repoRoot,
       }),
     });
   });
@@ -204,11 +332,8 @@ describe("handleDocsCommand", () => {
       action: "signal",
       task_id: "docs-refresh-example-repo",
       lane: "pull_request",
-      handoff_state: {
-        status: "needs_revision",
-      },
     });
-    expect(globalThis.__runxDocsPushedSignal).toMatchObject({
+    expect((globalThis as typeof globalThis & { __runxDocsPushedSignal?: unknown }).__runxDocsPushedSignal).toMatchObject({
       entry_id: "message:docs-refresh-example-repo:signal",
       metadata: {
         control: {
@@ -305,6 +430,9 @@ describe("handleDocsCommand", () => {
 
   it("fails closed on push-pr until the control thread records acceptance", async () => {
     const sourceyRoot = await mkDocsRoot();
+    const repoRoot = await mkdtemp(path.join(os.tmpdir(), "runx-docs-push-pr-"));
+    tempDirs.push(repoRoot);
+    execFileSync("git", ["init", "-q"], { cwd: repoRoot });
     const thread = {
       thread_locator: "github://sourcey/sourcey.com/issues/2",
       canonical_uri: "https://github.com/sourcey/sourcey.com/issues/2",
@@ -331,7 +459,7 @@ describe("handleDocsCommand", () => {
         docsAction: "push-pr",
         inputs: {
           issue: "sourcey/sourcey.com#issue/2",
-          "repo-root": "/tmp/example-repo",
+          "repo-root": repoRoot,
           "sourcey-root": sourceyRoot,
         },
       } satisfies DocsCommandArgs,
@@ -349,6 +477,9 @@ describe("handleDocsCommand", () => {
       action: "push-pr",
       phase: "review",
     });
+    if (result.status !== "failure") {
+      throw new Error(`Expected failure result, received ${result.status}.`);
+    }
     expect(result.message).toContain("accepted review signal");
     expect(runLocalSkill).not.toHaveBeenCalled();
   });
@@ -418,6 +549,9 @@ describe("handleDocsCommand", () => {
 
   it("returns a managed-agent hint when docs-build pauses on cognitive work", async () => {
     const sourceyRoot = await mkDocsRoot();
+    const repoRoot = await mkdtemp(path.join(os.tmpdir(), "runx-docs-managed-agent-"));
+    tempDirs.push(repoRoot);
+    execFileSync("git", ["init", "-q"], { cwd: repoRoot });
     const thread = {
       thread_locator: "github://sourcey/sourcey.com/issues/2",
       canonical_uri: "https://github.com/sourcey/sourcey.com/issues/2",
@@ -453,7 +587,7 @@ describe("handleDocsCommand", () => {
         docsAction: "rerun",
         inputs: {
           issue: "sourcey/sourcey.com#issue/2",
-          "repo-root": "/tmp/example-repo",
+          "repo-root": repoRoot,
           "sourcey-root": sourceyRoot,
         },
       } satisfies DocsCommandArgs,
@@ -470,6 +604,9 @@ describe("handleDocsCommand", () => {
       status: "needs_resolution",
       phase: "build",
     });
+    if (result.status !== "needs_resolution") {
+      throw new Error(`Expected needs_resolution result, received ${result.status}.`);
+    }
     expect(result.message).toContain("shape native docs brief");
     expect(result.message).toContain("RUNX_AGENT_PROVIDER");
   });

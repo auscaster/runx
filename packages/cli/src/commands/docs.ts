@@ -18,7 +18,7 @@ export type DocsCommandArgs = Partial<ParsedArgs> & {
   readonly command?: string;
   readonly inputs: Readonly<Record<string, unknown>>;
   readonly receiptDir?: string;
-  readonly docsAction?: "rerun" | "push-pr" | "signal" | "status" | "doctor" | "dogfood";
+  readonly docsAction?: "rerun" | "push-pr" | "signal" | "status" | "doctor" | "dogfood" | "bind-repo";
 };
 
 interface GitHubIssueRef {
@@ -42,11 +42,13 @@ export interface DocsCommandDeps {
 export type DocsCommandResult =
   | {
       readonly status: "success";
-      readonly action: "status" | "rerun" | "push-pr" | "signal";
+      readonly action: "status" | "rerun" | "push-pr" | "signal" | "bind-repo";
       readonly issue: string;
       readonly thread_locator: string;
       readonly task_id?: string;
       readonly lane?: "pull_request" | "outreach";
+      readonly target_repo?: string;
+      readonly repo_root?: string;
       readonly preview_url?: string;
       readonly review_comment_url?: string;
       readonly pull_request_url?: string;
@@ -82,6 +84,8 @@ interface DocsControlState {
   readonly latestPullRequest?: Record<string, unknown>;
   readonly taskId?: string;
   readonly lane?: "pull_request" | "outreach";
+  readonly targetRepo?: string;
+  readonly boundRepoRoot?: string;
   readonly handoffRef?: Record<string, unknown>;
   readonly handoffState?: Record<string, unknown>;
 }
@@ -92,6 +96,8 @@ interface ExecutedDocsSkill {
   readonly data?: Record<string, unknown>;
 }
 
+const DOCS_CONTROL_BINDINGS_PATH = path.join(".runx", "state", "docs-control-bindings.json");
+
 export async function handleDocsCommand(
   parsed: DocsCommandArgs,
   env: NodeJS.ProcessEnv,
@@ -100,7 +106,7 @@ export async function handleDocsCommand(
 ): Promise<DocsCommandResult> {
   const action = parsed.docsAction;
   if (!action) {
-    throw new Error("runx docs requires an action: status, rerun, push-pr, signal, doctor, or dogfood.");
+    throw new Error("runx docs requires an action: status, bind-repo, rerun, push-pr, signal, doctor, or dogfood.");
   }
 
   if (action === "doctor" || action === "dogfood") {
@@ -115,19 +121,28 @@ export async function handleDocsCommand(
     throw new Error(`runx docs ${action} requires --issue owner/repo#issue/123 or a canonical GitHub issue URL.`);
   }
 
-  const control = await loadDocsControlState(issueInput, env, resolveDocsThreadCwd(parsed.inputs, env));
+  const statusSourceyRoot = resolveOptionalSourceyRoot(parsed.inputs, env);
+  const control = await withDocsRepoBinding(
+    await loadDocsControlState(issueInput, env, resolveDocsThreadCwd(parsed.inputs, env)),
+    statusSourceyRoot,
+  );
 
   if (action === "status") {
     return buildDocsStatusResult(control);
   }
 
   const sourceyRoot = resolveSourceyRoot(parsed.inputs, env);
+  const boundControl = await withDocsRepoBinding(control, sourceyRoot);
 
-  if (action === "signal") {
-    return await handleDocsSignalAction(parsed, env, caller, deps, sourceyRoot, control);
+  if (action === "bind-repo") {
+    return await handleDocsBindRepoAction(parsed, env, sourceyRoot, boundControl);
   }
 
-  return await handleDocsRerunAction(parsed, env, caller, deps, sourceyRoot, control);
+  if (action === "signal") {
+    return await handleDocsSignalAction(parsed, env, caller, deps, sourceyRoot, boundControl);
+  }
+
+  return await handleDocsRerunAction(parsed, env, caller, deps, sourceyRoot, boundControl);
 }
 
 export function renderDocsResult(result: DocsCommandResult): string {
@@ -159,6 +174,8 @@ export function renderDocsResult(result: DocsCommandResult): string {
       `thread   ${result.thread_locator}`,
       result.task_id ? `task     ${result.task_id}` : undefined,
       result.lane ? `lane     ${result.lane}` : undefined,
+      result.target_repo ? `target   ${result.target_repo}` : undefined,
+      result.repo_root ? `repo     ${result.repo_root}` : undefined,
       result.review_comment_url ? `review   ${result.review_comment_url}` : undefined,
       result.pull_request_url ? `pr       ${result.pull_request_url}` : undefined,
       `summary  ${result.summary}`,
@@ -172,7 +189,21 @@ export function renderDocsResult(result: DocsCommandResult): string {
       `issue    ${result.issue}`,
       result.task_id ? `task     ${result.task_id}` : undefined,
       result.lane ? `lane     ${result.lane}` : undefined,
+      result.target_repo ? `target   ${result.target_repo}` : undefined,
       `status   ${readStringFromRecord(result.handoff_state, ["status"]) ?? "unknown"}`,
+      `summary  ${result.summary}`,
+    ].filter((line): line is string => typeof line === "string");
+    return `${lines.join("\n")}\n`;
+  }
+
+  if (result.action === "bind-repo") {
+    const lines = [
+      "docs bind-repo",
+      `issue    ${result.issue}`,
+      `thread   ${result.thread_locator}`,
+      result.task_id ? `task     ${result.task_id}` : undefined,
+      result.target_repo ? `target   ${result.target_repo}` : undefined,
+      result.repo_root ? `repo     ${result.repo_root}` : undefined,
       `summary  ${result.summary}`,
     ].filter((line): line is string => typeof line === "string");
     return `${lines.join("\n")}\n`;
@@ -184,6 +215,8 @@ export function renderDocsResult(result: DocsCommandResult): string {
     readonly thread_locator: string;
     readonly task_id?: string;
     readonly lane?: "pull_request" | "outreach";
+    readonly target_repo?: string;
+    readonly repo_root?: string;
     readonly preview_url?: string;
     readonly review_comment_url?: string;
     readonly pull_request_url?: string;
@@ -195,6 +228,8 @@ export function renderDocsResult(result: DocsCommandResult): string {
     `thread   ${threadedResult.thread_locator}`,
     threadedResult.task_id ? `task     ${threadedResult.task_id}` : undefined,
     threadedResult.lane ? `lane     ${threadedResult.lane}` : undefined,
+    threadedResult.target_repo ? `target   ${threadedResult.target_repo}` : undefined,
+    threadedResult.repo_root ? `repo     ${threadedResult.repo_root}` : undefined,
     threadedResult.preview_url ? `preview  ${threadedResult.preview_url}` : undefined,
     threadedResult.review_comment_url ? `review   ${threadedResult.review_comment_url}` : undefined,
     threadedResult.pull_request_url ? `pr       ${threadedResult.pull_request_url}` : undefined,
@@ -211,11 +246,32 @@ async function handleDocsRerunAction(
   sourceyRoot: string,
   control: DocsControlState,
 ): Promise<DocsCommandResult> {
-  const repoRootInput = readStringInput(parsed.inputs, ["repo-root", "repo_root", "project"]);
+  const repoRootInput = firstNonEmptyString(
+    readStringInput(parsed.inputs, ["repo-root", "repo_root", "project"]),
+    control.boundRepoRoot,
+  );
   if (!repoRootInput) {
-    throw new Error(`runx docs ${parsed.docsAction} requires --repo-root pointing at a local target repo clone.`);
+    return {
+      status: "failure",
+      action: parsed.docsAction ?? "rerun",
+      issue: control.issueRef.issue_url,
+      phase: "scan",
+      message: "No local target repo clone is bound to this control thread yet. Run `runx docs bind-repo --issue ... --repo-root /path/to/repo` first or pass `--repo-root` directly.",
+    };
   }
   const repoRoot = normalizeDocsRepoRoot(resolvePathFromUserInput(repoRootInput, env));
+  if (!existsSync(repoRoot)) {
+    const rebound = control.boundRepoRoot && repoRootInput === control.boundRepoRoot;
+    return {
+      status: "failure",
+      action: parsed.docsAction ?? "rerun",
+      issue: control.issueRef.issue_url,
+      phase: "scan",
+      message: rebound
+        ? `The bound repo clone '${repoRoot}' no longer exists. Rebind it with \`runx docs bind-repo --issue ... --repo-root /path/to/repo\`.`
+        : `The repo clone '${repoRoot}' does not exist.`,
+    };
+  }
 
   if (parsed.docsAction === "push-pr" && readStringFromRecord(control.handoffState, ["status"]) !== "accepted") {
     return {
@@ -347,6 +403,8 @@ async function handleDocsRerunAction(
     thread_locator: control.issueRef.thread_locator,
     task_id: taskId,
     lane: selectedLane,
+    target_repo: control.targetRepo ?? readStringFromRecord(buildPacket.data, ["scan", "target", "repo_slug"]),
+    repo_root: repoRoot,
     preview_url: firstNonEmptyString(
       readStringFromRecord(buildPacket.data, ["before_after_evidence", "build_url"]),
       readStringFromRecord(buildPacket.data, ["preview", "preview_url"]),
@@ -368,6 +426,44 @@ async function handleDocsRerunAction(
       readStringFromRecord(buildPacket.data, ["operator_summary", "rationale"]),
       "Docs review refreshed successfully.",
     ) ?? "Docs review refreshed successfully.",
+    thread: control.thread,
+  };
+}
+
+async function handleDocsBindRepoAction(
+  parsed: DocsCommandArgs,
+  env: NodeJS.ProcessEnv,
+  sourceyRoot: string,
+  control: DocsControlState,
+): Promise<DocsCommandResult> {
+  const repoRootInput = readStringInput(parsed.inputs, ["repo-root", "repo_root", "project"]);
+  if (!repoRootInput) {
+    throw new Error("runx docs bind-repo requires --repo-root pointing at a local target repo clone.");
+  }
+  const repoRoot = normalizeDocsRepoRoot(resolvePathFromUserInput(repoRootInput, env));
+  if (!existsSync(repoRoot)) {
+    throw new Error(`The repo clone '${repoRoot}' does not exist.`);
+  }
+  await writeDocsRepoBinding(sourceyRoot, control.issueRef.thread_locator, {
+    issue_url: control.issueRef.issue_url,
+    thread_locator: control.issueRef.thread_locator,
+    target_repo: control.targetRepo,
+    task_id: control.taskId,
+    repo_root: repoRoot,
+    updated_at: new Date().toISOString(),
+  });
+  return {
+    status: "success",
+    action: "bind-repo",
+    issue: control.issueRef.issue_url,
+    thread_locator: control.issueRef.thread_locator,
+    task_id: control.taskId,
+    lane: control.lane,
+    target_repo: control.targetRepo,
+    repo_root: repoRoot,
+    summary: control.targetRepo
+      ? `Bound ${repoRoot} to ${control.targetRepo} for this control thread.`
+      : `Bound ${repoRoot} to this control thread.`,
     thread: control.thread,
   };
 }
@@ -435,6 +531,8 @@ async function handleDocsSignalAction(
     thread_locator: control.issueRef.thread_locator,
     task_id: control.taskId,
     lane: control.lane,
+    target_repo: control.targetRepo,
+    repo_root: control.boundRepoRoot,
     handoff_state: handoffState,
     summary: firstNonEmptyString(
       readStringFromRecord(handoffState, ["summary"]),
@@ -500,8 +598,8 @@ async function handleDocsDoctorAction(sourceyRoot: string): Promise<DocsCommandR
   await checkContains(sourceyRoot, ".runx/tools/docs/package_signal/src/index.ts", "runx.suppression_record.v1", "docs.package_signal emits the generic suppression contract", checks);
   checkPinnedCliDependency(packageJson, checks);
   await checkNoDirectGitHubMutation(sourceyRoot, ".runx/tools/docs", checks);
-  await checkContains(sourceyRoot, "package.json", "\"doctor:outreach\": \"runx docs doctor --sourcey-root .\"", "package.json routes doctor:outreach through the runx CLI", checks);
-  await checkContains(sourceyRoot, "package.json", "\"dogfood:outreach\": \"runx docs dogfood --sourcey-root .\"", "package.json routes dogfood:outreach through the runx CLI", checks);
+  await checkContains(sourceyRoot, "package.json", "\"doctor:outreach\": \"runx docs doctor\"", "package.json routes doctor:outreach through the runx CLI", checks);
+  await checkContains(sourceyRoot, "package.json", "\"dogfood:outreach\": \"runx docs dogfood\"", "package.json routes dogfood:outreach through the runx CLI", checks);
 
   const failed = checks.filter((check) => check.status === "fail");
   return failed.length === 0
@@ -678,6 +776,8 @@ function buildDocsStatusResult(control: DocsControlState): DocsCommandResult {
     thread_locator: control.issueRef.thread_locator,
     task_id: control.taskId,
     lane: control.lane,
+    target_repo: control.targetRepo,
+    repo_root: control.boundRepoRoot,
     review_comment_url: firstNonEmptyString(control.latestReview?.locator),
     pull_request_url: firstNonEmptyString(control.latestPullRequest?.locator),
     review_entry_id: firstNonEmptyString(control.latestReview?.entry_id),
@@ -706,6 +806,7 @@ async function loadDocsControlState(issueInput: string, env: NodeJS.ProcessEnv, 
   const control = readDocsControlMetadata(latestReview);
   const signalControl = readDocsControlMetadata(latestSignal);
   const lane = inferDocsLane(latestReview);
+  const handoffRef = readRecord(signalControl?.handoff_ref) ?? readRecord(control?.handoff_ref);
   return {
     issueRef,
     thread,
@@ -719,8 +820,32 @@ async function loadDocsControlState(issueInput: string, env: NodeJS.ProcessEnv, 
       parseDocsSignalTaskId(firstNonEmptyString(latestSignal?.entry_id)),
     ),
     lane,
-    handoffRef: readRecord(signalControl?.handoff_ref) ?? readRecord(control?.handoff_ref),
+    targetRepo: firstNonEmptyString(
+      readStringFromRecord(handoffRef, ["target_repo"]),
+      readStringFromRecord(signalControl, ["target_repo"]),
+      readStringFromRecord(control, ["target_repo"]),
+    ),
+    handoffRef,
     handoffState: readRecord(signalControl?.handoff_state),
+  };
+}
+
+async function withDocsRepoBinding(control: DocsControlState, sourceyRoot: string | undefined): Promise<DocsControlState> {
+  if (!sourceyRoot) {
+    return control;
+  }
+  const bindings = await readDocsRepoBindings(sourceyRoot);
+  const binding = readRecord(bindings[control.issueRef.thread_locator]);
+  return {
+    ...control,
+    targetRepo: firstNonEmptyString(
+      control.targetRepo,
+      readStringFromRecord(binding, ["target_repo"]),
+    ),
+    boundRepoRoot: firstNonEmptyString(
+      readStringFromRecord(binding, ["repo_root"]),
+      control.boundRepoRoot,
+    ),
   };
 }
 
@@ -814,6 +939,15 @@ function resolveSourceyRoot(inputs: Readonly<Record<string, unknown>>, env: Node
     throw new Error(`Sourcey docs root '${candidate}' does not contain skills/docs-build. Pass --sourcey-root explicitly.`);
   }
   return candidate;
+}
+
+function resolveOptionalSourceyRoot(inputs: Readonly<Record<string, unknown>>, env: NodeJS.ProcessEnv): string | undefined {
+  const explicit = readStringInput(inputs, ["sourcey-root", "sourcey_root"]);
+  if (explicit) {
+    return resolveSourceyRoot(inputs, env);
+  }
+  const candidate = resolvePathFromUserInput(env.RUNX_DOCS_ROOT ?? env.RUNX_CWD ?? process.cwd(), env);
+  return existsSync(path.join(candidate, "skills", "docs-build")) ? candidate : undefined;
 }
 
 function resolveDocsThreadCwd(inputs: Readonly<Record<string, unknown>>, env: NodeJS.ProcessEnv): string {
@@ -1083,6 +1217,42 @@ function buildDocsSignalOutboxEntry(
       },
     }),
   });
+}
+
+async function readDocsRepoBindings(sourceyRoot: string): Promise<Readonly<Record<string, unknown>>> {
+  const filePath = path.join(sourceyRoot, DOCS_CONTROL_BINDINGS_PATH);
+  if (!existsSync(filePath)) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(await readFile(filePath, "utf8")) as Record<string, unknown>;
+    const bindings = readRecord(parsed.bindings);
+    return bindings ?? {};
+  } catch {
+    return {};
+  }
+}
+
+async function writeDocsRepoBinding(
+  sourceyRoot: string,
+  threadLocator: string,
+  binding: Readonly<Record<string, unknown>>,
+): Promise<void> {
+  const bindingsPath = path.join(sourceyRoot, DOCS_CONTROL_BINDINGS_PATH);
+  const bindingsDir = path.dirname(bindingsPath);
+  const existing = await readDocsRepoBindings(sourceyRoot);
+  await mkdir(bindingsDir, { recursive: true });
+  await writeFile(
+    bindingsPath,
+    `${JSON.stringify({
+      schema_version: "runx.docs-control-bindings.v1",
+      bindings: {
+        ...existing,
+        [threadLocator]: pruneRecord(binding),
+      },
+    }, null, 2)}\n`,
+    "utf8",
+  );
 }
 
 function buildMaintainerContact(inputs: Readonly<Record<string, unknown>>): Record<string, unknown> | undefined {
