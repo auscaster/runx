@@ -159,6 +159,16 @@ describe("handleDocsCommand", () => {
     };
     vi.stubGlobal("__runxDocsThreadFixture", thread);
     runLocalSkill.mockResolvedValueOnce(successSkillResult({
+      handoff_ref: {
+        handoff_id: "sourcey.docs-pr:docs-refresh-example-repo",
+        boundary_kind: "external_maintainer",
+        thread_locator: "github://sourcey/sourcey.com/issues/2",
+      },
+      handoff_signal: {
+        source: "issue_comment",
+        disposition: "requested_changes",
+        recorded_at: "2026-04-25T00:00:00Z",
+      },
       handoff_state: {
         status: "needs_revision",
         summary: "needs_revision from issue_comment (requested_changes)",
@@ -198,6 +208,19 @@ describe("handleDocsCommand", () => {
         status: "needs_revision",
       },
     });
+    expect(globalThis.__runxDocsPushedSignal).toMatchObject({
+      entry_id: "message:docs-refresh-example-repo:signal",
+      metadata: {
+        control: {
+          workflow: "docs",
+          lane: "handoff_signal",
+          task_id: "docs-refresh-example-repo",
+          handoff_state: {
+            status: "needs_revision",
+          },
+        },
+      },
+    });
     expect(runLocalSkill).toHaveBeenCalledTimes(1);
     expect(runLocalSkill.mock.calls[0]?.[0]).toMatchObject({
       runner: "docs-signal",
@@ -211,6 +234,123 @@ describe("handleDocsCommand", () => {
         }),
       }),
     });
+  });
+
+  it("surfaces the latest durable signal state from the control thread", async () => {
+    const sourceyRoot = await mkDocsRoot();
+    const thread = {
+      thread_locator: "github://sourcey/sourcey.com/issues/2",
+      canonical_uri: "https://github.com/sourcey/sourcey.com/issues/2",
+      outbox: [
+        {
+          entry_id: "message:docs-refresh-example-repo:review",
+          kind: "message",
+          locator: "https://github.com/sourcey/sourcey.com/issues/2#issuecomment-1",
+          metadata: {
+            control: {
+              workflow: "docs",
+              lane: "pr_review",
+              task_id: "docs-refresh-example-repo",
+            },
+          },
+        },
+        {
+          entry_id: "message:docs-refresh-example-repo:signal",
+          kind: "message",
+          locator: "https://github.com/sourcey/sourcey.com/issues/2#issuecomment-2",
+          metadata: {
+            updated_at: "2026-04-25T01:00:00Z",
+            control: {
+              workflow: "docs",
+              lane: "handoff_signal",
+              task_id: "docs-refresh-example-repo",
+              handoff_state: {
+                status: "accepted",
+                summary: "accepted from issue_comment (accepted)",
+              },
+            },
+          },
+        },
+      ],
+    };
+    vi.stubGlobal("__runxDocsThreadFixture", thread);
+
+    const result = await handleDocsCommand(
+      {
+        command: "docs",
+        docsAction: "status",
+        inputs: {
+          issue: "sourcey/sourcey.com#issue/2",
+          "sourcey-root": sourceyRoot,
+        },
+      } satisfies DocsCommandArgs,
+      {
+        ...process.env,
+        RUNX_CWD: process.cwd(),
+        RUNX_DOCS_THREAD_ADAPTER_PATH: path.join(sourceyRoot, "adapter.mjs"),
+      },
+      caller,
+      deps,
+    );
+
+    expect(result).toMatchObject({
+      status: "success",
+      action: "status",
+      handoff_state: {
+        status: "accepted",
+      },
+      summary: "accepted from issue_comment (accepted)",
+    });
+  });
+
+  it("fails closed on push-pr until the control thread records acceptance", async () => {
+    const sourceyRoot = await mkDocsRoot();
+    const thread = {
+      thread_locator: "github://sourcey/sourcey.com/issues/2",
+      canonical_uri: "https://github.com/sourcey/sourcey.com/issues/2",
+      outbox: [
+        {
+          entry_id: "message:docs-refresh-example-repo:review",
+          kind: "message",
+          locator: "https://github.com/sourcey/sourcey.com/issues/2#issuecomment-1",
+          metadata: {
+            control: {
+              workflow: "docs",
+              lane: "pr_review",
+              task_id: "docs-refresh-example-repo",
+            },
+          },
+        },
+      ],
+    };
+    vi.stubGlobal("__runxDocsThreadFixture", thread);
+
+    const result = await handleDocsCommand(
+      {
+        command: "docs",
+        docsAction: "push-pr",
+        inputs: {
+          issue: "sourcey/sourcey.com#issue/2",
+          "repo-root": "/tmp/example-repo",
+          "sourcey-root": sourceyRoot,
+        },
+      } satisfies DocsCommandArgs,
+      {
+        ...process.env,
+        RUNX_CWD: process.cwd(),
+        RUNX_DOCS_THREAD_ADAPTER_PATH: path.join(sourceyRoot, "adapter.mjs"),
+      },
+      caller,
+      deps,
+    );
+
+    expect(result).toMatchObject({
+      status: "failure",
+      action: "push-pr",
+      phase: "review",
+    });
+    expect(result.message).toContain("accepted review signal");
+    expect(runLocalSkill).not.toHaveBeenCalled();
   });
 
   it("normalizes docs rerun repo-root inputs to the git top-level", async () => {
@@ -355,6 +495,16 @@ async function mkDocsRoot(): Promise<string> {
 }
 export function fetchGitHubIssueThread() {
   return globalThis.__runxDocsThreadFixture;
+}
+export function pushGitHubMessage({ outboxEntry }) {
+  globalThis.__runxDocsPushedSignal = outboxEntry;
+  return {
+    outbox_entry: outboxEntry,
+    message: {
+      locator: outboxEntry.locator ?? "https://github.com/sourcey/sourcey.com/issues/2#issuecomment-2",
+      comment_id: outboxEntry.metadata?.comment_id ?? "2",
+    },
+  };
 }
 `,
     "utf8",

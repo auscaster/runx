@@ -78,10 +78,12 @@ interface DocsControlState {
   readonly issueRef: GitHubIssueRef;
   readonly thread: GitHubHydratedThread;
   readonly latestReview?: Record<string, unknown>;
+  readonly latestSignal?: Record<string, unknown>;
   readonly latestPullRequest?: Record<string, unknown>;
   readonly taskId?: string;
   readonly lane?: "pull_request" | "outreach";
   readonly handoffRef?: Record<string, unknown>;
+  readonly handoffState?: Record<string, unknown>;
 }
 
 interface ExecutedDocsSkill {
@@ -214,6 +216,17 @@ async function handleDocsRerunAction(
     throw new Error(`runx docs ${parsed.docsAction} requires --repo-root pointing at a local target repo clone.`);
   }
   const repoRoot = normalizeDocsRepoRoot(resolvePathFromUserInput(repoRootInput, env));
+
+  if (parsed.docsAction === "push-pr" && readStringFromRecord(control.handoffState, ["status"]) !== "accepted") {
+    return {
+      status: "failure",
+      action: parsed.docsAction,
+      issue: control.issueRef.issue_url,
+      phase: "review",
+      message: "The control thread is not approved for PR push yet. Record an accepted review signal with `runx docs signal --disposition accepted ...` before using `runx docs push-pr`.",
+    };
+  }
+
   const skillEnv = { ...env, RUNX_CWD: sourceyRoot };
   const scanPacket = await executeDocsSkill(
     sourceyRoot,
@@ -405,6 +418,16 @@ async function handleDocsSignalAction(
   }
 
   const handoffState = readRecord(signalPacket.data.handoff_state);
+  const signalOutboxEntry = buildDocsSignalOutboxEntry(control, signalPacket.data);
+  if (signalOutboxEntry) {
+    const threadAdapter = await loadThreadAdapterModule(env);
+    threadAdapter.pushGitHubMessage({
+      thread: control.thread,
+      outboxEntry: signalOutboxEntry,
+      nextStatus: "published",
+      env,
+    });
+  }
   return {
     status: "success",
     action: parsed.docsAction ?? "signal",
@@ -658,9 +681,13 @@ function buildDocsStatusResult(control: DocsControlState): DocsCommandResult {
     review_comment_url: firstNonEmptyString(control.latestReview?.locator),
     pull_request_url: firstNonEmptyString(control.latestPullRequest?.locator),
     review_entry_id: firstNonEmptyString(control.latestReview?.entry_id),
-    summary: control.latestReview
-      ? "Docs review state recovered from the control thread."
-      : "No docs review comments have been published on this control thread yet.",
+    summary: firstNonEmptyString(
+      readStringFromRecord(control.handoffState, ["summary"]),
+      control.latestReview
+        ? "Docs review state recovered from the control thread."
+        : "No docs review comments have been published on this control thread yet.",
+    ) ?? "No docs review comments have been published on this control thread yet.",
+    handoff_state: control.handoffState,
     thread: control.thread,
   };
 }
@@ -674,17 +701,26 @@ async function loadDocsControlState(issueInput: string, env: NodeJS.ProcessEnv, 
     cwd,
   });
   const latestReview = findLatestDocsReviewEntry(thread);
+  const latestSignal = findLatestDocsSignalEntry(thread);
   const latestPullRequest = findLatestPullRequestEntry(thread);
   const control = readDocsControlMetadata(latestReview);
+  const signalControl = readDocsControlMetadata(latestSignal);
   const lane = inferDocsLane(latestReview);
   return {
     issueRef,
     thread,
     latestReview,
+    latestSignal,
     latestPullRequest,
-    taskId: firstNonEmptyString(control?.task_id, parseDocsTaskId(firstNonEmptyString(latestReview?.entry_id))),
+    taskId: firstNonEmptyString(
+      signalControl?.task_id,
+      control?.task_id,
+      parseDocsTaskId(firstNonEmptyString(latestReview?.entry_id)),
+      parseDocsSignalTaskId(firstNonEmptyString(latestSignal?.entry_id)),
+    ),
     lane,
-    handoffRef: readRecord(control?.handoff_ref),
+    handoffRef: readRecord(signalControl?.handoff_ref) ?? readRecord(control?.handoff_ref),
+    handoffState: readRecord(signalControl?.handoff_state),
   };
 }
 
@@ -695,6 +731,13 @@ async function loadThreadAdapterModule(env: NodeJS.ProcessEnv): Promise<{
     readonly env?: NodeJS.ProcessEnv;
     readonly cwd?: string;
   }) => GitHubHydratedThread;
+  readonly pushGitHubMessage: (options: {
+    readonly thread: GitHubHydratedThread;
+    readonly outboxEntry: Readonly<Record<string, unknown>>;
+    readonly nextStatus?: string;
+    readonly env?: NodeJS.ProcessEnv;
+    readonly workspacePath?: string;
+  }) => Readonly<Record<string, unknown>>;
 }> {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [
@@ -862,6 +905,42 @@ function findLatestDocsReviewEntry(thread: { readonly outbox?: readonly unknown[
     })[0];
 }
 
+function findLatestDocsSignalEntry(thread: { readonly outbox?: readonly unknown[] } | Readonly<Record<string, unknown>>): Record<string, unknown> | undefined {
+  const outbox = Array.isArray(thread.outbox) ? thread.outbox : [];
+  const signals = outbox
+    .map((entry) => readRecord(entry))
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry))
+    .filter((entry) => entry.kind === "message")
+    .filter((entry) => {
+      const entryId = firstNonEmptyString(entry.entry_id);
+      if (!entryId) {
+        return false;
+      }
+      const control = readDocsControlMetadata(entry);
+      if (control?.workflow === "docs" && control?.lane === "handoff_signal") {
+        return true;
+      }
+      return /^message:[^:]+:signal$/i.test(entryId);
+    });
+  return signals
+    .slice()
+    .sort((left, right) => {
+      const leftUpdated = firstNonEmptyString(
+        readStringFromRecord(left, ["metadata", "updated_at"]),
+        readStringFromRecord(left, ["metadata", "pushed_at"]),
+        readStringFromRecord(left, ["locator"]),
+        readStringFromRecord(left, ["entry_id"]),
+      );
+      const rightUpdated = firstNonEmptyString(
+        readStringFromRecord(right, ["metadata", "updated_at"]),
+        readStringFromRecord(right, ["metadata", "pushed_at"]),
+        readStringFromRecord(right, ["locator"]),
+        readStringFromRecord(right, ["entry_id"]),
+      );
+      return String(rightUpdated).localeCompare(String(leftUpdated));
+    })[0];
+}
+
 function findLatestPullRequestEntry(thread: { readonly outbox?: readonly unknown[] } | Readonly<Record<string, unknown>>): Record<string, unknown> | undefined {
   const outbox = Array.isArray(thread.outbox) ? thread.outbox : [];
   return outbox
@@ -916,6 +995,15 @@ function parseDocsTaskId(entryId: string | undefined): string | undefined {
   return firstNonEmptyString(match?.[1]);
 }
 
+function parseDocsSignalTaskId(entryId: string | undefined): string | undefined {
+  const text = firstNonEmptyString(entryId);
+  if (!text) {
+    return undefined;
+  }
+  const match = text.match(/^message:([^:]+):signal$/i);
+  return firstNonEmptyString(match?.[1]);
+}
+
 function readDocsControlMetadata(entry: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
   const metadata = readRecord(entry?.metadata);
   return readRecord(metadata?.control);
@@ -931,6 +1019,69 @@ function synthesizeHandoffRef(control: DocsControlState): Record<string, unknown
     thread_locator: control.issueRef.thread_locator,
     target_locator: control.issueRef.thread_locator,
     outbox_entry_id: firstNonEmptyString(control.latestReview?.entry_id),
+  });
+}
+
+function buildDocsSignalOutboxEntry(
+  control: DocsControlState,
+  signalPacket: Readonly<Record<string, unknown>>,
+): Record<string, unknown> | undefined {
+  if (!control.taskId) {
+    return undefined;
+  }
+  const handoffRef = readRecord(signalPacket.handoff_ref);
+  const handoffSignal = readRecord(signalPacket.handoff_signal);
+  const handoffState = readRecord(signalPacket.handoff_state);
+  if (!handoffRef || !handoffSignal || !handoffState) {
+    return undefined;
+  }
+  const suppressionRecord = readRecord(signalPacket.suppression_record);
+  const sourceRef = readRecord(handoffSignal.source_ref);
+  const existing = control.latestSignal;
+  const bodyLines = [
+    "Recorded docs control signal for the current review thread.",
+    "",
+    "## Signal",
+    `Source: \`${readStringFromRecord(handoffSignal, ["source"]) ?? "unknown"}\``,
+    `Disposition: \`${readStringFromRecord(handoffSignal, ["disposition"]) ?? "unknown"}\``,
+    `Recorded at: \`${readStringFromRecord(handoffSignal, ["recorded_at"]) ?? "unknown"}\``,
+    "",
+    "## Handoff State",
+    `Status: \`${readStringFromRecord(handoffState, ["status"]) ?? "unknown"}\``,
+    firstNonEmptyString(readStringFromRecord(handoffState, ["summary"]))
+      ? `Summary: ${readStringFromRecord(handoffState, ["summary"])}`
+      : undefined,
+    sourceRef
+      ? `Source ref: ${readStringFromRecord(sourceRef, ["uri"]) ?? "unknown"}`
+      : undefined,
+    suppressionRecord
+      ? `Suppression: \`${readStringFromRecord(suppressionRecord, ["scope"]) ?? "unknown"}\` / \`${readStringFromRecord(suppressionRecord, ["reason"]) ?? "unknown"}\``
+      : undefined,
+  ].filter((line): line is string => typeof line === "string");
+
+  return pruneRecord({
+    entry_id: firstNonEmptyString(existing?.entry_id, `message:${control.taskId}:signal`),
+    kind: "message",
+    locator: firstNonEmptyString(existing?.locator),
+    status: "draft",
+    thread_locator: control.issueRef.thread_locator,
+    metadata: pruneRecord({
+      schema_version: "runx.outbox-entry.message.v1",
+      channel: "github_issue_comment",
+      comment_id: readStringFromRecord(existing, ["metadata", "comment_id"]),
+      body_markdown: `${bodyLines.join("\n")}\n`,
+      control: {
+        schema_version: "sourcey.docs.control.v1",
+        workflow: "docs",
+        lane: "handoff_signal",
+        task_id: control.taskId,
+        handoff_lane: control.lane ?? "pull_request",
+        handoff_ref: handoffRef,
+        handoff_signal: handoffSignal,
+        handoff_state: handoffState,
+        suppression_record: suppressionRecord,
+      },
+    }),
   });
 }
 
