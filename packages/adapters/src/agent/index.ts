@@ -38,6 +38,7 @@ export interface ManagedAgentConfig {
 interface ManagedToolCallResult {
   readonly value: unknown;
   readonly trace?: ManagedToolExecutionTrace;
+  readonly request?: ResolutionRequest;
 }
 
 interface ManagedToolExecutionTrace {
@@ -55,12 +56,19 @@ interface ManagedRuntimeTool {
   readonly invoke: (argumentsValue: unknown) => Promise<ManagedToolCallResult>;
 }
 
-interface ManagedAgentExecutionDetails {
-  readonly response: ResolutionResponse;
+interface ManagedAgentExecutionTelemetry {
   readonly rounds: number;
   readonly toolCalls: number;
   readonly tools: readonly string[];
   readonly toolExecutions: readonly ManagedToolExecutionTrace[];
+}
+
+interface ManagedAgentExecutionDetails extends ManagedAgentExecutionTelemetry {
+  readonly response: ResolutionResponse;
+}
+
+interface ManagedAgentPausedExecution extends ManagedAgentExecutionTelemetry {
+  readonly request: ResolutionRequest;
 }
 
 interface OpenAiToolDefinition {
@@ -199,7 +207,13 @@ export async function executeManagedAgentResolution(
     readonly nestedSkillInvoker?: NestedSkillInvoker;
   } = {},
 ): Promise<ResolutionResponse> {
-  return (await executeManagedAgentRequest(config, request, options)).response;
+  const execution = await executeManagedAgentRequest(config, request, options);
+  if ("request" in execution) {
+    throw new Error(
+      `Managed agent resolution for ${request.id} paused on nested ${execution.request.kind} resolution, which is not supported on the direct caller path.`,
+    );
+  }
+  return execution.response;
 }
 
 async function invokeManagedAgentAdapter(
@@ -224,9 +238,23 @@ async function invokeManagedAgentAdapter(
         signal: request.signal,
         searchFromDirectory: request.skillDirectory,
         nestedSkillInvoker: request.nestedSkillInvoker,
+        allowPauseOnNestedResolution: true,
         toolCatalogAdapters: request.toolCatalogAdapters,
       },
     );
+
+    if ("request" in execution) {
+      return {
+        status: "needs_resolution",
+        stdout: "",
+        stderr: "",
+        exitCode: null,
+        signal: null,
+        durationMs: Date.now() - startedAt,
+        request: execution.request,
+        metadata: nativeAgentMetadata(sourceType, request, config, execution, "paused"),
+      };
+    }
 
     return {
       status: "success",
@@ -237,7 +265,7 @@ async function invokeManagedAgentAdapter(
       exitCode: 0,
       signal: null,
       durationMs: Date.now() - startedAt,
-      metadata: nativeAgentMetadata(sourceType, request, config, execution),
+      metadata: nativeAgentMetadata(sourceType, request, config, execution, "success"),
     };
   } catch (error) {
     return {
@@ -248,7 +276,7 @@ async function invokeManagedAgentAdapter(
       signal: null,
       durationMs: Date.now() - startedAt,
       errorMessage: error instanceof Error ? error.message : String(error),
-      metadata: nativeAgentMetadata(sourceType, request, config),
+      metadata: nativeAgentMetadata(sourceType, request, config, undefined, "failure"),
     };
   }
 }
@@ -261,9 +289,10 @@ async function executeManagedAgentRequest(
     readonly signal?: AbortSignal;
     readonly searchFromDirectory?: string;
     readonly nestedSkillInvoker?: NestedSkillInvoker;
+    readonly allowPauseOnNestedResolution?: boolean;
     readonly toolCatalogAdapters?: AdapterInvokeRequest["toolCatalogAdapters"];
   } = {},
-): Promise<ManagedAgentExecutionDetails> {
+): Promise<ManagedAgentExecutionDetails | ManagedAgentPausedExecution> {
   const env = options.env ?? process.env;
   const searchFromDirectory = path.resolve(
     options.searchFromDirectory
@@ -282,9 +311,21 @@ async function executeManagedAgentRequest(
   );
 
   if (config.provider === "anthropic") {
-    return await resolveWithAnthropic(config, request, runtimeTools, options.signal);
+    return await resolveWithAnthropic(
+      config,
+      request,
+      runtimeTools,
+      options.signal,
+      options.allowPauseOnNestedResolution === true,
+    );
   }
-  return await resolveWithOpenAi(config, request, runtimeTools, options.signal);
+  return await resolveWithOpenAi(
+    config,
+    request,
+    runtimeTools,
+    options.signal,
+    options.allowPauseOnNestedResolution === true,
+  );
 }
 
 async function resolveWithOpenAi(
@@ -292,7 +333,8 @@ async function resolveWithOpenAi(
   request: CognitiveResolutionRequest,
   runtimeTools: readonly ManagedRuntimeTool[],
   signal: AbortSignal | undefined,
-): Promise<ManagedAgentExecutionDetails> {
+  allowPauseOnNestedResolution: boolean,
+): Promise<ManagedAgentExecutionDetails | ManagedAgentPausedExecution> {
   const tools = buildOpenAiTools(request, runtimeTools);
   const toolByProviderName = new Map(runtimeTools.map((tool) => [tool.providerName, tool] as const));
   const history: OpenAiResponseInputItem[] = [buildOpenAiInitialRequestMessage(request)];
@@ -381,6 +423,15 @@ async function resolveWithOpenAi(
       if (result.trace) {
         toolExecutions.push(result.trace);
       }
+      if (result.request && allowPauseOnNestedResolution) {
+        return {
+          request: result.request,
+          rounds: round,
+          toolCalls,
+          tools: runtimeTools.map((tool) => tool.runxName),
+          toolExecutions,
+        };
+      }
       toolOutputs.push({
         type: "function_call_output",
         call_id: call.call_id,
@@ -399,7 +450,8 @@ async function resolveWithAnthropic(
   request: CognitiveResolutionRequest,
   runtimeTools: readonly ManagedRuntimeTool[],
   signal: AbortSignal | undefined,
-): Promise<ManagedAgentExecutionDetails> {
+  allowPauseOnNestedResolution: boolean,
+): Promise<ManagedAgentExecutionDetails | ManagedAgentPausedExecution> {
   const tools = buildAnthropicTools(request, runtimeTools);
   const toolByProviderName = new Map(runtimeTools.map((tool) => [tool.providerName, tool] as const));
   const messages: AnthropicMessage[] = [buildAnthropicInitialRequestMessage(request)];
@@ -472,6 +524,15 @@ async function resolveWithAnthropic(
       const result = await executeManagedToolCall(tool, toolUse.input);
       if (result.trace) {
         toolExecutions.push(result.trace);
+      }
+      if (result.request && allowPauseOnNestedResolution) {
+        return {
+          request: result.request,
+          rounds: round,
+          toolCalls,
+          tools: runtimeTools.map((tool) => tool.runxName),
+          toolExecutions,
+        };
       }
       toolResults.push({
         type: "tool_result",
@@ -593,6 +654,7 @@ async function invokeManagedRuntimeTool(
       value: {
         error: `Tool '${toolName}' requested ${result.request.kind} resolution and cannot be used inside managed agent execution.`,
       },
+      request: result.request,
       trace: {
         tool: toolName,
         status: "needs_resolution",
@@ -806,7 +868,8 @@ function nativeAgentMetadata(
   sourceType: "agent" | "agent-step",
   request: AdapterInvokeRequest,
   config: ManagedAgentConfig,
-  execution?: ManagedAgentExecutionDetails,
+  execution?: ManagedAgentExecutionTelemetry,
+  status: "success" | "failure" | "paused" = execution ? "success" : "failure",
 ): Readonly<Record<string, unknown>> {
   if (sourceType === "agent-step") {
     return {
@@ -817,7 +880,7 @@ function nativeAgentMetadata(
         route: "native",
         provider: config.provider,
         model: config.model,
-        status: execution ? "success" : "failure",
+        status,
         rounds: execution?.rounds,
         tool_calls: execution?.toolCalls,
         tools: execution?.tools,
@@ -832,7 +895,7 @@ function nativeAgentMetadata(
       route: "native",
       provider: config.provider,
       model: config.model,
-      status: execution ? "success" : "failure",
+      status,
       rounds: execution?.rounds,
       tool_calls: execution?.toolCalls,
       tools: execution?.tools,

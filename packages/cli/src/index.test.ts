@@ -682,6 +682,168 @@ Read note.txt and produce a grounded summary.
     expect(requestCount).toBe(2);
   });
 
+  it("pauses managed agent runs when a nested tool needs resolution, then resumes cleanly", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-cli-managed-tool-pause-"));
+    tempDirs.push(tempDir);
+    const receiptDir = path.join(tempDir, "receipts");
+    const answersPath = path.join(tempDir, "answers.json");
+    const workspaceDir = path.join(tempDir, "workspace");
+    const env = {
+      ...process.env,
+      RUNX_HOME: path.join(tempDir, ".runx"),
+      RUNX_CWD: workspaceDir,
+      RUNX_RECEIPT_DIR: receiptDir,
+    };
+    await configureOpenAiAgent(env, "gpt-tool-pause-test");
+
+    const skillDir = path.join(workspaceDir, "file-summary");
+    const toolDir = path.join(workspaceDir, ".runx", "tools", "demo", "ask_label");
+    await mkdir(skillDir, { recursive: true });
+    await mkdir(toolDir, { recursive: true });
+    await writeFile(
+      path.join(skillDir, "SKILL.md"),
+      `---
+name: file-summary
+description: Resolve a required nested tool input through managed pause and resume.
+source:
+  type: agent-step
+  agent: codex
+  task: summarize-label
+  outputs:
+    summary: string
+runx:
+  allowed_tools:
+    - demo.ask_label
+---
+Use the local tool and return the grounded label.
+`,
+    );
+    await writeFile(
+      path.join(toolDir, "manifest.json"),
+      `${JSON.stringify({
+        schema: "runx.tool.manifest.v1",
+        name: "demo.ask_label",
+        description: "Return a required workspace label.",
+        source: {
+          type: "cli-tool",
+          command: "node",
+          args: ["./run.mjs"],
+        },
+        inputs: {
+          workspace_label: {
+            type: "string",
+            required: true,
+            description: "Workspace label to echo back.",
+          },
+        },
+        output: {
+          packet: "demo.ask_label.v1",
+          wrap_as: "ask_label",
+        },
+        scopes: ["demo.read"],
+        runtime: {
+          command: "node",
+          args: ["./run.mjs"],
+        },
+        source_hash: "sha256:test",
+        schema_hash: "sha256:test",
+        toolkit_version: "0.1.1",
+      }, null, 2)}\n`,
+    );
+    await writeFile(
+      path.join(toolDir, "run.mjs"),
+      `#!/usr/bin/env node
+const inputs = JSON.parse(process.env.RUNX_INPUTS_JSON || "{}");
+process.stdout.write(JSON.stringify({
+  schema: "demo.ask_label.v1",
+  data: {
+    workspace_label: inputs.workspace_label,
+  },
+}));
+`,
+    );
+
+    let requestCount = 0;
+    globalThis.fetch = vi.fn(async (_input, init) => {
+      requestCount += 1;
+      const body = JSON.parse(String(init?.body)) as {
+        input: Array<Record<string, unknown>>;
+      };
+      if (requestCount === 1 || requestCount === 2) {
+        return new Response(JSON.stringify({
+          output: [
+            {
+              type: "function_call",
+              call_id: `call_label_${requestCount}`,
+              name: "demo_ask_label",
+              arguments: JSON.stringify({}),
+            },
+          ],
+        }), { status: 200 });
+      }
+
+      const toolOutput = body.input.find((item) => item.type === "function_call_output") as
+        | { output?: string }
+        | undefined;
+      expect(toolOutput?.output).toContain("workspace-demo");
+      return new Response(JSON.stringify({
+        output: [
+          {
+            type: "function_call",
+            call_id: "call_submit",
+            name: "submit_result",
+            arguments: JSON.stringify({ summary: "grounded from resumed nested input" }),
+          },
+        ],
+      }), { status: 200 });
+    }) as typeof fetch;
+
+    const firstStdout = createMemoryStream();
+    const firstStderr = createMemoryStream();
+    const firstExit = await runCli(
+      [skillDir, "--receipt-dir", receiptDir, "--non-interactive", "--json"],
+      { stdin: process.stdin, stdout: firstStdout, stderr: firstStderr },
+      env,
+    );
+
+    expect(firstExit).toBe(2);
+    expect(firstStderr.contents()).toBe("");
+    const first = JSON.parse(firstStdout.contents()) as {
+      status: string;
+      run_id: string;
+      requests: Array<{ id: string; kind: string }>;
+    };
+    expect(first.status).toBe("needs_resolution");
+    expect(first.requests[0]?.kind).toBe("input");
+
+    await writeFile(
+      answersPath,
+      `${JSON.stringify(
+        {
+          answers: {
+            workspace_label: "workspace-demo",
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const resumedStdout = createMemoryStream();
+    const resumedStderr = createMemoryStream();
+    const resumedExit = await runCli(
+      ["resume", first.run_id, "--answers", answersPath, "--receipt-dir", receiptDir, "--non-interactive", "--json"],
+      { stdin: process.stdin, stdout: resumedStdout, stderr: resumedStderr },
+      env,
+    );
+
+    expect(resumedExit).toBe(0);
+    expect(resumedStderr.contents()).toBe("");
+    const resumed = JSON.parse(resumedStdout.contents()) as { execution: { stdout: string } };
+    expect(JSON.parse(resumed.execution.stdout)).toEqual({ summary: "grounded from resumed nested input" });
+    expect(requestCount).toBe(3);
+  });
+
   it("auto-resolves plain-text agent runs when no structured outputs are declared", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-cli-auto-agent-text-"));
     tempDirs.push(tempDir);

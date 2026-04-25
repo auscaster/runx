@@ -794,19 +794,41 @@ export async function runValidatedSkill(options: RunValidatedSkillOptions): Prom
     message: `Executing ${skill.source.type} skill source.`,
   });
 
-  const managedToolCaller: Caller = {
-    resolve: async () => undefined,
-    report: async () => undefined,
-  };
   const nestedSkillInvoker = async (
     nested: NestedSkillInvocation,
   ): Promise<NestedSkillInvocationResult> => {
+    const nestedInputResolution = await resolveInputs(nested.skill, {
+      skillPath: nested.requestedSkillPath,
+      inputs: nested.inputs,
+      caller: options.caller,
+      env: options.env,
+      receiptDir: options.receiptDir,
+      runxHome: options.runxHome,
+      knowledgeDir: options.knowledgeDir,
+      adapters: options.adapters,
+      allowedSourceTypes: options.allowedSourceTypes,
+      authResolver: options.authResolver,
+      registryStore: options.registryStore,
+      skillCacheDir: options.skillCacheDir,
+      toolCatalogAdapters: options.toolCatalogAdapters,
+      context: options.context,
+      voiceProfile: options.voiceProfile,
+      voiceProfilePath: options.voiceProfilePath,
+      workspacePolicy,
+    });
+    if (nestedInputResolution.status === "needs_resolution") {
+      return {
+        status: "needs_resolution",
+        request: nestedInputResolution.request,
+      };
+    }
+
     const nestedResult = await runValidatedSkill({
       skill: nested.skill,
       skillDirectory: nested.skillDirectory,
       requestedSkillPath: nested.requestedSkillPath,
-      inputs: nested.inputs,
-      caller: managedToolCaller,
+      inputs: nestedInputResolution.inputs,
+      caller: options.caller,
       env: options.env,
       receiptDir: options.receiptDir,
       runxHome: options.runxHome,
