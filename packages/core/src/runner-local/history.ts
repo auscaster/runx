@@ -8,7 +8,6 @@ import {
   readVerifiedLocalReceipt,
   type LocalGraphReceipt,
   type LocalReceipt,
-  type LocalSkillReceipt,
   type ReceiptVerification,
 } from "../receipts/index.js";
 import { defaultReceiptDir } from "./receipt-paths.js";
@@ -133,7 +132,7 @@ export interface ReadLocalReplaySeedOptions {
 export interface LocalReplaySeed {
   readonly runId: string;
   readonly receiptId: string;
-  readonly receipt: LocalSkillReceipt;
+  readonly receipt: LocalReceipt;
   readonly verification: ReceiptVerification;
   readonly skillPath: string;
   readonly selectedRunner?: string;
@@ -322,9 +321,6 @@ export async function readLocalReplaySeed(options: ReadLocalReplaySeedOptions): 
   }
 
   const resolved = await resolveLocalRunReference(options.referenceId, receiptDir, options.runxHome ?? options.env?.RUNX_HOME);
-  if (resolved.receipt.kind !== "skill_execution") {
-    throw new Error(`Run '${options.referenceId}' is a ${resolved.receipt.kind} receipt. Replay currently supports skill executions only.`);
-  }
   const seed = extractReplaySeed(resolved.ledgerEntries);
   if (!seed?.skillPath || !seed.inputs) {
     throw new Error(
@@ -559,11 +555,15 @@ async function findReceiptIdForRunId(receiptDir: string, runId: string): Promise
     }
     const kind = typeof entry.data.kind === "string" ? entry.data.kind : "";
     const detail = isRecord(entry.data.detail) ? entry.data.detail : undefined;
-    if ((kind === "run_completed" || kind === "run_failed") && detail && typeof detail.receipt_id === "string") {
+    if (isTerminalRunEventKind(kind) && detail && typeof detail.receipt_id === "string") {
       return detail.receipt_id;
     }
   }
   return undefined;
+}
+
+function isTerminalRunEventKind(kind: string): boolean {
+  return kind === "run_completed" || kind === "run_failed" || kind === "chain_completed";
 }
 
 function extractReplaySeed(entries: readonly ArtifactEnvelope[]): {
@@ -577,7 +577,7 @@ function extractReplaySeed(entries: readonly ArtifactEnvelope[]): {
       continue;
     }
     const kind = typeof entry.data.kind === "string" ? entry.data.kind : "";
-    if (kind !== "resolution_requested" && kind !== "run_started") {
+    if (kind !== "resolution_requested" && kind !== "run_started" && kind !== "step_waiting_resolution") {
       continue;
     }
     const detail = isRecord(entry.data.detail) ? entry.data.detail : undefined;

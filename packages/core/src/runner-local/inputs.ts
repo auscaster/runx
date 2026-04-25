@@ -94,7 +94,7 @@ export async function readPendingRunState(receiptDir: string, runId: string): Pr
       continue;
     }
     const kind = typeof entry.data.kind === "string" ? entry.data.kind : "";
-    if (kind === "run_completed" || kind === "run_failed") {
+    if (isTerminalRunEventKind(kind)) {
       return undefined;
     }
     const detail = isPlainRecord(entry.data.detail) ? entry.data.detail : undefined;
@@ -119,6 +119,10 @@ export async function readPendingRunState(receiptDir: string, runId: string): Pr
     };
   }
   return undefined;
+}
+
+function isTerminalRunEventKind(kind: string): boolean {
+  return kind === "run_completed" || kind === "run_failed" || kind === "chain_completed";
 }
 
 export async function readPendingSkillPath(receiptDir: string, runId: string): Promise<string | undefined> {
