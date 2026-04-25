@@ -48,6 +48,7 @@ export const RUNX_CONTRACT_IDS = {
   fixture: `${RUNX_SCHEMA_BASE_URL}/runx/fixture/v1.json`,
   toolManifest: `${RUNX_SCHEMA_BASE_URL}/runx/tool/manifest/v1.json`,
   packetIndex: `${RUNX_SCHEMA_BASE_URL}/runx/packet/index/v1.json`,
+  capabilityExecution: `${RUNX_SCHEMA_BASE_URL}/runx/capability-execution/v1.json`,
   handoffSignal: `${RUNX_SCHEMA_BASE_URL}/runx/handoff-signal/v1.json`,
   handoffState: `${RUNX_SCHEMA_BASE_URL}/runx/handoff-state/v1.json`,
   suppressionRecord: `${RUNX_SCHEMA_BASE_URL}/runx/suppression-record/v1.json`,
@@ -61,6 +62,7 @@ export const RUNX_LOGICAL_SCHEMAS = {
   fixture: "runx.fixture.v1",
   toolManifest: "runx.tool.manifest.v1",
   packetIndex: "runx.packet.index.v1",
+  capabilityExecution: "runx.capability_execution.v1",
   handoffSignal: "runx.handoff_signal.v1",
   handoffState: "runx.handoff_state.v1",
   suppressionRecord: "runx.suppression_record.v1",
@@ -121,6 +123,7 @@ const runxListRequestedKinds = ["all", "tools", "skills", "chains", "packets", "
 const runxListItemKinds = ["tool", "skill", "chain", "packet", "overlay"] as const;
 const runxListSources = ["local", "workspace", "dependencies", "built-in"] as const;
 const runxListStatuses = ["ok", "invalid"] as const;
+const capabilityExecutionTransportKinds = ["cli", "api", "github_issue_comment", "system"] as const;
 const handoffSignalSources = [
   "pull_request_comment",
   "pull_request_review",
@@ -643,6 +646,76 @@ export const packetIndexV1Schema = Type.Object(
 
 export type PacketIndexContract = DeepReadonly<Static<typeof packetIndexV1Schema>>;
 
+export const capabilityExecutionActorSchema = Type.Object(
+  {
+    actor_id: Type.Optional(Type.String({ minLength: 1 })),
+    display_name: Type.Optional(Type.String({ minLength: 1 })),
+    role: Type.Optional(Type.String({ minLength: 1 })),
+    provider_identity: Type.Optional(Type.String({ minLength: 1 })),
+  },
+  {
+    additionalProperties: false,
+  },
+);
+
+export type CapabilityExecutionActorContract = DeepReadonly<Static<typeof capabilityExecutionActorSchema>>;
+
+export const capabilityExecutionTransportSchema = Type.Object(
+  {
+    kind: stringEnum(capabilityExecutionTransportKinds),
+    trigger_ref: Type.Optional(Type.String({ minLength: 1 })),
+    scope_set: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
+    actor: Type.Optional(capabilityExecutionActorSchema),
+  },
+  {
+    additionalProperties: false,
+  },
+);
+
+export type CapabilityExecutionTransportContract = DeepReadonly<Static<typeof capabilityExecutionTransportSchema>>;
+
+export const capabilityExecutionIdempotencySchema = Type.Object(
+  {
+    algorithm: Type.Literal("sha256"),
+    intent_key: Type.String({ minLength: 1 }),
+    trigger_key: Type.Optional(Type.String({ minLength: 1 })),
+    content_hash: Type.String({ minLength: 1 }),
+  },
+  {
+    additionalProperties: false,
+  },
+);
+
+export type CapabilityExecutionIdempotencyContract = DeepReadonly<Static<typeof capabilityExecutionIdempotencySchema>>;
+
+export const capabilityExecutionV1Schema = Type.Object(
+  {
+    schema: Type.Literal(RUNX_LOGICAL_SCHEMAS.capabilityExecution),
+    capability_ref: Type.String({ minLength: 1 }),
+    runner: Type.String({ minLength: 1 }),
+    thread_ref: Type.Optional(Type.String({ minLength: 1 })),
+    requested_at: dateTimeStringSchema(),
+    transport: capabilityExecutionTransportSchema,
+    input_overrides: Type.Optional(unknownRecordSchema()),
+    idempotency: capabilityExecutionIdempotencySchema,
+  },
+  {
+    $schema: JSON_SCHEMA_DRAFT_2020_12,
+    $id: RUNX_CONTRACT_IDS.capabilityExecution,
+    "x-runx-schema": RUNX_LOGICAL_SCHEMAS.capabilityExecution,
+    additionalProperties: false,
+  },
+);
+
+export type CapabilityExecutionContract = DeepReadonly<Static<typeof capabilityExecutionV1Schema>>;
+
+export function validateCapabilityExecutionContract(
+  value: unknown,
+  label = "capability_execution",
+): CapabilityExecutionContract {
+  return validateContractSchema(capabilityExecutionV1Schema, value, label);
+}
+
 const handoffActorSchema = Type.Object(
   {
     actor_id: Type.Optional(Type.String({ minLength: 1 })),
@@ -765,6 +838,7 @@ export const runxContractSchemas = {
   fixture: fixtureV1Schema,
   toolManifest: toolManifestV1Schema,
   packetIndex: packetIndexV1Schema,
+  capabilityExecution: capabilityExecutionV1Schema,
   handoffSignal: handoffSignalV1Schema,
   handoffState: handoffStateV1Schema,
   suppressionRecord: suppressionRecordV1Schema,
@@ -783,6 +857,7 @@ export const runxGeneratedSchemaArtifacts = {
   "fixture.schema.json": fixtureV1Schema,
   "tool-manifest.schema.json": toolManifestV1Schema,
   "packet-index.schema.json": packetIndexV1Schema,
+  "capability-execution.schema.json": capabilityExecutionV1Schema,
   "handoff-signal.schema.json": handoffSignalV1Schema,
   "handoff-state.schema.json": handoffStateV1Schema,
   "suppression-record.schema.json": suppressionRecordV1Schema,

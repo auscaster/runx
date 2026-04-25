@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.runx.dev/runx/capability-execution/v1.json",
+  "x-runx-schema": "runx.capability_execution.v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schema",
+    "capability_ref",
+    "runner",
+    "requested_at",
+    "transport",
+    "idempotency"
+  ],
+  "properties": {
+    "schema": {
+      "const": "runx.capability_execution.v1",
+      "type": "string"
+    },
+    "capability_ref": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "runner": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "thread_ref": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "requested_at": {
+      "minLength": 1,
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$",
+      "type": "string"
+    },
+    "transport": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "anyOf": [
+            {
+              "const": "cli",
+              "type": "string"
+            },
+            {
+              "const": "api",
+              "type": "string"
+            },
+            {
+              "const": "github_issue_comment",
+              "type": "string"
+            },
+            {
+              "const": "system",
+              "type": "string"
+            }
+          ]
+        },
+        "trigger_ref": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "scope_set": {
+          "type": "array",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "actor": {
+          "additionalProperties": false,
+          "type": "object",
+          "properties": {
+            "actor_id": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "display_name": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "role": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "provider_identity": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "input_overrides": {
+      "type": "object",
+      "patternProperties": {
+        "^(.*)$": {}
+      }
+    },
+    "idempotency": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "algorithm",
+        "intent_key",
+        "content_hash"
+      ],
+      "properties": {
+        "algorithm": {
+          "const": "sha256",
+          "type": "string"
+        },
+        "intent_key": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "trigger_key": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "content_hash": {
+          "minLength": 1,
+          "type": "string"
+        }
+      }
+    }
+  }
+}

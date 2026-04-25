@@ -1,0 +1,205 @@
+spec_version: "1.1"
+task_id: "runx-capability-execution-envelope"
+created: "2026-04-25T13:30:00Z"
+updated: "2026-04-25T13:35:00Z"
+status: "completed"
+
+task:
+  title: "Freeze and implement the generic capability execution envelope"
+  summary: >
+    Sourcey outreach already has the right high-level decomposition: Sourcey
+    owns the workflow as a local runx capability pack, while GitHub issue
+    threads hold review state and handoff history. The remaining architectural
+    gap is that transport-specific trigger data is still reconstructed ad hoc
+    from CLI flags, local bindings, and thread metadata. The clean cut is a
+    generic runx capability execution envelope that every transport can build,
+    every capability can consume, and every thread-backed review artifact can
+    persist.
+  size: "medium"
+  risk_level: "medium"
+  context:
+    packages:
+      - "packages/contracts"
+      - "packages/core/src/sdk"
+      - "../sourcey.com/skills/outreach"
+      - "../sourcey.com/.runx/tools/outreach"
+      - "../sourcey.com/.runx/tools/docs"
+    invariants:
+      - "Runx stays generic; no product-specific `docs` or `sourcey` command surface is added to the engine."
+      - "Sourcey outreach remains a local capability pack executed through generic runx skill invocation."
+      - "The GitHub thread is a first-class control object and context surface, not the executor."
+      - "CLI, API, and GitHub-comment execution paths must converge on the same normalized request contract."
+      - "Unrelated in-flight runx issue-to-pr edits are not touched or reverted."
+    related_docs:
+      - "README.md"
+      - "../sourcey.com/README.md"
+      - "../sourcey.com/skills/outreach/SKILL.md"
+      - "../sourcey.com/skills/outreach/X.yaml"
+      - "../sourcey.com/.runx/tools/outreach/control.mjs"
+  objectives:
+    - "Define a generic runx-level capability execution envelope contract."
+    - "Make thread refs explicit, stable, and transport-neutral."
+    - "Define deterministic idempotency semantics shared by CLI, API, and GitHub-triggered executions."
+    - "Cut Sourcey outreach over to the envelope without adding a public Sourcey CLI or a privileged runx product command."
+    - "Persist the normalized execution request in thread review metadata so future transports can recover it."
+  scope:
+    in_scope:
+      - "A new runx contract for capability execution envelopes."
+      - "A small generic runx helper that canonicalizes inputs and derives idempotency keys."
+      - "Sourcey outreach control tooling building and returning the normalized envelope."
+      - "Persisting the normalized request inside review-thread control metadata."
+      - "Documentation and tests for the new transport/capability/thread model."
+    out_of_scope:
+      - "A webhook worker or GitHub command bridge."
+      - "A public Sourcey CLI binary."
+      - "Generic runx execution changes unrelated to the capability-envelope seam."
+  decisions:
+    - "The canonical envelope lives in `@runxhq/contracts`, not in Sourcey. It is a generic runx contract any capability can reuse."
+    - "The canonical thread ref is the existing thread-locator URI string, exposed as `thread_ref` in the envelope. For GitHub control threads that is `github://owner/repo/issues/N`."
+    - "Thread resolution remains adapter-backed. The envelope carries the thread ref; the consuming capability resolves it through its configured thread adapter."
+    - "Idempotency uses two related keys:"
+    - "`intent_key`: semantic hash of capability ref, runner, thread ref, and normalized runner inputs."
+    - "`trigger_key`: optional exact-trigger hash derived from transport kind plus trigger ref; used to dedupe replayed webhook/comment events."
+    - "The same semantic rerun may be intentionally executed again later. `intent_key` is for collision/concurrency reasoning, not an eternal no-op cache."
+    - "Transport supplies actor identity and scope set; capability behavior is the same, but reachable actions can still be gated by those scopes."
+  deliverables:
+    - "A runx capability execution envelope schema with runtime validation."
+    - "A core helper to build normalized envelopes and derive stable idempotency keys."
+    - "Sourcey outreach control actions that emit `capability_execution` in results."
+    - "Review and outreach thread comments that persist `capability_execution` in control metadata."
+    - "Docs explaining the capability / transport / thread split."
+
+phases:
+  - id: "phase1"
+    name: "Freeze the contract"
+    objective: "Define the generic request model before code changes."
+    changes:
+      - file: "packages/contracts/src/index.ts"
+        action: "update"
+        lines: "contract ids, logical schemas, new execution-envelope schemas"
+        content_spec: >
+          Add the generic capability execution envelope contract and nested
+          transport/actor/idempotency schemas. Keep naming generic and
+          product-agnostic.
+      - file: "packages/contracts/src/index.test.ts"
+        action: "update"
+        lines: "contract coverage"
+        content_spec: >
+          Add validation coverage for stable schema ids, transport actor/scope
+          fields, and deterministic idempotency fields.
+    acceptance_criteria:
+      - id: "ac1_1"
+        type: "test"
+        command: "pnpm exec vitest run packages/contracts/src/index.test.ts"
+        description: "The generic envelope contract validates and exports stable schema ids."
+
+  - id: "phase2"
+    name: "Add the generic builder"
+    objective: "Create one reusable normalizer for all transports."
+    dependencies:
+      - "phase1"
+    changes:
+      - file: "packages/core/src/sdk/capability-execution.ts"
+        action: "add"
+        lines: "all"
+        content_spec: >
+          Add a small generic helper that normalizes input overrides, builds
+          the envelope, and derives `intent_key`, `trigger_key`, and
+          `content_hash` deterministically.
+      - file: "packages/core/src/sdk/index.ts"
+        action: "update"
+        lines: "exports"
+        content_spec: "Export the new generic capability-execution helpers."
+      - file: "packages/core/src/sdk/capability-execution.test.ts"
+        action: "add"
+        lines: "all"
+        content_spec: >
+          Cover stable hashing, omission of undefined fields, and the split
+          between semantic intent and exact trigger dedupe.
+    acceptance_criteria:
+      - id: "ac2_1"
+        type: "test"
+        command: "pnpm exec vitest run packages/core/src/sdk/capability-execution.test.ts"
+        description: "The builder produces stable intent and trigger hashes."
+
+  - id: "phase3"
+    name: "Cut Sourcey outreach over"
+    objective: "Make Sourcey consume the normalized envelope without changing the public operator surface."
+    dependencies:
+      - "phase2"
+    changes:
+      - file: "../sourcey.com/.runx/tools/outreach/control.mjs"
+        action: "update"
+        lines: "control-state and result packaging"
+        content_spec: >
+          Build a capability-execution envelope for each thread-facing runner,
+          return it in control results, and persist it into control metadata.
+      - file: "../sourcey.com/.runx/tools/outreach/control/src/index.ts"
+        action: "update"
+        lines: "inputs and action handlers"
+        content_spec: >
+          Accept optional thread-ref and transport metadata, build the envelope
+          centrally, and pass it through to docs-pr/docs-outreach packaging.
+      - file: "../sourcey.com/skills/docs-pr/X.yaml"
+        action: "update"
+        lines: "runner inputs and package step"
+        content_spec: >
+          Thread the normalized capability execution object into
+          `docs.package_pr` so review comments persist it.
+      - file: "../sourcey.com/skills/docs-outreach/X.yaml"
+        action: "update"
+        lines: "runner inputs and package step"
+        content_spec: >
+          Thread the normalized capability execution object into
+          `docs.package_outreach` so review comments persist it.
+      - file: "../sourcey.com/.runx/tools/docs/package_pr/src/index.ts"
+        action: "update"
+        lines: "review metadata packaging"
+        content_spec: >
+          Accept the capability-execution envelope and persist it under
+          control metadata in the review message outbox entry.
+      - file: "../sourcey.com/.runx/tools/docs/package_outreach/src/index.ts"
+        action: "update"
+        lines: "review metadata packaging"
+        content_spec: >
+          Persist the same normalized request contract for outreach review
+          and outbound message artifacts.
+    acceptance_criteria:
+      - id: "ac3_1"
+        type: "test"
+        command: "npm test"
+        description: "Sourcey tool and runtime tests pass with the new envelope path."
+      - id: "ac3_2"
+        type: "command"
+        command: "npm exec runx -- outreach --runner status --issue sourcey/sourcey.com#issue/3 --json"
+        description: "The installed CLI can still recover current control state and return normalized execution metadata."
+
+  - id: "phase4"
+    name: "Document the model"
+    objective: "Make the intended extension shape explicit."
+    dependencies:
+      - "phase3"
+    changes:
+      - file: "README.md"
+        action: "update"
+        lines: "capability-pack guidance"
+        content_spec: >
+          Explain that transports trigger capabilities through the same
+          generic envelope while threads remain the review/control surface.
+      - file: "../sourcey.com/README.md"
+        action: "update"
+        lines: "outreach operations"
+        content_spec: >
+          Explain that `outreach` is a local capability, the GitHub issue is
+          context, and CLI/API/GitHub triggers should all normalize into the
+          same request contract.
+      - file: "../sourcey.com/skills/outreach/SKILL.md"
+        action: "update"
+        lines: "operator guidance"
+        content_spec: >
+          Clarify that the runner examples are one transport over the same
+          underlying capability execution model.
+    acceptance_criteria:
+      - id: "ac4_1"
+        type: "documentation"
+        description: "The docs explain the capability / transport / thread split without implying a public Sourcey CLI."

@@ -76,6 +76,8 @@ The intended extension model is:
 - `runx` owns generic runtime, thread, outbox, receipt, and handoff machinery
 - service repos own their product workflows as local capability packs
 - operators execute those workflows through normal skill invocation
+- CLI, API, and GitHub-comment triggers all normalize into the same capability
+  execution envelope, while the thread stays the review/control object
 
 Sourcey is the reference shape for this model: from inside the Sourcey repo,
 `runx outreach --runner status --issue ...` resolves the local

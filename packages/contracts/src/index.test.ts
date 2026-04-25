@@ -13,6 +13,7 @@ import {
   runxAuxiliarySchemas,
   runxGeneratedSchemaArtifacts,
   validateCredentialEnvelopeContract,
+  validateCapabilityExecutionContract,
   validateDevReportContract,
   validateDoctorReportContract,
   validateHandoffSignalContract,
@@ -86,6 +87,7 @@ describe("@runxhq/contracts", () => {
     expect(reviewReceiptOutputSchema.$id).toBe(RUNX_AUXILIARY_SCHEMA_IDS.reviewReceiptOutput);
     expect(runxAuxiliarySchemas.reviewReceiptOutput).toBe(reviewReceiptOutputSchema);
     expect(runxGeneratedSchemaArtifacts["doctor.schema.json"]).toBe(runxContractSchemas.doctor);
+    expect(runxGeneratedSchemaArtifacts["capability-execution.schema.json"]).toBe(runxContractSchemas.capabilityExecution);
     expect(runxGeneratedSchemaArtifacts["handoff-signal.schema.json"]).toBe(runxContractSchemas.handoffSignal);
     expect(runxGeneratedSchemaArtifacts["handoff-state.schema.json"]).toBe(runxContractSchemas.handoffState);
     expect(runxGeneratedSchemaArtifacts["suppression-record.schema.json"]).toBe(runxContractSchemas.suppressionRecord);
@@ -232,6 +234,48 @@ describe("@runxhq/contracts", () => {
     })).toMatchObject({
       scope: "contact",
       reason: "requested_no_contact",
+    });
+  });
+
+  it("owns a generic capability execution envelope contract for transport-neutral invocation", () => {
+    expect(RUNX_CONTRACT_IDS.capabilityExecution).toBe("https://schemas.runx.dev/runx/capability-execution/v1.json");
+    expect(runxContractSchemas.capabilityExecution.$id).toBe(RUNX_CONTRACT_IDS.capabilityExecution);
+
+    expect(validateCapabilityExecutionContract({
+      schema: "runx.capability_execution.v1",
+      capability_ref: "outreach",
+      runner: "rerun",
+      thread_ref: "github://sourcey/sourcey.com/issues/3",
+      requested_at: "2026-04-25T13:45:00Z",
+      transport: {
+        kind: "github_issue_comment",
+        trigger_ref: "https://github.com/sourcey/sourcey.com/issues/3#issuecomment-1",
+        scope_set: ["docs.write", "thread:push"],
+        actor: {
+          actor_id: "auscaster",
+          display_name: "auscaster",
+          provider_identity: "github:auscaster",
+        },
+      },
+      input_overrides: {
+        objective: "Refresh the MCP-first docs preview.",
+        bind_current: true,
+      },
+      idempotency: {
+        algorithm: "sha256",
+        intent_key: "sha256:intent",
+        trigger_key: "sha256:trigger",
+        content_hash: "sha256:content",
+      },
+    })).toMatchObject({
+      capability_ref: "outreach",
+      runner: "rerun",
+      transport: {
+        kind: "github_issue_comment",
+      },
+      idempotency: {
+        algorithm: "sha256",
+      },
     });
   });
 

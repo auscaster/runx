@@ -1,6 +1,7 @@
 export const sdkJsPackage = "@runxhq/core/sdk";
 
 export * from "./caller.js";
+export * from "./capability-execution.js";
 export * from "./surface-protocol.js";
 
 import { randomUUID } from "node:crypto";
