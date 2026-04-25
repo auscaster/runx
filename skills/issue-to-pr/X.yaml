@@ -294,14 +294,6 @@ runners:
           and projection surfaces keep the lane aligned with normal
           issue-to-branch-to-PR work instead of a shadow workflow model.
       steps:
-        - id: scafld-init
-          label: ensure scafld workspace
-          skill: ../scafld
-          scopes:
-            - scafld:workspace:write
-          mutation: true
-          inputs:
-            command: init
         - id: scafld-new
           label: open task lane
           skill: ../scafld

@@ -942,6 +942,65 @@ Answer the prompt directly.
     expect(installedProfileState.profile.document).toBe(profileDocument);
   });
 
+  it("indexes GitHub URL adds through the configured API endpoint", async () => {
+    const stdout = createMemoryStream();
+    const stderr = createMemoryStream();
+    let capturedBody: unknown;
+
+    globalThis.fetch = vi.fn(async (_input, init) => {
+      capturedBody = init?.body ? JSON.parse(String(init.body)) : undefined;
+      return new Response(JSON.stringify({
+        status: "success",
+        listings: [
+          {
+            owner: "kam",
+            name: "echo",
+            skill_id: "kam/echo",
+            version: "sha-abc",
+            permalink: "https://runx.example.test/x/kam/echo",
+            trust_tier: "community",
+            skill_path: "SKILL.md",
+            digest_unchanged: false,
+          },
+        ],
+        warnings: [],
+        repo: { owner: "kam", repo: "skills", ref: "main", sha: "a".repeat(40) },
+      }), { status: 200 });
+    }) as typeof fetch;
+
+    const exitCode = await runCli(
+      ["add", "github.com/kam/skills", "--version", "main", "--registry", "https://api.runx.test", "--json"],
+      { stdin: process.stdin, stdout, stderr },
+      { ...process.env, RUNX_CWD: process.cwd() },
+    );
+
+    expect(exitCode).toBe(0);
+    expect(stderr.contents()).toBe("");
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "https://api.runx.test/v1/index",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(capturedBody).toEqual({ repo_url: "github.com/kam/skills", ref: "main" });
+    expect(JSON.parse(stdout.contents())).toMatchObject({ status: "success" });
+  });
+
+  it("rejects install-only flags for GitHub URL add without calling the API", async () => {
+    const stdout = createMemoryStream();
+    const stderr = createMemoryStream();
+    globalThis.fetch = vi.fn() as typeof fetch;
+
+    const exitCode = await runCli(
+      ["add", "github.com/kam/skills", "--to", "skills"],
+      { stdin: process.stdin, stdout, stderr },
+      { ...process.env, RUNX_CWD: process.cwd() },
+    );
+
+    expect(exitCode).toBe(1);
+    expect(stdout.contents()).toBe("");
+    expect(stderr.contents()).toContain("does not support --to or --digest");
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
   it("renders top-level help with starter flows and admin commands", async () => {
     const stdout = createMemoryStream();
     const stderr = createMemoryStream();

@@ -61,4 +61,12 @@ export {
   createDefaultHttpCachedRegistryStore,
   type HttpCachedRegistryStoreOptions,
 } from "./http-cached-store.js";
-export { buildPublisherAttestations, deriveTrustSignals, type TrustSignal, type TrustSignalStatus } from "./trust.js";
+export {
+  buildPublisherAttestations,
+  deriveTrustSignals,
+  deriveEngagementScore,
+  tierWeight,
+  type TrustSignal,
+  type TrustSignalStatus,
+  type EngagementSignals,
+} from "./trust.js";

@@ -96,7 +96,7 @@ describe("HttpCachedRegistryStore", () => {
       expect(first?.profile_document).toBe(ECHO_PROFILE);
       expect(fetches).toBe(1);
 
-      const second = await store.getVersion("acme/echo");
+      const second = await store.getVersion("acme/echo", "0.1.0");
       expect(second?.skill_id).toBe("acme/echo");
       expect(fetches).toBe(1);
     } finally {
@@ -143,6 +143,62 @@ describe("HttpCachedRegistryStore", () => {
       const result = await store.getVersion("acme/echo", "1.2.3");
       expect(seenVersion).toBe("1.2.3");
       expect(result?.version).toBe("1.2.3");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("refreshes unpinned latest requests instead of returning a stale cache hit", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-http-cache-latest-"));
+    try {
+      const cache = createFileRegistryStore(path.join(tempDir, "cache"));
+      let fetches = 0;
+      const fetchImpl: typeof fetch = async () => {
+        fetches += 1;
+        return jsonResponse(buildAcquirePayload({
+          version: fetches === 1 ? "0.1.0" : "0.2.0",
+          digest: fetches === 1 ? "a".repeat(64) : "c".repeat(64),
+        }));
+      };
+      const store = new HttpCachedRegistryStore({
+        remoteBaseUrl: "https:/@runxhq/core/registry.example",
+        installationId: "inst_test",
+        cache,
+        fetchImpl,
+      });
+
+      const first = await store.getVersion("acme/echo");
+      const second = await store.getVersion("acme/echo");
+
+      expect(first?.version).toBe("0.1.0");
+      expect(second?.version).toBe("0.2.0");
+      expect(fetches).toBe(2);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("falls back to the cached latest when a refresh returns 404", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-http-cache-latest-404-"));
+    try {
+      const cache = createFileRegistryStore(path.join(tempDir, "cache"));
+      let fetches = 0;
+      const fetchImpl: typeof fetch = async () => {
+        fetches += 1;
+        return fetches === 1
+          ? jsonResponse(buildAcquirePayload({ version: "0.1.0" }))
+          : new Response("not found", { status: 404 });
+      };
+      const store = new HttpCachedRegistryStore({
+        remoteBaseUrl: "https:/@runxhq/core/registry.example",
+        installationId: "inst_test",
+        cache,
+        fetchImpl,
+      });
+
+      await expect(store.getVersion("acme/echo")).resolves.toMatchObject({ version: "0.1.0" });
+      await expect(store.getVersion("acme/echo")).resolves.toMatchObject({ version: "0.1.0" });
+      expect(fetches).toBe(2);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

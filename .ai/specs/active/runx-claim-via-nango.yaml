@@ -1,0 +1,477 @@
+spec_version: "1.1"
+task_id: "runx-claim-via-nango"
+created: "2026-04-26T00:00:00Z"
+updated: "2026-04-26T00:00:00Z"
+status: "draft"
+
+task:
+  title: "Claim via Nango: connect github → promote listing → keep the connection"
+  summary: >
+    URL-as-publish lands every listing at `community` tier. Promotion to
+    `verified` requires proof that the caller controls the github owner of the
+    source repo. We do that proof through Nango Connect (github provider,
+    already wired): the user clicks "connect github" on /x/claim, goes through
+    Nango's hosted OAuth, and lands back on a runx return page with their
+    listing promoted. The github connection persists, scoped to the listing,
+    and is the same artifact that powers ongoing webhook-driven reindex when
+    the user pushes new commits to the claimed repo. No runx account, no
+    polling — the return page does a server-side `await` on a webhook-resolved
+    promise so the page renders the result on first load.
+
+  size: "large"
+  risk_level: "medium"
+
+  context:
+    packages:
+      - "cloud/packages/api/src"
+      - "cloud/packages/auth/src"
+      - "cloud/apps/web/src"
+      - "cloud/packages/ui/src"
+    files_impacted:
+      - path: "cloud/packages/api/src/self-publish-model.ts"
+        lines: "SelfPublishEnrollmentRecord.status"
+        reason: "Add `pending_connection` + `claim_rejected` statuses; add `request_id`, `runx_flow_id`, `connection_id`, `github_user`, `github_orgs`, `expires_at`."
+      - path: "cloud/packages/api/src/self-publish-helpers.ts"
+        lines: "normalizeEnrollment + new findByRequestId helper"
+        reason: "Round-trip the new fields; expose lookup by request_id."
+      - path: "cloud/packages/api/src/self-publish-stores.ts"
+        lines: "FileSelfPublishStore + InMemorySelfPublishStore"
+        reason: "Add `findByRequestId(request_id)` and `findByRunxFlowId(flow_id)`."
+      - path: "cloud/packages/api/src/github-identity.ts"
+        lines: "all"
+        reason: "New module. Given a Nango connection_id, return `{ user, public_orgs }` via Nango proxy. Single dependency: HostedNangoClient."
+      - path: "cloud/packages/auth/src/nango-hosted.ts"
+        lines: "HostedNangoClient — add proxy method"
+        reason: "Add `proxyGithubGet<T>(connectionId, githubPath)` that POSTs to `${baseUrl}/proxy` with `{ connection_id, provider_config_key, method: 'GET', endpoint: githubPath }` and returns the parsed body."
+      - path: "cloud/packages/api/src/claim-resolver.ts"
+        lines: "all"
+        reason: "New module. In-process `Map<request_id, { resolve, expires_at }>` so the return page can `await` the webhook completion without polling."
+      - path: "cloud/packages/api/src/claim-service.ts"
+        lines: "all"
+        reason: "New module. `startClaim({owner, name})` (validates listing, mints session, calls Nango beginOauth with redirect_url, persists enrollment) and `completeClaim({flow_id, connection_id})` (fetches github identity via proxy, verifies match, promotes tier, resolves promise)."
+      - path: "cloud/packages/api/src/claim-routes.ts"
+        lines: "all"
+        reason: "New module. `POST /v1/claim/sessions`, `GET /v1/claim/sessions/:request_id`."
+      - path: "cloud/packages/api/src/self-publish-routes.ts"
+        lines: "/v1/claim — replace 503 stub with delegation to claim-service"
+        reason: "The 503 placeholder from the surgical cutover comes back to life via claim-service."
+      - path: "cloud/packages/auth/src/nango-hosted.ts"
+        lines: "createNangoWebhookHandler"
+        reason: "Branch on `runx_flow_id` resolution: if the flow belongs to a claim session (looked up via the new ClaimWebhookResolver), invoke claim-service.completeClaim; otherwise fall through to the existing principal-bound completeFlow."
+      - path: "cloud/packages/api/src/index.ts"
+        lines: "HostedApiOptions + route registration"
+        reason: "Wire claimService into HostedApiOptions; register claim-routes; pass claimService into the webhook handler chain."
+      - path: "cloud/packages/api/src/server.ts"
+        lines: "service construction"
+        reason: "Construct ClaimResolver + ClaimService alongside SelfPublishService and UrlPublishService."
+      - path: "cloud/apps/web/src/pages/x/claim/index.astro"
+        lines: "all"
+        reason: "Drop the 'OAuth coming soon' copy. Pass owner/name into ClaimAction."
+      - path: "cloud/apps/web/src/pages/x/claim/return.astro"
+        lines: "all"
+        reason: "New page. Server-side: read request_id, look up enrollment, await resolver promise (5s timeout), render success / mismatch / processing."
+      - path: "cloud/apps/web/src/pages/api/claim/sessions.ts"
+        lines: "all"
+        reason: "New Astro proxy route. POST forwards to /v1/claim/sessions on the upstream API."
+      - path: "cloud/packages/ui/src/ClaimAction/ClaimAction.tsx"
+        lines: "all"
+        reason: "Restore the real button. Click → POST /api/claim/sessions → redirect to authorize_url. Render mismatch/error states from the response."
+      - path: "cloud/packages/api/src/server-config.ts"
+        lines: "RUNX_PUBLIC_BASE_URL usage"
+        reason: "claim-service needs the public base URL to construct redirect_url. Already in config; just thread it through."
+    invariants:
+      - "Anonymous flow: no runx-side principal required, no runx account exists."
+      - "Connection-as-claim: the github connection itself is the trust artifact. Each successful claim persists the connection scoped to one (owner, name) listing. No long-lived runx user identity."
+      - "Server-side-await, not client-side polling: the return page resolves a single in-process promise that the webhook handler completes."
+      - "Github identity is fetched via Nango proxy, never by handling the OAuth token directly in runx code."
+      - "Existing principal-bound /v1/connect flows are untouched — claim is its own surface."
+      - "Claim never downgrades: re-claiming a `verified` or `first_party` listing is a no-op promotion."
+      - "Per-listing scope: a successful claim grants ongoing webhook reindex authority for that one (owner, name) listing only, not the actor's other repos."
+    related_docs:
+      - "oss/.ai/specs/active/runx-url-as-publish.yaml (the publish flow this builds on)"
+      - "cloud/packages/auth/src/nango-hosted.ts (existing Nango client)"
+      - "cloud/packages/auth/src/http.ts (existing principal-bound connect surface — model only, not extended)"
+
+  objectives:
+    - "Replace the 503 stub at /v1/claim with a real Nango-backed flow."
+    - "Make `verified` self-serve for legitimate github owners and org members."
+    - "Persist the github connection per-listing so subsequent push/tag webhooks reindex automatically."
+    - "Avoid client-side polling: the return page renders the final state on first load."
+    - "Avoid handling github OAuth tokens directly: every github call goes through Nango proxy."
+
+  scope:
+    in_scope:
+      - "Anonymous /v1/claim/sessions endpoint that mints a Nango Connect session for github."
+      - "Webhook integration: claim flows complete via the existing /webhooks/nango handler, branching on the claim-resolver."
+      - "Github identity fetch via Nango proxy (`/user`, `/user/orgs?type=public`)."
+      - "Tier promotion across all RegistrySkillVersion records for `(owner, name)` on successful identity match."
+      - "Persisted enrollment with `connection_id` so future webhook events on that repo are honored."
+      - "Return page with server-side promise await, single page load, no client polling."
+      - "Restored ClaimAction component on /x/claim."
+      - "Tests across model, store, webhook resolver, claim-service happy path, identity-mismatch, expired-session, and end-to-end mock-Nango simulation."
+    out_of_scope:
+      - "Public sign-up / runx user accounts."
+      - "CLI `runx connect github` (a follow-on spec — this one is web-only)."
+      - "Private-repo URL-publish (separate work, leverages the same connection later)."
+      - "Per-org claim consensus (e.g. requiring multiple maintainers to claim). First-claim wins."
+      - "Reverse-claim / disputes (the operator-side `runx admin demote` path is its own spec)."
+
+  decisions:
+    - "Connection-as-claim, not account-as-identity. The github connection itself is what proves authority; runx does not mint a long-lived runx user from it."
+    - "Synthetic Nango principalId of the form `claim:<request_id>`. This satisfies the existing Connect flow's principalId requirement without colliding with bearer principals."
+    - "Identity fetch path: Nango proxy (option B from the design conversation). Nango handles token refresh; runx never sees raw github tokens."
+    - "Org-claim semantics: broad. `@stripe/x` is claimable by any github actor whose **public** org membership list (from `GET /user/orgs?type=public`) includes `stripe`. We deliberately exclude private memberships — public membership is the verifiable signal."
+    - "Webhook precedence: the webhook handler ALWAYS completes the claim before the return page can render success. The return page server-side `await`s the same in-memory resolver entry the webhook resolves; if the webhook never arrives within 5s the return page renders a 'still processing' fallback (rare; usually the webhook is resolved before the redirect lands)."
+    - "Resolver state lives in-process only. A node restart in the middle of an unclaimed-but-pending session results in the user landing on the return page, finding `status: pending_connection`, and falling through to the 'still processing' fallback. Acceptable — they retry."
+    - "Persist `connection_id` on the enrollment so the existing webhook reindex path (push/tag) honors claimed repos. The standard `/webhooks/nango` flow already updates by `runx_flow_id`; we ALSO key future github push/tag events to the enrollment by `repo_full_name` lookup (already implemented)."
+    - "Trust tier promotion is bulk: every existing RegistrySkillVersion for `(owner, name)` is promoted in one pass. Subsequent versions inherit `verified` via the existing 'preserve existing tier on reindex' rule we shipped in the surgical cutover."
+    - "Single-flight per (owner, name): if a `pending_connection` enrollment already exists for that listing and is not expired, /v1/claim/sessions returns the existing authorize_url. Prevents duplicate Nango sessions racing each other."
+
+  deliverables:
+    - "`POST /v1/claim/sessions` and `GET /v1/claim/sessions/:request_id` HTTP routes."
+    - "Webhook handler extension that recognises claim flows and completes them server-side."
+    - "GithubIdentityClient module wrapping Nango proxy calls to GitHub."
+    - "ClaimService orchestrating start, complete, and tier promotion."
+    - "ClaimResolver in-process registry with TTL-based pruning."
+    - "Restored web `/x/claim` page with a working ClaimAction button."
+    - "New `/x/claim/return.astro` page with server-side promise await."
+    - "Astro proxy at `/api/claim/sessions`."
+    - "Tests covering: happy path, identity mismatch, public-org membership match, listing-not-found, expired session, webhook arriving before vs after redirect, two concurrent claims for the same listing."
+
+  assumptions:
+    - "Nango's `/proxy` endpoint can call arbitrary github endpoints with a connection_id and the integration's provider_config_key, returning the upstream JSON body. (Standard Nango functionality; failure here would require a direct-token fallback, which we explicitly chose against.)"
+    - "Nango's `/connect/sessions` endpoint accepts an optional `redirect_url` field in the body that bounces the browser back to a runx URL after success. (Standard Nango Connect functionality.)"
+    - "Nango fires the success webhook to runx within seconds of OAuth completion, generally before the browser redirect lands. The 5s server-side await on the return page covers the rare ordering race."
+    - "The existing `RUNX_NANGO_SECRET_KEY` has permission to call `/connections/:id` and `/proxy` with the github provider_config_key. (Operator confirmed they will set this up.)"
+    - "GitHub's `GET /user/orgs?type=public` returns the authenticated user's public org memberships when the OAuth token has `read:org` scope. (Standard GitHub API behavior.)"
+    - "The existing `read:user` and `read:org` scopes are configured on the `github` integration in Nango's dashboard. If only `read:user` is currently set, operator extends the integration config. (Verifiable from Nango dashboard.)"
+
+  risks:
+    - description: "Nango webhook never fires (network partition, Nango outage). The return page hits the 5s timeout."
+      impact: "low"
+      mitigation: "Return page renders a 'still processing — refresh in a few seconds' message. No state is lost; the next webhook will still resolve the enrollment. Operator runbook: check the enrollment in the store, confirm Nango webhook health."
+    - description: "Race between webhook arrival and browser redirect. If the redirect lands first, the resolver may not have an entry yet."
+      impact: "low"
+      mitigation: "Resolver is registered when the session is minted (BEFORE redirect), so the webhook always resolves an existing entry. The return page subscribes to the same entry. Order doesn't matter."
+    - description: "Github user attempts to claim `@org/x` where they are NOT a public member of `org`."
+      impact: "expected — this is the rejection case."
+      mitigation: "Enrollment marked `claim_rejected` with reason. Return page renders the mismatch with the actual github_user the connection authenticated as. Connection remains in Nango (the user can disconnect via Nango's UI)."
+    - description: "Two concurrent claim attempts for the same listing race."
+      impact: "low"
+      mitigation: "Single-flight: `findByListing(owner, name)` returns the existing pending enrollment. New /v1/claim/sessions calls return the existing authorize_url + request_id."
+    - description: "In-process resolver state lost on node restart while a session is pending."
+      impact: "low"
+      mitigation: "User lands on return page, finds enrollment pending, sees the fallback. They retry. Acceptable for v1; later we can move resolver to a durable bus (Redis/SQS)."
+
+  acceptance:
+    validation_profile: "standard"
+    definition_of_done:
+      - id: "dod1"
+        description: "POST /v1/claim/sessions with a valid listing returns 201 + authorize_url + request_id, persists enrollment with status `pending_connection`."
+      - id: "dod2"
+        description: "POST /v1/claim/sessions for a non-existent listing returns 404."
+      - id: "dod3"
+        description: "Simulated webhook completion with matching github user promotes every RegistrySkillVersion for `(owner, name)` to `verified` and marks enrollment `indexed`."
+      - id: "dod4"
+        description: "Simulated webhook completion with non-matching github user (and no public-org match) marks enrollment `claim_rejected`, leaves trust tier unchanged."
+      - id: "dod5"
+        description: "Simulated webhook with public-org match (e.g. authenticated as `@alice`, claiming `@stripe/x`, public-orgs includes `stripe`) promotes successfully."
+      - id: "dod6"
+        description: "Return page (`/x/claim/return?request_id=...`) renders the final state synchronously after webhook resolution. With webhook delayed >5s, renders 'still processing' fallback."
+      - id: "dod7"
+        description: "Concurrent /v1/claim/sessions calls for the same listing return the same pending enrollment instead of creating duplicates."
+      - id: "dod8"
+        description: "After successful claim, a subsequent github push webhook for the claimed repo reindexes the listing AND preserves trust_tier=verified (via the existing preserve-tier rule)."
+      - id: "dod9"
+        description: "ClaimAction renders a real button (no 'coming soon' stub). Clicking it sends to /api/claim/sessions and redirects to the returned authorize_url."
+      - id: "dod10"
+        description: "Github identity is fetched exclusively via Nango proxy. No code path reads raw access tokens from Nango or stores them in runx."
+    validation:
+      - id: "v1"
+        type: "test"
+        description: "claim-service tests cover happy, mismatch, public-org match, single-flight, expired session."
+        command: "cd cloud/packages/api && npm test -- claim-service"
+        expected: "All pass."
+      - id: "v2"
+        type: "test"
+        description: "End-to-end with a mock HostedNangoClient: simulate beginOauth → webhook → return-page render."
+        command: "cd cloud/packages/api && npm test -- claim-routes"
+        expected: "All pass."
+      - id: "v3"
+        type: "test"
+        description: "Webhook resolver completes pending claims and resolves the awaiting promise within 5s."
+        command: "cd cloud/packages/api && npm test -- claim-resolver"
+        expected: "All pass."
+      - id: "v4"
+        type: "boundary"
+        description: "No raw github token handling outside the Nango proxy module."
+        command: "rg -n 'access_token|github_token|Authorization.*github' cloud/packages/api/src/claim-* cloud/packages/api/src/github-identity.ts"
+        expected: "No matches."
+
+  constraints:
+    approvals_required:
+      - "registry_invariants"
+      - "nango_proxy_permissions"
+    non_goals:
+      - "Designing a runx user-account / sign-up flow."
+      - "Account-level CLI github auth (separate spec)."
+      - "Disputed claims / multiple maintainers per org."
+      - "Claim revocation or downgrade UI."
+
+  info_sources:
+    - "cloud/packages/auth/src/nango-hosted.ts (HostedNangoClient.beginOauth)"
+    - "cloud/packages/auth/src/http.ts (existing principal-bound connect flow as reference)"
+    - "Nango docs: /connect/sessions accepts redirect_url; /proxy supports per-connection passthrough"
+
+  notes: >
+    The crux: the github connection IS the proof, not a runx-side identity. We
+    don't mint accounts; we mint single-use claim sessions whose webhook
+    completion does the verification work. The connection persists scoped to
+    the one listing it proved control of, which is exactly the artifact the
+    existing webhook handler needs to keep that listing reindexed on push.
+
+planning_log:
+  - timestamp: "2026-04-26T00:00:00Z"
+    actor: "agent"
+    summary: "Drafted Nango-backed claim spec after the surgical cutover left /v1/claim as a 503 stub. Confirmed Nango mechanics by reading nango-hosted.ts (beginOauth + webhook + redirect_url) and http.ts (existing principal-bound flow as model). User confirmed: Path B (Nango proxy), broad org-claim semantics, operator handles Nango secret key permissions."
+
+phases:
+  - id: "phase1"
+    name: "Schema bump + store lookups"
+    objective: "Land the data shape changes before any service code references the new fields."
+    changes:
+      - file: "cloud/packages/api/src/self-publish-model.ts"
+        action: "update"
+        lines: "SelfPublishEnrollmentRecord.status enum + new fields"
+        content_spec: |
+          Status enum becomes `"indexed" | "tombstoned" | "pending_connection" | "claim_rejected"`.
+          Add optional fields: `request_id?`, `runx_flow_id?`, `connection_id?`, `github_user?`, `github_orgs?: readonly string[]`, `expires_at?`, `claim_reason?` (only set when status === claim_rejected).
+      - file: "cloud/packages/api/src/self-publish-helpers.ts"
+        action: "update"
+        lines: "normalizeEnrollment + normalizeStatus"
+        content_spec: |
+          Round-trip new fields. Status enum normalizer accepts all four values; default unchanged ("indexed").
+      - file: "cloud/packages/api/src/self-publish-stores.ts"
+        action: "update"
+        lines: "FileSelfPublishStore + InMemorySelfPublishStore"
+        content_spec: |
+          Add: `findByRequestId(request_id)`, `findByRunxFlowId(flow_id)`, `findPendingByListing(owner, name)`. Each is a list-and-filter for v1.
+    acceptance_criteria:
+      - id: "ac1_1"
+        type: "test"
+        description: "Round-trip an enrollment with status pending_connection + request_id + connection_id through normalizeEnrollment."
+      - id: "ac1_2"
+        type: "test"
+        description: "findByRequestId / findByRunxFlowId / findPendingByListing return the seeded enrollments."
+    status: "pending"
+
+  - id: "phase2"
+    name: "Github identity via Nango proxy"
+    objective: "Encapsulate every github API call so no other module ever sees a raw token."
+    dependencies: ["phase1"]
+    changes:
+      - file: "cloud/packages/auth/src/nango-hosted.ts"
+        action: "update"
+        lines: "HostedNangoClient — add proxyGet method"
+        content_spec: |
+          Add `proxyGet<T>(connectionId, provider, githubPath): Promise<T>`. POSTs to `${baseUrl}/proxy` with body `{ connection_id, provider_config_key: this.providerConfigKey(provider), method: "GET", endpoint: githubPath }` and parses the upstream JSON. Throws on non-2xx with the upstream error message.
+      - file: "cloud/packages/api/src/github-identity.ts"
+        action: "create"
+        lines: "all"
+        content_spec: |
+          Export `GithubIdentityClient` with `fetchIdentity(connectionId): Promise<{ user: string; public_orgs: readonly string[] }>`. Calls `proxyGet("/user")` for `login`, then `proxyGet("/user/orgs?type=public")` for `[{ login }]`. All values lowercased before return. Throws a typed `GithubIdentityFetchError` on any failure.
+    acceptance_criteria:
+      - id: "ac2_1"
+        type: "test"
+        description: "GithubIdentityClient with a mock HostedNangoClient returns user + public_orgs from canned responses."
+      - id: "ac2_2"
+        type: "test"
+        description: "Errors on /user or /user/orgs surface as GithubIdentityFetchError."
+      - id: "ac2_3"
+        type: "boundary"
+        description: "github-identity.ts has no `access_token` references."
+        command: "rg 'access_token' cloud/packages/api/src/github-identity.ts"
+        expected: "No matches."
+    status: "pending"
+
+  - id: "phase3"
+    name: "ClaimResolver + ClaimService"
+    objective: "Orchestrate session start, webhook completion, and tier promotion. The brain of the flow."
+    dependencies: ["phase1", "phase2"]
+    changes:
+      - file: "cloud/packages/api/src/claim-resolver.ts"
+        action: "create"
+        lines: "all"
+        content_spec: |
+          ClaimResolver: in-process Map<request_id, { resolve: (result) => void; promise: Promise<result>; expires_at }>. Methods: `register(request_id, ttl_ms)`, `await(request_id, timeout_ms): Promise<result | "timeout">`, `complete(request_id, result)`, `prune()`. Result type: `{ status: "indexed" | "claim_rejected"; reason?: string }`.
+      - file: "cloud/packages/api/src/claim-service.ts"
+        action: "create"
+        lines: "all"
+        content_spec: |
+          ClaimService:
+            - constructor injects: registryStore, selfPublishStore, nangoClient, githubIdentity, resolver, publicBaseUrl, ttlMs (default 600s).
+            - `startClaim({ owner, name }): Promise<{ request_id, authorize_url, expires_at }>`:
+              - Reject if listing has zero versions (404).
+              - Single-flight: if a non-expired pending_connection enrollment exists for (owner, name), return its authorize_url + request_id.
+              - Otherwise mint request_id (`cr_<uuid>`), flow_id, register resolver entry.
+              - Call nangoClient.beginOauth({ flowId, principalId: `claim:${request_id}`, provider: "github", scopes: ["read:user","read:org"] }) WITH redirect_url=`${publicBaseUrl}/x/claim/return?request_id=${request_id}`.
+              - Persist enrollment: status pending_connection, target owner/name, request_id, runx_flow_id, expires_at.
+              - Return { request_id, authorize_url, expires_at }.
+            - `completeClaim({ flow_id, connection_id }): Promise<void>`:
+              - Look up enrollment by runx_flow_id. If none, log + ignore.
+              - Fetch identity via GithubIdentityClient.fetchIdentity(connection_id).
+              - Match: github_user === enrollment.owner OR enrollment.owner ∈ public_orgs.
+              - On match: load all RegistrySkillVersion for skill_id, putVersion each with trust_tier=verified (preserve first_party). Update enrollment to status indexed, persist github_user, github_orgs, connection_id. Resolve resolver with { status: "indexed" }.
+              - On mismatch: update enrollment to claim_rejected with claim_reason. Resolve resolver with { status: "claim_rejected", reason }.
+              - On any thrown error: update enrollment to claim_rejected with claim_reason="Identity verification failed". Resolve resolver. NEVER rethrow — webhook must return 2xx.
+            - `awaitClaim(request_id, timeout_ms = 5000)`: delegates to resolver.await.
+    acceptance_criteria:
+      - id: "ac3_1"
+        type: "test"
+        description: "Resolver register/await/complete cycle resolves the awaiting promise."
+      - id: "ac3_2"
+        type: "test"
+        description: "Resolver await with no completion times out at the configured ms."
+      - id: "ac3_3"
+        type: "test"
+        description: "ClaimService.startClaim mints session, persists enrollment, returns authorize_url containing the redirect_url query."
+      - id: "ac3_4"
+        type: "test"
+        description: "ClaimService.startClaim is single-flight for the same (owner, name)."
+      - id: "ac3_5"
+        type: "test"
+        description: "ClaimService.completeClaim with matching identity promotes all versions to verified and marks enrollment indexed."
+      - id: "ac3_6"
+        type: "test"
+        description: "ClaimService.completeClaim with public-org match promotes (alice claiming @stripe/x where stripe ∈ alice's public_orgs)."
+      - id: "ac3_7"
+        type: "test"
+        description: "ClaimService.completeClaim with mismatch leaves trust_tier unchanged and marks enrollment claim_rejected."
+    status: "pending"
+
+  - id: "phase4"
+    name: "HTTP routes + webhook hook"
+    objective: "Expose the service over HTTP and branch the Nango webhook to the claim path."
+    dependencies: ["phase3"]
+    changes:
+      - file: "cloud/packages/api/src/claim-routes.ts"
+        action: "create"
+        lines: "all"
+        content_spec: |
+          POST /v1/claim/sessions: body { owner, name }; calls claimService.startClaim; returns 201 { request_id, authorize_url, expires_at }. 404 if listing missing. 503 if claimService not configured.
+          GET /v1/claim/sessions/:request_id: looks up enrollment; returns { status, github_user?, claim_reason?, listing_promoted: boolean }.
+      - file: "cloud/packages/auth/src/nango-hosted.ts"
+        action: "update"
+        lines: "createNangoWebhookHandler"
+        content_spec: |
+          Add an optional `claimWebhookHandler?: { complete: (flow_id, connection_id) => Promise<void> }` option. Inside the handler, AFTER signature verification AND before falling through to completeFlow, if `claimWebhookHandler` is set, attempt `claimWebhookHandler.complete(flowId, connection_id)` first; if that returns true (i.e. flow_id matched a claim), short-circuit. If false, fall through to the existing completeFlow path.
+      - file: "cloud/packages/api/src/index.ts"
+        action: "update"
+        lines: "HostedApiOptions + route registration"
+        content_spec: |
+          Add `claimService?: ClaimService` to HostedApiOptions. Register claim-routes alongside url-publish-routes.
+      - file: "cloud/packages/api/src/server.ts"
+        action: "update"
+        lines: "service construction"
+        content_spec: |
+          Construct ClaimResolver + GithubIdentityClient + ClaimService. Pass claimService into createHostedApiApp options. Pass claimService.completeClaim into the createNangoWebhookHandler options as claimWebhookHandler.complete.
+      - file: "cloud/packages/api/src/self-publish-routes.ts"
+        action: "update"
+        lines: "/v1/claim handler"
+        content_spec: |
+          Replace the 503 stub. The standalone /v1/claim path is repurposed: POST /v1/claim with { request_id } returns the current enrollment status (a thin alias for GET /v1/claim/sessions/:request_id, kept for backwards compat with anything that already calls /v1/claim by URL). Or, alternatively, drop /v1/claim entirely and have everything go through /v1/claim/sessions. **DECIDE during phase4 implementation; default = drop, keep only /v1/claim/sessions.**
+    acceptance_criteria:
+      - id: "ac4_1"
+        type: "test"
+        description: "POST /v1/claim/sessions wires through claimService.startClaim end-to-end."
+      - id: "ac4_2"
+        type: "test"
+        description: "Webhook with runx_flow_id matching a claim flow routes to claimWebhookHandler.complete and short-circuits the existing completeFlow path."
+      - id: "ac4_3"
+        type: "test"
+        description: "Webhook for a non-claim flow still works through the existing completeFlow."
+    status: "pending"
+
+  - id: "phase5"
+    name: "Web surface — return page + restored ClaimAction"
+    objective: "User-visible flow: button on /x/claim → Nango → return page → result."
+    dependencies: ["phase4"]
+    changes:
+      - file: "cloud/apps/web/src/pages/api/claim/sessions.ts"
+        action: "create"
+        lines: "all"
+        content_spec: |
+          POST forwards to upstream /v1/claim/sessions. Mirrors /api/claim.ts pattern but for the sessions route. Returns the upstream response unchanged.
+      - file: "cloud/packages/ui/src/ClaimAction/ClaimAction.tsx"
+        action: "update"
+        lines: "all"
+        content_spec: |
+          Replace the 'verified tier — coming soon' panel with a working button: 'connect github to claim @{owner}/{name}'. On click, POST /api/claim/sessions { owner, name }, then `window.location.href = response.authorize_url`. Show inline error states for 404 (listing missing) and unexpected failures.
+      - file: "cloud/apps/web/src/pages/x/claim/index.astro"
+        action: "update"
+        lines: "FAQ copy"
+        content_spec: |
+          Drop 'coming soon' framing. New FAQ:
+          - "what does claiming do?" — promotes every version of the listing to verified.
+          - "who can claim?" — the github actor whose handle matches the listing owner, or any public member of the named org.
+          - "do I need a runx account?" — no, claim is anonymous.
+          - "what happens after?" — the github connection persists, scoped to the listing. Pushes auto-reindex.
+      - file: "cloud/apps/web/src/pages/x/claim/return.astro"
+        action: "create"
+        lines: "all"
+        content_spec: |
+          Reads request_id from query. Server-side: fetch upstream `GET /v1/claim/sessions/:request_id`. If status is indexed, render success card with the listing link. If claim_rejected, render mismatch with the actual github_user. If pending_connection, server-side `await` the resolver via a new endpoint `GET /v1/claim/sessions/:request_id/await?timeout_ms=5000` (added in phase 4 acceptance — server holds open for up to 5s and returns final status). On timeout, render 'still processing — refresh in a few seconds'.
+    acceptance_criteria:
+      - id: "ac5_1"
+        type: "test"
+        description: "ClaimAction's button click submits /api/claim/sessions with owner+name and redirects to authorize_url."
+      - id: "ac5_2"
+        type: "test"
+        description: "/x/claim/return server-side fetches the awaiting endpoint and renders the final state on first load when webhook has resolved."
+      - id: "ac5_3"
+        type: "test"
+        description: "/x/claim/return renders 'still processing' when webhook has not resolved within timeout."
+    status: "pending"
+
+  - id: "phase6"
+    name: "Integration test: end-to-end with mock Nango"
+    objective: "Prove the full happy path before marking the spec complete."
+    dependencies: ["phase5"]
+    changes:
+      - file: "cloud/tests/claim-via-nango.test.ts"
+        action: "create"
+        lines: "all"
+        content_spec: |
+          Build a fake HostedNangoClient that captures beginOauth calls, exposes a `simulateWebhook(flow_id, connection_id, identity)` helper that pushes the same shape as Nango's webhook into createNangoWebhookHandler. Stub proxyGet so /user and /user/orgs return canned identities.
+          Test the happy path: startClaim → simulateWebhook → poll-free GET /v1/claim/sessions/:request_id returns indexed.
+          Test public-org match.
+          Test mismatch.
+          Test single-flight (two startClaim calls return same authorize_url).
+          Test webhook arriving before the GET (resolver already complete; GET returns immediately).
+          Test webhook arriving during the await GET (resolver completes mid-await; GET returns at completion).
+    acceptance_criteria:
+      - id: "ac6_1"
+        type: "test"
+        description: "End-to-end happy path passes."
+      - id: "ac6_2"
+        type: "test"
+        description: "All four edge cases pass."
+    status: "pending"
+
+rollback:
+  strategy: "per_phase"
+  commands:
+    phase1: "git checkout HEAD -- cloud/packages/api/src/self-publish-{model,helpers,stores}.ts"
+    phase2: "git rm cloud/packages/api/src/github-identity.ts && git checkout HEAD -- cloud/packages/auth/src/nango-hosted.ts"
+    phase3: "git rm cloud/packages/api/src/claim-{resolver,service}.ts cloud/packages/api/src/claim-{resolver,service}.test.ts"
+    phase4: "git rm cloud/packages/api/src/claim-routes.ts && git checkout HEAD -- cloud/packages/api/src/index.ts cloud/packages/api/src/server.ts cloud/packages/api/src/self-publish-routes.ts cloud/packages/auth/src/nango-hosted.ts"
+    phase5: "git rm -r cloud/apps/web/src/pages/x/claim/return.astro cloud/apps/web/src/pages/api/claim/sessions.ts && git checkout HEAD -- cloud/packages/ui/src/ClaimAction/ClaimAction.tsx cloud/apps/web/src/pages/x/claim/index.astro"
+    phase6: "git rm cloud/tests/claim-via-nango.test.ts"
+
+metadata:
+  estimated_effort_hours: 10
+  tags:
+    - "claim"
+    - "nango"
+    - "trust-tier"
+    - "github-oauth"

@@ -257,7 +257,15 @@ class StdioJsonRpcClient {
 
       const body = this.stdout.subarray(bodyStart, bodyEnd).toString("utf8");
       this.stdout = this.stdout.subarray(bodyEnd);
-      this.handleMessage(JSON.parse(body) as JsonRpcResponse);
+      let message: JsonRpcResponse;
+      try {
+        message = JSON.parse(body) as JsonRpcResponse;
+      } catch {
+        this.stdout = Buffer.alloc(0);
+        this.rejectAll(new Error("MCP server sent invalid JSON."));
+        return;
+      }
+      this.handleMessage(message);
     }
   }
 

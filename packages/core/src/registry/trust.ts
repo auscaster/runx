@@ -28,6 +28,37 @@ export function deriveRegistryTrustTier(options: {
   return "community";
 }
 
+export function tierWeight(tier: RegistryTrustTier): number {
+  switch (tier) {
+    case "first_party":
+      return 4;
+    case "verified":
+      return 2;
+    case "community":
+      return 1;
+  }
+}
+
+export interface EngagementSignals {
+  readonly trustTier: RegistryTrustTier;
+  readonly nonPublisherInstallCount: number;
+  readonly updatedAtMs?: number;
+  readonly nowMs?: number;
+}
+
+export function deriveEngagementScore(signals: EngagementSignals): number {
+  const installs = Math.max(0, signals.nonPublisherInstallCount);
+  const tier = tierWeight(signals.trustTier);
+  const recency = recencyDecayBonus(signals.updatedAtMs, signals.nowMs ?? Date.now());
+  return installs * tier + recency;
+}
+
+function recencyDecayBonus(updatedAtMs: number | undefined, nowMs: number): number {
+  if (updatedAtMs === undefined) return 0;
+  const ageDays = Math.max(0, (nowMs - updatedAtMs) / (1000 * 60 * 60 * 24));
+  return Math.max(0, 1 - ageDays / 30);
+}
+
 export function buildSourceAttestations(
   sourceMetadata: RegistrySourceMetadata | undefined,
   issuedAt: string,

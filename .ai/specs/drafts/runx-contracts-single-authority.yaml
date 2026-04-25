@@ -115,6 +115,9 @@ planning_log:
   - timestamp: "2026-04-24T00:40:00Z"
     actor: "agent"
     summary: "Scoped contract debt to a packages/contracts authority migration with deterministic generation and drift enforcement."
+  - timestamp: "2026-04-25T14:31:49Z"
+    actor: "agent"
+    summary: "Updated rollback scope for the current split git topology; cross-repo rollback must use explicit git roots."
 
 phases:
   - id: "phase1"
@@ -224,9 +227,9 @@ phases:
 rollback:
   strategy: "per_phase"
   commands:
-    phase1: "git checkout HEAD -- packages/contracts/src/index.ts packages/cli/src ../cloud/packages/api/src"
-    phase2: "git checkout HEAD -- packages/contracts/src/index.ts schemas scripts/generate-contract-schemas.ts"
-    phase3: "git checkout HEAD -- packages/core/src/executor packages/core/src"
+    phase1: "git -C /home/kam/dev/runx/oss checkout HEAD -- packages/contracts/src/index.ts packages/cli/src && git -C /home/kam/dev/runx/cloud checkout HEAD -- packages/api/src"
+    phase2: "git -C /home/kam/dev/runx/oss checkout HEAD -- packages/contracts/src/index.ts schemas scripts/generate-contract-schemas.ts"
+    phase3: "git -C /home/kam/dev/runx/oss checkout HEAD -- packages/core/src/executor packages/core/src"
 
 metadata:
   estimated_effort_hours: 10

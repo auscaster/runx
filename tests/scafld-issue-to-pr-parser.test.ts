@@ -20,7 +20,6 @@ describe("scafld issue-to-PR skill contract", () => {
 
     expect(chain.name).toBe("issue-to-pr");
     expect(chain.steps.map((step) => step.id)).toEqual([
-      "scafld-init",
       "scafld-new",
       "author-spec",
       "write-spec",
@@ -48,7 +47,6 @@ describe("scafld issue-to-PR skill contract", () => {
       "push-pull-request",
     ]);
     expect(chain.steps.map((step) => step.skill ?? "")).toEqual([
-      "../scafld",
       "../scafld",
       "",
       "",
@@ -78,7 +76,6 @@ describe("scafld issue-to-PR skill contract", () => {
     expect(chain.steps.map((step) => step.tool ?? "")).toEqual([
       "",
       "",
-      "",
       "fs.write",
       "fs.read",
       "",
@@ -106,7 +103,6 @@ describe("scafld issue-to-PR skill contract", () => {
     expect(
       Object.fromEntries(chain.steps.filter((step) => step.inputs.command !== undefined).map((step) => [step.id, step.inputs.command])),
     ).toEqual({
-      "scafld-init": "init",
       "scafld-new": "spec",
       "scafld-validate": "validate",
       "scafld-approve": "approve",

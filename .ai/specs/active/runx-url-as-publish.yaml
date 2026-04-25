@@ -1,0 +1,479 @@
+spec_version: "1.1"
+task_id: "runx-url-as-publish"
+created: "2026-04-25T00:00:00Z"
+updated: "2026-04-25T00:00:00Z"
+status: "in_progress"
+
+task:
+  title: "URL-as-publish: zero-friction skill adoption with structural abuse defenses"
+  summary: >
+    The current /x/add flow requires four server-side handshakes before a skill
+    listing exists (github oauth → repo picker → enrollment record → indexer →
+    optional draft PR). That ceremony is the wrong shape for adoption. This
+    spec collapses publish into a single operation: "given a public github
+    repo URL, index every SKILL.md it contains and surface them as registry
+    listings — no account, no enrollment, no PR." OAuth becomes an optional
+    upgrade ("claim"), not a gate. Abuse is contained structurally — handle
+    derivation is bound to the github owner, the catalog browse view is a
+    curated subset of the listing universe, and rank is engagement-weighted —
+    rather than by friction at publish time.
+
+  size: "large"
+  risk_level: "medium"
+
+  context:
+    packages:
+      - "oss/packages/core/src/registry"
+      - "cloud/packages/api/src"
+      - "cloud/apps/web/src/pages/x"
+      - "cloud/packages/ui/src"
+    files_impacted:
+      - path: "cloud/packages/api/src/skill-indexer.ts"
+        lines: "all"
+        reason: "Shared indexing core (walk repo, parse SKILL.md, validate, derive digest, putVersion). Used by both UrlPublishService and the existing SelfPublishService — eliminates duplication."
+      - path: "cloud/packages/api/src/url-publish-service.ts"
+        lines: "all"
+        reason: "Anon publish transport on top of skill-indexer. No OAuth state."
+      - path: "cloud/packages/api/src/url-publish-routes.ts"
+        lines: "all"
+        reason: "POST /v1/index, GET /v1/index/:owner/:name (anonymous publish endpoints)."
+      - path: "cloud/packages/api/src/url-publish-model.ts"
+        lines: "all"
+        reason: "Indexer contract: IndexRequest, IndexResult, SkillSourceCandidate."
+      - path: "cloud/packages/api/src/rate-limit.ts"
+        lines: "all"
+        reason: "Rate-limit middleware keyed by github owner + IP."
+      - path: "cloud/packages/api/src/public-site-data.ts"
+        lines: "catalog filter helpers"
+        reason: "Catalog browse default filters by trust_tier + engagement floor."
+      - path: "oss/packages/core/src/registry/store.ts"
+        lines: "RegistrySourceMetadata, RegistrySkillVersion"
+        reason: "Add multi-skill-per-repo support: skill_path is already present; tighten semantics + uniqueness."
+      - path: "oss/packages/core/src/registry/github-source.ts"
+        lines: "GitHubSourceSnapshot, resolveGitHubSource"
+        reason: "Parameterize skill_path (currently hardcoded 'SKILL.md'). Required for multi-skill-per-repo. Default keeps existing single-skill callers backwards-compatible."
+      - path: "cloud/packages/api/src/url-publish-provider.ts"
+        lines: "all"
+        reason: "Unauthenticated github contents API + walker for the URL-publish flow. Distinct from SelfPublishProvider (oauth, draft-PRs)."
+      - path: "cloud/packages/api/src/self-publish-service.ts"
+        lines: "indexRepository"
+        reason: "Refactor to delegate validate/build/store/tombstone/evidence to skill-indexer.ts. Removes inline duplication."
+      - path: "oss/packages/core/src/registry/trust.ts"
+        lines: "engagement signal helpers"
+        reason: "Add non-publisher install count helper used by catalog rank."
+      - path: "oss/packages/cli/src/commands/add.ts"
+        lines: "all"
+        reason: "Replace OAuth-bound add flow with `runx add <url>`."
+      - path: "cloud/apps/web/src/pages/x/add.astro"
+        lines: "all"
+        reason: "One-input redesign. OAuth path moves to /x/claim."
+      - path: "cloud/apps/web/src/pages/x/claim.astro"
+        lines: "all"
+        reason: "Optional upgrade flow (verified tier)."
+      - path: "cloud/packages/ui/src/AddSkillFlow"
+        lines: "all"
+        reason: "Replace stepper UI with single-input + result-card."
+    invariants:
+      - "Handle is bound to the github owner. `@stripe/x` requires a SKILL.md inside `github.com/stripe/*`. No exceptions."
+      - "Publish has no account requirement. OAuth is an optional upgrade for tier and private-repo support."
+      - "The registry is the source of truth for listings; the github repo is the source of truth for content. Indexing never copies markdown into a server-only namespace."
+      - "Catalog browse is a *view* over the listing universe. Spam can publish but cannot be promoted into browse without earned engagement."
+      - "Multiple SKILL.md files per repo are first-class. Listing key is `(github_owner, skill_name)`, not `(repo)`."
+      - "Existing OAuth-enrolled skills (SelfPublishEnrollmentRecord) keep working unchanged. New flow is additive."
+      - "All abuse defenses must default to *adoption-friendly* — friction lives in promotion, not publish."
+    related_docs:
+      - "cloud/packages/api/src/self-publish-model.ts"
+      - "oss/packages/core/src/registry/store.ts"
+      - "cloud/packages/api/src/public-site-model.ts"
+
+  objectives:
+    - "Define an indexer contract that maps a public github URL to one or more registry listings without authentication."
+    - "Allow multiple skills per repo via per-SKILL.md indexing."
+    - "Encode the four hard structural abuse rules into the indexer (handle binding, SKILL.md validation, owner-scoped name uniqueness, generous rate limits)."
+    - "Add a tiered catalog visibility model so spam is invisible by default without friction at publish."
+    - "Ship the CLI command `runx add <url>` and the redesigned single-input `/x/add` page."
+    - "Keep OAuth-based self-publish working as the `/x/claim` upgrade path."
+    - "Avoid touching unrelated registry, run, or receipts code."
+
+  scope:
+    in_scope:
+      - "URL-as-publish indexer service, model, and HTTP routes."
+      - "Multi-skill walk of the repo (root SKILL.md + `skills/*/SKILL.md`)."
+      - "Hard structural rules + per-owner + per-IP rate limiting."
+      - "Catalog browse filter: trust tier + engagement floor."
+      - "CLI `runx add <url>`."
+      - "Redesigned `/x/add` page (single input, no OAuth)."
+      - "`/x/claim` route (oauth-upgrade)."
+      - "Tests across all of the above."
+    out_of_scope:
+      - "README badge SVG endpoint and embed UX (follow-on outer-ring spec)."
+      - "Receipt-as-share UI on the skill page (follow-on outer-ring spec)."
+      - "Automated `claim`/dispute resolution beyond first-publisher-wins."
+      - "Rewriting the existing SelfPublishService — it remains for OAuth-claimed listings."
+      - "Changes to runtime, harness, or run-control surfaces."
+
+  decisions:
+    - "skill_id remains `<owner>/<name>` — unchanged shape, but `name` may now come from a SKILL.md found at any indexed path inside the repo, not only at root."
+    - "Skill name uniqueness is per-owner. Two SKILL.md files in different repos owned by the same github user must declare distinct `name` fields, or the second one fails to index with a clear `name_taken_by_repo` error."
+    - "Trust tier on URL-publish defaults to `community`. `verified` requires a github oauth claim. `first_party` requires a runx-internal attestation (existing flow)."
+    - "Catalog browse default filter: `trust_tier in [first_party, verified] OR (trust_tier = community AND non_publisher_install_count >= 1)`. The 1-install floor is intentionally low; the goal is to keep manufactured-by-publisher listings out of browse, not to gatekeep real adoption."
+    - "Catalog rank: `engagement_score = non_publisher_install_count * tier_weight + recency_decay`. Tier weights: first_party=4, verified=2, community=1."
+    - "All non-claimed (community-tier) skill detail pages emit `<meta name=\"robots\" content=\"noindex\">` until they cross the engagement floor or are claimed. Kills SEO/affiliate spam vector."
+    - "Rate limits: per github owner = 10 indexes/day, per anonymous IP = 5 indexes/day. Reindex of an existing (owner, name, digest) tuple is free and does not consume budget. Only successful, distinct-content indexes count."
+    - "Indexer is idempotent on `(owner, name, content_digest)` — re-publishing the same content is a no-op write that refreshes `updated_at`."
+    - "Multi-skill walk paths (in priority order): `/SKILL.md`, `skills/*/SKILL.md`, `skills/*/*/SKILL.md` (max depth 3). Configurable via `runx.discover` field in repo-root `X.yaml` if present."
+    - "Profile resolution per skill: prefer co-located `X.yaml` next to the SKILL.md, fall back to repo-root `X.yaml`, fall back to legacy `.runx/X.yaml`."
+    - "No anonymous claim of github-owned handles. To publish under `@stripe`, the github API must show the SKILL.md sitting in a repo whose owner is `stripe`. We re-validate this on every reindex."
+    - "An anonymous URL-publish creates a listing visible at its permalink immediately. Catalog browse inclusion waits for either claim or the engagement floor."
+
+  deliverables:
+    - "A URL-publish indexer service that takes a github repo URL and returns one or more `RegistrySkillVersion` records."
+    - "Public HTTP routes: `POST /v1/index`, `GET /v1/index/:owner/:name/status`."
+    - "Catalog list query updated to apply the trust+engagement filter by default, with `?include=all` to opt out."
+    - "`runx add <github-url>` CLI command writing into the local registry view and printing the resulting permalinks."
+    - "Redesigned `/x/add` Astro page using a single input + result card."
+    - "`/x/claim` Astro page wrapping the existing OAuth+enrollment flow, repurposed as a tier-upgrade rather than a publish gate."
+    - "Tests covering: handle binding rejection, multi-skill repo, name collision, rate limit, catalog filter, idempotent reindex, and a smoke test for each transport (CLI, HTTP, web)."
+
+  assumptions:
+    - "Public github repos are reachable via the unauthenticated github contents API. We accept the public-API rate limit for the indexer and document the runtime cap."
+    - "SKILL.md and X.yaml validators already exist in oss/packages/core (used by the OAuth flow). We reuse them unchanged."
+    - "RegistrySkillVersion's existing `source_metadata.skill_path` and `publisher_handle` fields are sufficient to represent multi-skill-per-repo. No core schema additions required."
+
+  risks:
+    - description: "github rate limits on the unauthenticated API hit batch indexers."
+      impact: "medium"
+      mitigation: "Indexer caches by `(repo, sha)`; reuses the github ETag for HEAD checks; backs off and surfaces a retryable error to the caller."
+    - description: "First-publisher-wins on a name lets a squatter take `@kam/research` from a real `@kam` who hasn't onboarded."
+      impact: "low"
+      mitigation: "Name is scoped to github owner. The squatter must already control `github.com/kam/*`. If `@kam` is the github user, only they can publish under that handle."
+    - description: "Catalog filter excludes legitimate brand-new skills until first install."
+      impact: "low"
+      mitigation: "Permalink and direct sharing always work. Catalog is for discovery; new-skill funnel is via creator-shared link → first install → catalog."
+    - description: "Existing SelfPublishEnrollmentRecord and the new URL-publish path could double-list the same skill."
+      impact: "medium"
+      mitigation: "Indexer checks for an existing enrollment record on the same `(owner, repo, skill_path)`. If one exists, it routes through the OAuth-aware path and treats the URL-publish as a refresh."
+
+  acceptance:
+    validation_profile: "standard"
+    definition_of_done:
+      - id: "dod1"
+        description: "POST /v1/index with a public github URL containing one SKILL.md returns a registry listing reachable at /x/<owner>/<name>."
+      - id: "dod2"
+        description: "POST /v1/index with a repo containing N SKILL.md files (root + skills/*/SKILL.md) returns N listings."
+      - id: "dod3"
+        description: "Indexing a SKILL.md whose `name` is already used by the same github owner in a different repo returns `name_taken_by_repo` with a hint."
+      - id: "dod4"
+        description: "Catalog browse default excludes community-tier listings with zero non-publisher installs. `?include=all` returns them."
+      - id: "dod5"
+        description: "Unclaimed community-tier skill pages emit `robots: noindex`."
+      - id: "dod6"
+        description: "Rate limit returns 429 after the per-owner or per-IP cap. Reindex-of-same-digest does not count against the cap."
+      - id: "dod7"
+        description: "`runx add github.com/<owner>/<repo>` runs end-to-end without any auth, prints permalinks, and exits 0."
+      - id: "dod8"
+        description: "/x/add renders a single input field, accepts a github URL, and lands on a result card with permalinks. No OAuth modal appears."
+      - id: "dod9"
+        description: "/x/claim runs the existing OAuth+enrollment flow and upgrades the listing trust_tier from community → verified on success."
+      - id: "dod10"
+        description: "Existing OAuth-enrolled SelfPublishEnrollmentRecord listings remain reachable and unchanged."
+    validation:
+      - id: "v1"
+        type: "test"
+        description: "Indexer unit + integration tests pass."
+        command: "cd cloud/packages/api && npm test -- url-publish"
+        expected: "All pass."
+      - id: "v2"
+        type: "test"
+        description: "CLI integration test for `runx add <url>` passes."
+        command: "cd oss/packages/cli && npm test -- add"
+        expected: "All pass."
+      - id: "v3"
+        type: "test"
+        description: "Web E2E for /x/add and /x/claim passes."
+        command: "cd cloud/apps/web && npm run test:e2e -- add claim"
+        expected: "All pass."
+      - id: "v4"
+        type: "boundary"
+        description: "No new public route writes without rate-limit middleware."
+        command: "rg -n 'POST /v1/index' cloud/packages/api/src | rg -v 'rate'"
+        expected: "No matches."
+
+  constraints:
+    approvals_required:
+      - "registry_invariants"
+      - "runx_ai_surface_scope"
+    non_goals:
+      - "Renaming or restructuring the existing self-publish service."
+      - "Changing the runtime / sandbox / scope-grant model."
+      - "Designing the README badge SVG (separate spec)."
+
+  info_sources:
+    - "oss/packages/core/src/registry/store.ts (RegistrySkillVersion shape — no changes required)"
+    - "cloud/packages/api/src/self-publish-model.ts (existing OAuth-bound flow remains)"
+    - "cloud/packages/api/src/public-site-model.ts (catalog list query)"
+    - "cloud/apps/web/src/pages/x/add.astro (current four-step UI being replaced)"
+
+  notes: >
+    The reframe driving this spec: publishing is open; *being shown* is earned.
+    Anyone can publish a SKILL.md from a public github repo, no account needed.
+    The catalog browse view is a curated subset, ranked by real engagement
+    against the governed runtime. The runtime is the moat; publish is the
+    funnel. Hard structural rules contain the abuse vector for free
+    (handle == github owner, SKILL.md must validate, names unique per owner,
+    generous rate limits). Visibility tiering contains the rest. Friction is
+    not a substitute for governance — and governance is what runx already has.
+
+planning_log:
+  - timestamp: "2026-04-25T00:00:00Z"
+    actor: "agent"
+    summary: "Drafted URL-as-publish spec covering indexer, multi-skill walk, hard structural rules, visibility tiering, and CLI/web/api transports. Inner ring + claim flow only; badges and receipt-as-share UX deferred to outer-ring spec."
+
+phases:
+  - id: "phase1"
+    name: "Hard structural rules + shared indexer + url-publish service"
+    objective: "Land the indexer contract, shared indexing core, rate-limit primitive, and the anon publish service. No UI yet."
+    changes:
+      - file: "cloud/packages/api/src/skill-indexer.ts"
+        action: "create"
+        lines: "all"
+        content_spec: |
+          Shared indexing core. Pure functions over a github contents fetcher.
+          Exports:
+          - walkSkillSources(repoFiles, discoverPaths): readonly SkillSourceCandidate[]
+          - validateSkillSource(candidate): { ok: true; parsed } | { ok: false; reason }
+          - buildRegistryVersion(candidate, owner, repo, ref, sha): RegistrySkillVersion
+          - DEFAULT_DISCOVER_PATHS: readonly ["/SKILL.md", "skills/*/SKILL.md", "skills/*/*/SKILL.md"]
+          Used by both UrlPublishService (anon) and SelfPublishService (oauth) — neither owns the indexing logic.
+      - file: "cloud/packages/api/src/url-publish-model.ts"
+        action: "create"
+        lines: "all"
+        content_spec: |
+          Export:
+          - IndexRequest { repo_url: string; ref?: string; requested_by?: { actor_kind: "anon" | "claimed"; actor_id?: string } }
+          - SkillSourceCandidate { skill_path: string; skill_name: string; markdown: string; profile_document?: string; content_digest: string }
+          - IndexResult { listings: readonly { owner: string; name: string; version: string; permalink: string; trust_tier: "community" | "verified" | "first_party" }[]; warnings: readonly string[] }
+          - IndexError discriminated union: { code: "handle_mismatch" | "skill_md_invalid" | "name_taken_by_repo" | "repo_unreachable" | "rate_limited"; detail: string; hint?: string }
+      - file: "cloud/packages/api/src/rate-limit.ts"
+        action: "create"
+        lines: "all"
+        content_spec: |
+          A small in-memory + persistable rate limiter keyed by:
+          - github_owner: max 10 successful indexes / 24h
+          - source_ip: max 5 successful indexes / 24h
+          Reindex of an existing (owner, name, digest) tuple is free and does not consume budget.
+          Failed validation does not consume budget (only successful, distinct-content indexes count).
+          Exposed as Hono middleware for the index routes.
+      - file: "cloud/packages/api/src/url-publish-service.ts"
+        action: "create"
+        lines: "all"
+        content_spec: |
+          UrlPublishService.index(request): IndexResult.
+          Steps:
+          1. Parse repo_url into (owner, repo). Reject non-github URLs.
+          2. Hit github contents API (unauth) for the resolved ref. 404 → repo_unreachable.
+          3. Walk discover paths: /SKILL.md, skills/*/SKILL.md, skills/*/*/SKILL.md (max depth 3).
+             If repo-root X.yaml has runx.discover, override the walk paths.
+          4. For each SKILL.md: parse + validate. Skip with warning if invalid (no hard fail unless zero valid skills).
+          5. For each valid SkillSourceCandidate: enforce handle == repo owner. Enforce name unique per owner: query registry by (owner, name); if a record exists with a different (repo, skill_path), return name_taken_by_repo.
+          6. putVersion into RegistryStore with trust_tier=community, source_metadata.skill_path set, publisher_handle=undefined.
+          7. Return IndexResult.
+    acceptance_criteria:
+      - id: "ac1_1"
+        type: "test"
+        description: "Service rejects non-github URLs."
+      - id: "ac1_2"
+        type: "test"
+        description: "Service returns N listings for a repo with N SKILL.md files at supported paths."
+      - id: "ac1_3"
+        type: "test"
+        description: "Service rejects a SKILL.md whose `owner` doesn't match the repo owner."
+      - id: "ac1_4"
+        type: "test"
+        description: "Same-digest reindex returns the existing version and does not consume rate budget."
+    status: "pending"
+
+  - id: "phase2"
+    name: "Public HTTP routes"
+    objective: "Expose the indexer as anonymous endpoints with rate limiting."
+    dependencies:
+      - "phase1"
+    changes:
+      - file: "cloud/packages/api/src/url-publish-routes.ts"
+        action: "create"
+        lines: "all"
+        content_spec: |
+          POST /v1/index — body: IndexRequest. Wraps UrlPublishService.index. Returns IndexResult or IndexError.
+          GET /v1/index/:owner/:name/status — returns { trust_tier, latest_digest, in_catalog: boolean, non_publisher_install_count }.
+          Both routes mount the abuse-rate-limit middleware.
+      - file: "cloud/packages/api/src/index.ts"
+        action: "update"
+        lines: "route registration"
+        content_spec: "Register url-publish-routes alongside existing self-publish-routes."
+    acceptance_criteria:
+      - id: "ac2_1"
+        type: "test"
+        description: "POST /v1/index 200 with one SKILL.md."
+      - id: "ac2_2"
+        type: "test"
+        description: "POST /v1/index 429 after the per-owner cap."
+      - id: "ac2_3"
+        type: "boundary"
+        description: "No new public POST without rate-limit middleware."
+        command: "rg -n 'app\\.post\\(\"/v1/index' cloud/packages/api/src/url-publish-routes.ts | rg 'rateLimit'"
+        expected: "Match found."
+    status: "pending"
+
+  - id: "phase3"
+    name: "Catalog visibility tiering"
+    objective: "Make spam invisible without friction at publish."
+    dependencies:
+      - "phase1"
+    changes:
+      - file: "cloud/packages/api/src/public-site-data.ts"
+        action: "update"
+        lines: "listSkills helpers"
+        content_spec: |
+          Add a default catalog filter:
+            trust_tier in [first_party, verified]
+            OR (trust_tier == community AND non_publisher_install_count >= 1)
+          Honour `?include=all` to bypass for admin/debug.
+          Catalog rank: engagement_score = non_publisher_install_count * tier_weight + recency_decay.
+          Tier weights: first_party=4, verified=2, community=1.
+      - file: "cloud/packages/api/src/public-site-render.ts"
+        action: "update"
+        lines: "skill detail head metadata"
+        content_spec: |
+          Emit <meta name="robots" content="noindex"> when:
+            trust_tier == community AND non_publisher_install_count == 0 AND not claimed.
+      - file: "oss/packages/core/src/registry/trust.ts"
+        action: "update"
+        lines: "engagement helpers"
+        content_spec: |
+          Add deriveEngagementScore(version, installSignals): number.
+          installSignals supplies { non_publisher_install_count, last_install_at }.
+    acceptance_criteria:
+      - id: "ac3_1"
+        type: "test"
+        description: "Default catalog list excludes community+0-install listings; ?include=all returns them."
+      - id: "ac3_2"
+        type: "test"
+        description: "Skill detail page sets noindex meta on community+0-install."
+      - id: "ac3_3"
+        type: "test"
+        description: "engagement_score sorts first_party > verified > community at equal install counts."
+    status: "pending"
+
+  - id: "phase4"
+    name: "CLI: runx add <url>"
+    objective: "Replace the OAuth-bound add path with the URL-publish transport."
+    dependencies:
+      - "phase2"
+    changes:
+      - file: "oss/packages/cli/src/commands/add.ts"
+        action: "update"
+        lines: "all"
+        content_spec: |
+          Detect URL form vs. registry-id form:
+            - URL: github.com/<owner>/<repo>[?ref=...] → POST /v1/index, print resulting permalinks + claim hint.
+            - registry-id: existing install path unchanged.
+          Suppress OAuth prompts entirely on the URL form. Output:
+            published → https://runx.ai/x/<owner>/<name>
+            run it:    runx run @<owner>/<name>
+            claim it:  runx claim @<owner>/<name>
+    acceptance_criteria:
+      - id: "ac4_1"
+        type: "test"
+        description: "`runx add github.com/test/sample` indexes and prints expected permalinks."
+      - id: "ac4_2"
+        type: "test"
+        description: "`runx add @owner/name` (registry-id form) still uses the existing install path."
+    status: "pending"
+
+  - id: "phase5"
+    name: "Web: redesigned /x/add"
+    objective: "Single-input page replacing the four-step stepper."
+    dependencies:
+      - "phase2"
+    changes:
+      - file: "cloud/apps/web/src/pages/x/add.astro"
+        action: "update"
+        lines: "all"
+        content_spec: |
+          Replace AddSkillFlow stepper with a single input + submit hitting /v1/index via fetch.
+          On success: render a result card per listing with the permalink and a "claim this listing" link to /x/claim?owner=<owner>&name=<name>.
+          Strip OAuth-related copy, repo-picker, and draft-PR FAQ items. Keep the FAQ section but rewrite for the no-OAuth flow.
+      - file: "cloud/packages/ui/src/SingleInputPublish"
+        action: "create"
+        lines: "all"
+        content_spec: |
+          New component: input + submit hitting /v1/index, renders a result-card list per listing.
+      - file: "cloud/packages/ui/src/AddSkillFlow"
+        action: "delete"
+        lines: "all"
+        content_spec: |
+          Old stepper component (OAuth + repo picker + draft PR) is removed entirely.
+          /x/add now imports SingleInputPublish; /x/claim uses the existing self-publish flow.
+      - file: "cloud/packages/ui/src/index.ts"
+        action: "update"
+        lines: "exports"
+        content_spec: |
+          Drop AddSkillFlow export, add SingleInputPublish export.
+    acceptance_criteria:
+      - id: "ac5_1"
+        type: "test"
+        description: "/x/add renders one input, no OAuth UI."
+      - id: "ac5_2"
+        type: "test"
+        description: "Submitting a github URL renders N result cards for an N-skill repo."
+    status: "pending"
+
+  - id: "phase6"
+    name: "Web: /x/claim (oauth-as-upgrade)"
+    objective: "Repurpose the existing OAuth flow as an optional tier upgrade, not a publish gate."
+    dependencies:
+      - "phase3"
+    changes:
+      - file: "cloud/apps/web/src/pages/x/claim.astro"
+        action: "create"
+        lines: "all"
+        content_spec: |
+          Reuse the existing self-publish OAuth + enrollment flow, but:
+            - Frame copy as "claim a listing" not "publish a skill."
+            - Pre-populate the target listing from query params (?owner=&name=).
+            - On success, upgrade the listing's trust_tier from community → verified and link the listing to the SelfPublishEnrollmentRecord.
+      - file: "cloud/packages/api/src/self-publish-service.ts"
+        action: "update"
+        lines: "claim entrypoint"
+        content_spec: |
+          Add claimListing(actor, owner, name): SelfPublishEnrollmentRecord.
+          Validates that the actor's github identity matches the listing owner.
+          Promotes trust_tier to verified across **all existing RegistrySkillVersion records** for `(owner, name)`, not just future versions.
+          Idempotent: re-running claim is a no-op write that refreshes updated_at.
+          Links the new SelfPublishEnrollmentRecord to the listing's source_metadata.publisher_handle.
+    acceptance_criteria:
+      - id: "ac6_1"
+        type: "test"
+        description: "Claim flow upgrades a community listing to verified."
+      - id: "ac6_2"
+        type: "test"
+        description: "Claim by a github actor whose identity doesn't match the listing owner is rejected."
+    status: "pending"
+
+rollback:
+  strategy: "per_phase"
+  commands:
+    phase1: "git rm cloud/packages/api/src/url-publish-{model,service}.ts cloud/packages/api/src/rate-limit.ts"
+    phase2: "git rm cloud/packages/api/src/url-publish-routes.ts && git checkout HEAD -- cloud/packages/api/src/index.ts"
+    phase3: "git checkout HEAD -- cloud/packages/api/src/public-site-data.ts cloud/packages/api/src/public-site-render.ts oss/packages/core/src/registry/trust.ts"
+    phase4: "git checkout HEAD -- oss/packages/cli/src/commands/add.ts"
+    phase5: "git checkout HEAD -- cloud/apps/web/src/pages/x/add.astro cloud/packages/ui/src/AddSkillFlow"
+    phase6: "git rm cloud/apps/web/src/pages/x/claim.astro && git checkout HEAD -- cloud/packages/api/src/self-publish-service.ts"
+
+metadata:
+  estimated_effort_hours: 14
+  tags:
+    - "registry"
+    - "adoption"
+    - "abuse-defense"
+    - "publish"

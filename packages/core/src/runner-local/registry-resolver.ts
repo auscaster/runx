@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -84,14 +84,20 @@ export async function materializeRegistrySkill(
   const skillDirectory = cachePathFor(options.cacheDir, resolution);
   const skillPath = path.join(skillDirectory, "SKILL.md");
   const markerPath = path.join(skillDirectory, ".runx-registry-digest");
-  const expectedMarker = `${resolution.digest}\n`;
+  const profilePath = path.join(skillDirectory, "X.yaml");
+  const expectedMarker = `${JSON.stringify({
+    digest: resolution.digest,
+    profile_digest: resolution.profile_digest ?? null,
+  })}\n`;
   const existingMarker = await readOptionalFile(markerPath);
 
   if (existingMarker !== expectedMarker || !existsSync(skillPath)) {
     await mkdir(skillDirectory, { recursive: true });
     await writeFile(skillPath, resolution.markdown, "utf8");
     if (resolution.profile_document) {
-      await writeFile(path.join(skillDirectory, "X.yaml"), resolution.profile_document, "utf8");
+      await writeFile(profilePath, resolution.profile_document, "utf8");
+    } else {
+      await rm(profilePath, { force: true });
     }
     await writeFile(markerPath, expectedMarker, "utf8");
   }

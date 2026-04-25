@@ -23,11 +23,22 @@ describe("createRuntimeBackedCaller", () => {
       id: "agent_step.docs-build.output",
       kind: "cognitive_work",
       work: {
+        id: "agent_step.docs-build.output",
+        source_type: "agent-step",
         envelope: {
+          run_id: "rx_test",
+          step_id: "docs-build",
           skill: "docs-build",
+          instructions: "Build docs.",
+          inputs: {},
+          allowed_tools: [],
+          current_context: [],
+          historical_context: [],
+          provenance: [],
           expected_outputs: {
             project_brief: "object",
           },
+          trust_boundary: "local-test",
         },
       },
     } satisfies ResolutionRequest;
@@ -48,11 +59,22 @@ describe("createRuntimeBackedCaller", () => {
       id: "agent_step.docs-build.output",
       kind: "cognitive_work",
       work: {
+        id: "agent_step.docs-build.output",
+        source_type: "agent-step",
         envelope: {
+          run_id: "rx_test",
+          step_id: "docs-build",
           skill: "docs-build",
+          instructions: "Build docs.",
+          inputs: {},
+          allowed_tools: [],
+          current_context: [],
+          historical_context: [],
+          provenance: [],
           expected_outputs: {
             project_brief: "object",
           },
+          trust_boundary: "local-test",
         },
       },
     } satisfies ResolutionRequest;

@@ -1,0 +1,95 @@
+spec_version: "1.1"
+task_id: "runx-fanout-gate-resolution-semantics"
+created: "2026-04-25T15:35:00Z"
+updated: "2026-04-25T15:35:00Z"
+status: "draft"
+
+task:
+  title: "Make fanout pause and escalate gates first-class graph states"
+  summary: >
+    Fanout threshold and conflict gates can declare actions named pause or
+    escalate, but the current runner records the sync decision and then returns
+    a failed graph. Implement resumable pause/escalation semantics so these
+    actions are not aliases for failure.
+  size: "medium"
+  risk_level: "high"
+  context:
+    packages:
+      - "packages/core"
+      - "packages/cli"
+      - "packages/adapters"
+    files_impacted:
+      - path: "packages/core/src/state-machine/index.ts"
+        lines: "fanout planning"
+        reason: "Represent pause and escalate plans distinctly from failure."
+      - path: "packages/core/src/runner-local/orchestrator.ts"
+        lines: "fanout sync handling"
+        reason: "Return a resumable pending graph state or explicit escalation result."
+      - path: "packages/core/src/runner-local/graph-hydration.ts"
+        lines: "resume support"
+        reason: "Hydrate completed fanout branches so a paused graph can resume after the gate decision."
+      - path: "packages/core/src/sdk/surface-protocol.ts"
+        lines: "paused run mapping"
+        reason: "Expose gate pauses through the same surface protocol as other pending resolution."
+      - path: "packages/cli/src/cli-presentation.ts"
+        lines: "paused and escalated graph output"
+        reason: "Render fanout gate pauses and escalations distinctly from execution failures."
+  objectives:
+    - "Add a graph result path for fanout gate pause that includes a structured resolution request."
+    - "Add explicit escalation behavior with a receipt disposition and surface status that is not generic failure."
+    - "Persist enough fanout branch ledger state to resume after a gate pause."
+    - "Keep halt and branch execution failure semantics unchanged."
+  scope:
+    in_scope:
+      - "Fanout sync decisions with action pause or escalate."
+      - "Ledger, receipt, SDK, and CLI behavior needed to inspect and resume paused fanout gates."
+      - "Regression tests for threshold and conflict gates."
+    out_of_scope:
+      - "Changing fanout execution strategy or branch scheduling."
+      - "Semantic/prose gates; gates remain structured-field only."
+  acceptance:
+    validation_profile: "strict"
+    definition_of_done:
+      - id: "dod1"
+        description: "A threshold gate with action pause returns a paused/resolution-needed graph result, not status failure."
+      - id: "dod2"
+        description: "Resuming a paused fanout gate reuses existing branch receipts and continues or halts deterministically from the recorded decision."
+      - id: "dod3"
+        description: "A conflict gate with action escalate returns an explicit escalation outcome and receipt metadata."
+      - id: "dod4"
+        description: "Existing halt, quorum, and all-success fanout tests remain green."
+    validation:
+      - id: "v1"
+        type: "compile"
+        description: "OSS typecheck stays green."
+        command: "pnpm typecheck"
+        cwd: "."
+        expected: "exit code 0"
+      - id: "v2"
+        type: "test"
+        description: "Fanout, surface, resume, and replay behavior stays coherent."
+        command: "pnpm exec vitest run tests/chain-fanout.test.ts tests/replay-run.test.ts packages/core/src/sdk/index.test.ts"
+        cwd: "."
+        expected: "exit code 0"
+
+planning_log:
+  - timestamp: "2026-04-25T15:35:00Z"
+    actor: "agent"
+    summary: "Created from deep review finding that pause/escalate fanout gates currently collapse into graph failure."
+
+phases:
+  - id: "phase1"
+    name: "Result Model"
+    objective: "Add first-class plan and result states for fanout pause and escalation."
+    status: "pending"
+  - id: "phase2"
+    name: "Resume Hydration"
+    objective: "Persist and hydrate completed fanout branch state so graph resume works after a gate pause."
+    status: "pending"
+  - id: "phase3"
+    name: "Surfaces"
+    objective: "Update SDK and CLI surfaces to render gate pause/escalate outcomes distinctly from failure."
+    status: "pending"
+
+metadata:
+  estimated_effort_hours: 8

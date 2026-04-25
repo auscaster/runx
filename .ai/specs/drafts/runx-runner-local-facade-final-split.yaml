@@ -74,7 +74,7 @@ task:
       - id: "dod2"
         description: "CLI and hosted worker use the shared runtime/bootstrap path by default."
       - id: "dod3"
-        description: "packages/core/src/runner-local/index.ts stays at or below 2000 lines."
+        description: "packages/core/src/runner-local/index.ts becomes a façade and stays at or below 1200 lines."
     validation:
       - id: "v1"
         type: "compile"
@@ -96,8 +96,8 @@ task:
         expected: "exit code 0"
       - id: "v4"
         type: "boundary"
-        description: "runner-local root stays under the final budget."
-        command: "test $(wc -l < packages/core/src/runner-local/index.ts) -le 2000"
+        description: "runner-local root meets the final façade budget and no longer owns graph orchestration internals."
+        command: "test $(wc -l < packages/core/src/runner-local/index.ts) -le 1200 && ! rg -n 'planSequentialGraphTransition|evaluateFanoutSync|runFanout|writeLocalGraphReceipt' packages/core/src/runner-local/index.ts"
         cwd: "."
         expected: "exit code 0"
 
@@ -108,11 +108,14 @@ planning_log:
   - timestamp: "2026-04-24T00:30:00Z"
     actor: "agent"
     summary: "Scoped the remaining runtime work to orchestration, resume, receipts, and bootstrap unification."
+  - timestamp: "2026-04-25T14:31:49Z"
+    actor: "agent"
+    summary: "Tightened the draft because the current runner-local root already passes the old line budget while still owning graph orchestration internals."
 
 phases:
   - id: "phase1"
-    name: "Extract orchestration and resume services"
-    objective: "Move graph progression and resume reconstruction into dedicated modules."
+    name: "Extract graph orchestration and resume services"
+    objective: "Move graph progression, fanout sync, transition planning, and resume reconstruction into dedicated modules."
     changes:
       - file: "packages/core/src/runner-local/index.ts"
         action: "update"
@@ -125,7 +128,8 @@ phases:
         lines: "all"
         content_spec: >
           Own single-step and graph-step orchestration, transition planning, and
-          control flow wiring.
+          fanout control flow wiring. The root index should call into this
+          module rather than importing transition planning and fanout internals.
       - file: "packages/core/src/runner-local/resume.ts"
         action: "create"
         lines: "all"
@@ -137,6 +141,12 @@ phases:
         type: "test"
         description: "Core SDK and harness tests stay green after orchestration extraction."
         command: "pnpm exec vitest run packages/core/src/sdk/index.test.ts packages/core/src/harness/runner.test.ts"
+        cwd: "."
+        expected: "exit code 0"
+      - id: "ac1_2"
+        type: "boundary"
+        description: "runner-local root no longer imports graph transition and fanout internals directly."
+        command: "! rg -n 'planSequentialGraphTransition|evaluateFanoutSync|runFanout' packages/core/src/runner-local/index.ts"
         cwd: "."
         expected: "exit code 0"
     status: "pending"
@@ -168,8 +178,8 @@ phases:
     acceptance_criteria:
       - id: "ac2_1"
         type: "boundary"
-        description: "runner-local shrinks below 2400 lines after the second extraction wave."
-        command: "test $(wc -l < packages/core/src/runner-local/index.ts) -le 2400"
+        description: "runner-local root shrinks below 1500 lines after receipt and context extraction."
+        command: "test $(wc -l < packages/core/src/runner-local/index.ts) -le 1500"
         cwd: "."
         expected: "exit code 0"
     status: "pending"
@@ -207,8 +217,8 @@ phases:
         expected: "exit code 0"
       - id: "ac3_2"
         type: "boundary"
-        description: "runner-local root meets the final 2000-line target."
-        command: "test $(wc -l < packages/core/src/runner-local/index.ts) -le 2000"
+        description: "runner-local root meets the final façade target."
+        command: "test $(wc -l < packages/core/src/runner-local/index.ts) -le 1200 && ! rg -n 'planSequentialGraphTransition|evaluateFanoutSync|runFanout|writeLocalGraphReceipt' packages/core/src/runner-local/index.ts"
         cwd: "."
         expected: "exit code 0"
     status: "pending"
@@ -216,9 +226,9 @@ phases:
 rollback:
   strategy: "per_phase"
   commands:
-    phase1: "git checkout HEAD -- packages/core/src/runner-local/index.ts packages/core/src/runner-local/orchestrator.ts packages/core/src/runner-local/resume.ts"
-    phase2: "git checkout HEAD -- packages/core/src/runner-local/index.ts packages/core/src/runner-local/receipt-composer.ts packages/core/src/runner-local/context-materializer.ts"
-    phase3: "git checkout HEAD -- packages/adapters/src/runtime.ts packages/cli/src ../cloud/packages/worker/src/index.ts"
+    phase1: "git -C /home/kam/dev/runx/oss checkout HEAD -- packages/core/src/runner-local/index.ts && git -C /home/kam/dev/runx/oss clean -f -- packages/core/src/runner-local/orchestrator.ts packages/core/src/runner-local/resume.ts"
+    phase2: "git -C /home/kam/dev/runx/oss checkout HEAD -- packages/core/src/runner-local/index.ts && git -C /home/kam/dev/runx/oss clean -f -- packages/core/src/runner-local/receipt-composer.ts packages/core/src/runner-local/context-materializer.ts"
+    phase3: "git -C /home/kam/dev/runx/oss checkout HEAD -- packages/adapters/src/runtime.ts packages/cli/src && git -C /home/kam/dev/runx/cloud checkout HEAD -- packages/worker/src/index.ts"
 
 metadata:
   estimated_effort_hours: 8

@@ -146,6 +146,10 @@ export function validateHandoffSignal(value: unknown, label = "handoff_signal"):
   return validateHandoffSignalContract(value, label);
 }
 
+export function validateHandoffState(value: unknown, label = "handoff_state"): HandoffState {
+  return validateHandoffStateContract(value, label);
+}
+
 export function validateSuppressionRecord(value: unknown, label = "suppression_record"): SuppressionRecord {
   return validateSuppressionRecordContract(value, label);
 }
@@ -217,7 +221,7 @@ export function reduceHandoffState(request: ReduceHandoffStateRequest): HandoffS
       ? handoffDispositionToStatus(lastSignal.disposition)
       : "awaiting_response";
 
-  return validateHandoffStateContract({
+  return validateHandoffState({
     schema: RUNX_LOGICAL_SCHEMAS.handoffState,
     handoff_id: request.handoff_id,
     boundary_kind: request.boundary_kind ?? lastSignal?.boundary_kind,

@@ -5,17 +5,17 @@ updated: "2026-04-24T02:15:00Z"
 status: "draft"
 
 task:
-  title: "Introduce a generic handoff signal model for post-boundary state"
+  title: "Harden the generic handoff signal model for post-boundary state"
   summary: >
     Runx already has generic transport and delivery primitives for external
     work: thread hydration, outbox packaging, explicit decisions, and boundary
-    semantics. What it still lacks is a generic post-handoff state model. The
-    Sourcey `docs-signal` need exposed a real core gap, but the canonical model
-    should not be docs-specific or maintainer-specific. The stable runx concept
-    is an outward handoff crossing an explicit boundary and then receiving
-    normalized response signals, reduced state, and suppression policy. Freeze
-    that nomenclature now so Sourcey, skill upstream PRs, issue-response
-    workflows, and future outreach lanes all build on one core model.
+    semantics. The generic handoff contracts and reducer now exist in core, but
+    the draft still needs to describe the remaining hardening work accurately:
+    keep the canonical nouns stable, verify generated schemas and reducer tests,
+    and add any missing persistence/query/tool surfaces without letting
+    Sourcey-specific names become platform vocabulary. The stable runx concept is
+    an outward handoff crossing an explicit boundary and then receiving
+    normalized response signals, reduced state, and suppression policy.
   size: "medium"
   risk_level: "medium"
   context:
@@ -27,10 +27,19 @@ task:
     files_impacted:
       - path: "packages/contracts/src/index.ts"
         lines: "all"
-        reason: "Canonical home for handoff signal, handoff state, and suppression contracts."
+        reason: "Canonical home for existing handoff signal, handoff state, and suppression contracts."
+      - path: "packages/contracts/src/handoff-contracts.test.ts"
+        lines: "all"
+        reason: "Focused contract coverage for the generic handoff model."
+      - path: "schemas/handoff-*.schema.json"
+        lines: "all"
+        reason: "Generated schema artifacts for the handoff contract family."
       - path: "packages/core/src/knowledge/index.ts"
         lines: "all"
-        reason: "Generic knowledge/boundary helpers should own persistence and reduction of post-handoff state."
+        reason: "Generic knowledge/boundary helpers own validation and reduction, and should own persistence/query if added."
+      - path: "packages/core/src/knowledge/*handoff*.test.ts"
+        lines: "all"
+        reason: "Focused knowledge-layer coverage for handoff state reduction."
       - path: "skills/draft-content/SKILL.md"
         lines: "all"
         reason: "Existing boundary terminology should stay aligned with the new handoff model."
@@ -53,14 +62,14 @@ task:
       - "packages/contracts/src/index.ts"
     cwd: "."
   objectives:
-    - "Define the canonical runx nouns for post-handoff state."
-    - "Separate immutable observed signals from reduced current state and from durable suppression policy."
-    - "Place the generic capability in contracts plus knowledge, not in Sourcey-specific lanes or runner-local kernel code."
+    - "Lock the canonical runx nouns for post-handoff state."
+    - "Verify immutable observed signals, reduced current state, and durable suppression policy stay separate in contracts and tests."
+    - "Place any remaining generic persistence/query capability in knowledge, not in Sourcey-specific lanes or runner-local kernel code."
     - "Leave Sourcey, skill-upstream, and future outreach workflows as thin wrappers over the generic model."
   scope:
     in_scope:
       - "Canonical contracts for handoff_signal, handoff_state, and suppression_record."
-      - "Knowledge-layer persistence and reduction responsibilities for post-handoff state."
+      - "Knowledge-layer validation, reduction, and any needed persistence/query responsibilities for post-handoff state."
       - "Tool and skill naming rules for generic versus domain-specific wrappers."
       - "Mapping from Sourcey docs review/PR/outreach flows onto the generic model."
     out_of_scope:
@@ -73,11 +82,11 @@ task:
     - "Email, GitHub, discussions, and future channels all need to fit the same response model."
   touchpoints:
     - area: "contracts"
-      description: "Canonical contract ids, TypeBox schemas, and runtime validation for generic post-handoff state."
+      description: "Canonical contract ids, TypeBox schemas, generated artifacts, and runtime validation for generic post-handoff state."
       links:
         - "packages/contracts/src/index.ts"
     - area: "knowledge"
-      description: "Generic boundary-state storage, lookup, and reduction logic should live with thread and outbox knowledge."
+      description: "Generic boundary-state validation and reduction already live here; persistence/query extensions should stay here too."
       links:
         - "packages/core/src/knowledge/index.ts"
     - area: "boundary semantics"
@@ -107,20 +116,26 @@ task:
     validation_profile: "standard"
     definition_of_done:
       - id: "dod1"
-        description: "Canonical runx nouns are frozen as handoff_signal, handoff_state, and suppression_record."
+        description: "Canonical runx nouns remain frozen as handoff_signal, handoff_state, and suppression_record."
       - id: "dod2"
-        description: "The design explicitly states that docs-signal and maintainer-signal are consumer-level names, not core contract names."
+        description: "The design and tests keep docs-signal and maintainer-signal as consumer-level names, not core contract names."
       - id: "dod3"
-        description: "The design assigns contracts to packages/contracts and persistence/reduction to packages/core knowledge."
+        description: "Contracts stay in packages/contracts; validation/reduction and any persistence/query helpers stay in packages/core knowledge."
       - id: "dod4"
-        description: "The mapping from Sourcey docs PR/outreach flows to the generic model is explicit."
+        description: "The mapping from Sourcey docs PR/outreach flows to the generic model is explicit without adding Sourcey-specific core vocabulary."
     validation:
       - id: "v1"
-        type: "documentation"
-        description: "The spec documents the canonical nomenclature and placement unambiguously."
+        type: "test"
+        description: "Focused handoff contract and reducer tests stay green."
+        command: "pnpm exec vitest run packages/contracts/src/handoff-contracts.test.ts packages/core/src/knowledge/handoff-state.test.ts packages/core/src/knowledge/index.test.ts"
+        cwd: "."
+        expected: "exit code 0"
       - id: "v2"
-        type: "documentation"
-        description: "The spec preserves existing boundary terminology instead of inventing a competing vocabulary."
+        type: "boundary"
+        description: "Generated handoff schema artifacts stay in sync with contracts."
+        command: "pnpm schemas:generate && git diff --exit-code packages/contracts/src schemas/handoff-signal.schema.json schemas/handoff-state.schema.json schemas/suppression-record.schema.json"
+        cwd: "."
+        expected: "exit code 0"
       - id: "v3"
         type: "documentation"
         description: "The spec leaves room for GitHub, email, and future channels under the same core model."
@@ -156,23 +171,36 @@ planning_log:
       The existing knowledge package already owns thread, outbox, and decision
       contracts. The missing layer is generic post-handoff state, not another
       Sourcey-specific workflow primitive.
+  - timestamp: "2026-04-25T14:31:49Z"
+    actor: "agent"
+    summary: "Rebased the draft on current code, where handoff contracts, generated schema artifacts, reducer helpers, and focused tests already exist."
+    notes: >
+      The remaining work should harden and expose the existing generic model
+      instead of adding a second docs-specific signal vocabulary.
 
 phases:
   - id: "phase1"
-    name: "Freeze canonical contracts and naming"
-    objective: "Define the generic nouns and shapes before implementation drift hardens."
+    name: "Audit canonical contracts and naming"
+    objective: "Lock the existing generic nouns and generated artifacts before integration drift hardens."
     changes:
       - file: "packages/contracts/src/index.ts"
         action: "update"
         lines: "all"
         content_spec: >
-          Add canonical contract families named runx.handoff_signal.v1,
-          runx.handoff_state.v1, and runx.suppression_record.v1. The handoff
-          signal should represent one immutable normalized observation after an
-          outward handoff. The handoff state should represent the reduced
-          posture for a handoff or target after replaying signals and
-          suppression. The suppression record should remain a separate explicit
-          policy object rather than a signal subtype.
+          Keep the existing canonical contract families named
+          runx.handoff_signal.v1, runx.handoff_state.v1, and
+          runx.suppression_record.v1. The handoff signal represents one
+          immutable normalized observation after an outward handoff. The handoff
+          state represents the reduced posture for a handoff or target after
+          replaying signals and suppression. The suppression record remains a
+          separate explicit policy object rather than a signal subtype.
+      - file: "schemas/handoff-*.schema.json"
+        action: "update"
+        lines: "all"
+        content_spec: >
+          Keep generated handoff schema artifacts synchronized with
+          packages/contracts. Do not hand-edit generated artifacts except through
+          the schema generation path.
       - file: "packages/contracts/src/index.ts"
         action: "update"
         lines: "all"
@@ -183,15 +211,21 @@ phases:
           part of the canonical contract name.
     acceptance_criteria:
       - id: "ac1_1"
-        type: "documentation"
-        description: "The spec names handoff_signal, handoff_state, and suppression_record as the canonical contract family."
+        type: "test"
+        description: "Focused handoff contract tests stay green."
+        command: "pnpm exec vitest run packages/contracts/src/handoff-contracts.test.ts"
+        cwd: "."
+        expected: "exit code 0"
       - id: "ac1_2"
-        type: "documentation"
-        description: "The design explicitly rejects docs-signal, maintainer-signal, and thread-signal as platform contract names."
+        type: "boundary"
+        description: "Generated handoff schema artifacts stay synchronized with packages/contracts."
+        command: "pnpm schemas:generate && git diff --exit-code packages/contracts/src schemas/handoff-signal.schema.json schemas/handoff-state.schema.json schemas/suppression-record.schema.json"
+        cwd: "."
+        expected: "exit code 0"
     status: "pending"
 
   - id: "phase2"
-    name: "Place persistence and reduction in knowledge"
+    name: "Harden knowledge reduction and persistence boundary"
     objective: "Keep generic post-handoff state beside thread and outbox knowledge instead of burying it in a product lane."
     dependencies:
       - "phase1"
@@ -200,11 +234,10 @@ phases:
         action: "update"
         lines: "all"
         content_spec: >
-          Add generic helpers to append, load, query, and reduce handoff
-          signals and suppression records. The knowledge layer should be able to
-          answer questions such as: what is the current posture for this
-          handoff, has this repo or contact been suppressed, and what signal
-          last moved the state?
+          Keep reducer helpers generic and pure. If durable append/load/query
+          helpers are added, place them here beside thread and outbox knowledge,
+          validate all records through packages/contracts, and keep the reducer
+          usable without a storage adapter.
       - file: "packages/core/src/knowledge/index.ts"
         action: "update"
         lines: "all"
@@ -213,8 +246,11 @@ phases:
           knowledge and reduction logic, not execution-kernel logic.
     acceptance_criteria:
       - id: "ac2_1"
-        type: "documentation"
-        description: "The design assigns generic signal storage and reduction to knowledge, not to Sourcey lanes or runner-local."
+        type: "test"
+        description: "Knowledge-layer handoff reducer coverage stays green."
+        command: "pnpm exec vitest run packages/core/src/knowledge/handoff-state.test.ts packages/core/src/knowledge/index.test.ts"
+        cwd: "."
+        expected: "exit code 0"
       - id: "ac2_2"
         type: "documentation"
         description: "The design keeps decisions, signals, and suppression as distinct concepts."
@@ -230,10 +266,10 @@ phases:
         action: "update"
         lines: "all"
         content_spec: >
-          Introduce generic post-handoff helpers under a neutral surface such as
-          handoff or boundary, for example record signal, reduce state, and
-          check suppression. Do not make docs or maintainer part of the generic
-          tool namespace.
+          Introduce or document generic post-handoff helpers under a neutral
+          surface such as handoff or boundary, for example record signal, reduce
+          state, and check suppression. Do not make docs or maintainer part of
+          the generic tool namespace.
       - file: "../plans/sourcey-adoption-engine.md"
         action: "update"
         lines: "all"
@@ -258,8 +294,11 @@ phases:
     status: "pending"
 
 rollback:
-  strategy: "manual"
-  commands: {}
+  strategy: "per_phase"
+  commands:
+    phase1: "git -C /home/kam/dev/runx/oss checkout HEAD -- packages/contracts/src/index.ts packages/contracts/src/handoff-contracts.test.ts packages/contracts/src/index.test.ts schemas/handoff-signal.schema.json schemas/handoff-state.schema.json schemas/suppression-record.schema.json scripts/generate-contract-schemas.ts"
+    phase2: "git -C /home/kam/dev/runx/oss checkout HEAD -- packages/core/src/knowledge/index.ts packages/core/src/knowledge/index.test.ts packages/core/src/knowledge/handoff-state.test.ts"
+    phase3: "git -C /home/kam/dev/runx/oss checkout HEAD -- tools/thread skills/draft-content/SKILL.md skills/issue-to-pr/SKILL.md && git -C /home/kam/dev/runx checkout HEAD -- plans/sourcey-adoption-engine.md"
 
 metadata:
   estimated_effort_hours: 6

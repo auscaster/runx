@@ -19,6 +19,7 @@ import {
   threadAllowsGate,
   summarizeThread,
   validateHandoffSignal,
+  validateHandoffState,
   validateSuppressionRecord,
   validateThread,
 } from "./index.js";
@@ -333,6 +334,19 @@ describe("handoff state reduction", () => {
       signal_count: 2,
       last_signal_id: "sig_2",
       last_signal_disposition: "requested_changes",
+    });
+    expect(validateHandoffState({
+      schema: "runx.handoff_state.v1",
+      handoff_id: "docs-pr:example/repo:001",
+      target_repo: "example/repo",
+      status: "needs_revision",
+      signal_count: 2,
+      last_signal_id: "sig_2",
+      last_signal_at: "2026-04-24T03:05:00Z",
+      last_signal_disposition: "requested_changes",
+    })).toMatchObject({
+      status: "needs_revision",
+      signal_count: 2,
     });
   });
 

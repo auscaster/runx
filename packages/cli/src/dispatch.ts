@@ -56,6 +56,13 @@ import {
   renderConnectResult,
   resolveConfiguredConnectService,
 } from "./commands/connect.js";
+import {
+  isGithubRepoUrl,
+  publishUrlSkill,
+  renderUrlAddResult,
+  resolveUrlAddApiBaseUrl,
+  UrlAddCliError,
+} from "./commands/url-add.js";
 import { handleDevCommand, renderDevResult } from "./commands/dev.js";
 import {
   explainDoctorDiagnostic,
@@ -320,6 +327,33 @@ export async function dispatchCli(
       io.stdout.write(renderSearchResults(results, env));
     }
     return 0;
+  }
+
+  if ((parsed.command === "skill" || parsed.command === "add") && parsed.skillAction === "add" && parsed.skillRef && isGithubRepoUrl(parsed.skillRef)) {
+    if (parsed.installTo || parsed.expectedDigest) {
+      io.stderr.write("runx add: GitHub URL indexing does not support --to or --digest. Index the URL, then install the emitted registry ref.\n");
+      return 1;
+    }
+    try {
+      const result = await publishUrlSkill({
+        repoUrl: parsed.skillRef,
+        ref: parsed.installVersion,
+        apiBaseUrl: parsed.registryUrl ?? resolveUrlAddApiBaseUrl(env),
+      });
+      if (parsed.json) {
+        io.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+      } else {
+        io.stdout.write(renderUrlAddResult(result));
+      }
+      return 0;
+    } catch (error) {
+      if (error instanceof UrlAddCliError) {
+        const detail = error.payload.hint ? `${error.payload.detail}\n  hint: ${error.payload.hint}` : error.payload.detail;
+        io.stderr.write(`runx add: ${detail}\n`);
+        return 1;
+      }
+      throw error;
+    }
   }
 
   if ((parsed.command === "skill" || parsed.command === "add") && parsed.skillAction === "add" && parsed.skillRef) {

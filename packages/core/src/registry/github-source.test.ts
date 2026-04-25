@@ -22,7 +22,7 @@ runners:
 `;
 
 describe("github registry source", () => {
-  it("prefers the canonical root X.yaml when both profile locations exist", () => {
+  it("uses root X.yaml when present and derives an sha-prefixed version", () => {
     const resolved = resolveGitHubSource({
       owner: "Acme",
       repo: "sourcey",
@@ -31,7 +31,6 @@ describe("github registry source", () => {
       sha: "1234567890abcdef",
       markdown,
       profileDocument,
-      fallbackProfileDocument: "fallback should be ignored",
       event: "push",
     });
 
@@ -40,20 +39,21 @@ describe("github registry source", () => {
     expect(resolved.version).toBe("sha-1234567890ab");
   });
 
-  it("falls back to .runx/X.yaml only when root X.yaml is absent", () => {
+  it("respects an explicit skillPath / profilePath for multi-skill repos", () => {
     const resolved = resolveGitHubSource({
       owner: "acme",
-      repo: "sourcey",
+      repo: "skills",
       defaultBranch: "main",
       ref: "main",
       sha: "fedcba9876543210",
       markdown,
-      fallbackProfileDocument: profileDocument,
+      profileDocument,
+      skillPath: "skills/sourcey/SKILL.md",
+      profilePath: "skills/sourcey/X.yaml",
       event: "push",
     });
 
-    expect(resolved.profileDocument).toBe(profileDocument);
-    expect(resolved.profilePath).toBe(".runx/X.yaml");
+    expect(resolved.profilePath).toBe("skills/sourcey/X.yaml");
   });
 
   it("normalizes semver tag releases into immutable versions with source metadata", () => {

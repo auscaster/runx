@@ -70,6 +70,32 @@ describe("invokeMcp", () => {
     expect(result.errorMessage).toContain("timed out");
   }, 15000);
 
+  it("returns sanitized failure when the MCP server sends malformed JSON", async () => {
+    const malformedServer = {
+      command: "node",
+      args: [
+        "-e",
+        "const body = '{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":'; process.stdout.write(`Content-Length: ${Buffer.byteLength(body)}\\r\\n\\r\\n${body}`);",
+      ],
+    };
+    const result = await invokeMcp({
+      source: {
+        type: "mcp",
+        args: [],
+        server: malformedServer,
+        tool: "echo",
+        raw: {},
+        timeoutSeconds: 1,
+      },
+      inputs: {},
+      skillDirectory: process.cwd(),
+      env: process.env,
+    });
+
+    expect(result.status).toBe("failure");
+    expect(result.errorMessage).toBe("MCP adapter failed.");
+  }, 15000);
+
   it("returns failure for missing tool metadata", async () => {
     const result = await invokeMcp({
       source: {

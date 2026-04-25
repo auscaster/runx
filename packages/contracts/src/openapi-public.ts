@@ -766,6 +766,125 @@ export function buildHostedOpenApiPublicSchemas(): Readonly<Record<string, unkno
       required: ["status", "updated", "enrollments"],
       additionalProperties: false,
     },
+    IndexRequest: {
+      type: "object",
+      properties: {
+        repo_url: { type: "string" },
+        ref: { type: "string" },
+      },
+      required: ["repo_url"],
+      additionalProperties: false,
+    },
+    IndexedListing: {
+      type: "object",
+      properties: {
+        owner: { type: "string" },
+        name: { type: "string" },
+        skill_id: { type: "string" },
+        version: { type: "string" },
+        permalink: { type: "string", format: "uri" },
+        trust_tier: { type: "string", enum: ["first_party", "verified", "community"] },
+        skill_path: { type: "string" },
+        digest_unchanged: { type: "boolean" },
+      },
+      required: [
+        "owner",
+        "name",
+        "skill_id",
+        "version",
+        "permalink",
+        "trust_tier",
+        "skill_path",
+        "digest_unchanged",
+      ],
+      additionalProperties: false,
+    },
+    IndexWarning: {
+      type: "object",
+      properties: {
+        skill_path: { type: "string" },
+        code: {
+          type: "string",
+          enum: ["skill_md_invalid", "skill_md_skipped", "profile_missing"],
+        },
+        detail: { type: "string" },
+      },
+      required: ["code", "detail"],
+      additionalProperties: false,
+    },
+    IndexResultEnvelope: {
+      type: "object",
+      properties: {
+        status: { type: "string", const: "success" },
+        listings: { type: "array", items: openApiSchemaRef("IndexedListing") },
+        warnings: { type: "array", items: openApiSchemaRef("IndexWarning") },
+        repo: {
+          type: "object",
+          properties: {
+            owner: { type: "string" },
+            repo: { type: "string" },
+            ref: { type: "string" },
+            sha: { type: "string" },
+          },
+          required: ["owner", "repo", "ref", "sha"],
+          additionalProperties: false,
+        },
+      },
+      required: ["status", "listings", "warnings", "repo"],
+      additionalProperties: false,
+    },
+    IndexErrorEnvelope: {
+      type: "object",
+      properties: {
+        status: { type: "string", const: "error" },
+        error: {
+          type: "object",
+          properties: {
+            code: {
+              type: "string",
+              enum: [
+                "handle_mismatch",
+                "skill_md_invalid",
+                "name_taken_by_repo",
+                "repo_unreachable",
+                "rate_limited",
+                "repo_url_invalid",
+                "no_skills_found",
+              ],
+            },
+            detail: { type: "string" },
+            hint: { type: "string" },
+            retry_after_seconds: { type: "integer" },
+          },
+          required: ["code", "detail"],
+          additionalProperties: false,
+        },
+      },
+      required: ["status", "error"],
+      additionalProperties: false,
+    },
+    IndexStatusEnvelope: {
+      type: "object",
+      properties: {
+        status: { type: "string", const: "success" },
+        skill_id: { type: "string" },
+        trust_tier: { type: "string", enum: ["first_party", "verified", "community"] },
+        latest_version: { type: "string" },
+        latest_digest: { type: "string" },
+      },
+      required: ["status", "skill_id", "trust_tier", "latest_version", "latest_digest"],
+      additionalProperties: false,
+    },
+    ClaimRequest: {
+      type: "object",
+      properties: {
+        actor: { type: "string" },
+        owner: { type: "string" },
+        name: { type: "string" },
+      },
+      required: ["actor", "owner", "name"],
+      additionalProperties: false,
+    },
     PublicHarnessEnvelope: {
       type: "object",
       properties: {

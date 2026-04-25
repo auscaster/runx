@@ -52,6 +52,11 @@ path into that push step so the boundary can push the branch, open or refresh
 the draft PR, and then rehydrate the issue thread. Each step gets only the
 scopes it needs. See the execution profile (`X.yaml`) for the full step graph.
 
+The lane assumes the repo already has an initialized scafld workspace. It does
+not run `scafld init` or `scafld update` inside the bounded change flow,
+because bootstrap or managed-bundle refresh widens scope before the task branch
+is even bound.
+
 The important contract shape is:
 
 - scafld owns workflow state such as spec paths, branch binding, sync status,

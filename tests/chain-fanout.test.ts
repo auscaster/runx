@@ -5,12 +5,14 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { runCli } from "../packages/cli/src/index.js";
+import { createDefaultSkillAdapters } from "@runxhq/adapters";
 import { inspectLocalGraph, runLocalGraph, type Caller } from "@runxhq/core/runner-local";
 
 const nonInteractiveCaller: Caller = {
   resolve: async () => undefined,
   report: () => undefined,
 };
+const adapters = createDefaultSkillAdapters();
 
 describe("local fanout chain runner", () => {
   it("runs a fanout group with all-success sync policy", async () => {
@@ -25,6 +27,7 @@ describe("local fanout chain runner", () => {
         receiptDir,
         runxHome,
         env: process.env,
+        adapters,
       });
 
       expect(result.status).toBe("success");
@@ -100,6 +103,7 @@ steps:
         receiptDir,
         runxHome,
         env: process.env,
+        adapters,
       });
       const durationMs = performance.now() - started;
 
@@ -126,6 +130,7 @@ steps:
         receiptDir,
         runxHome,
         env: process.env,
+        adapters,
       });
 
       expect(result.status).toBe("success");
@@ -176,6 +181,7 @@ steps:
         receiptDir,
         runxHome,
         env: process.env,
+        adapters,
       });
 
       expect(result.status).toBe("failure");
@@ -197,6 +203,75 @@ steps:
     }
   });
 
+  it("applies graph transition policy before fanout branch execution", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-fanout-transition-policy-"));
+    const graphPath = path.join(tempDir, "graph.yaml");
+    const receiptDir = path.join(tempDir, "receipts");
+    const runxHome = path.join(tempDir, "home");
+    const jsonSkillPath = path.resolve("fixtures/skills/json-output");
+
+    try {
+      await writeFile(
+        graphPath,
+        `name: fanout-transition-policy
+policy:
+  transitions:
+    - to: market
+      field: seed.allowed
+      equals: true
+fanout:
+  groups:
+    advisors:
+      strategy: all
+      on_branch_failure: halt
+steps:
+  - id: seed
+    skill: ${jsonSkillPath}
+    inputs:
+      allowed: false
+  - id: market
+    mode: fanout
+    fanout_group: advisors
+    skill: ${jsonSkillPath}
+    inputs:
+      recommendation: go
+  - id: risk
+    mode: fanout
+    fanout_group: advisors
+    skill: ${jsonSkillPath}
+    inputs:
+      risk_score: 0.2
+`,
+      );
+
+      const result = await runLocalGraph({
+        graphPath,
+        caller: nonInteractiveCaller,
+        receiptDir,
+        runxHome,
+        env: process.env,
+        adapters,
+      });
+
+      expect(result.status).toBe("policy_denied");
+      if (result.status !== "policy_denied") {
+        return;
+      }
+      expect(result.reasons).toEqual([
+        "transition policy blocked step 'market': expected seed.allowed == true",
+      ]);
+      expect(result.receipt?.steps.map((step) => step.step_id)).toEqual(["seed", "market"]);
+      expect(result.receipt?.steps[1]).toMatchObject({
+        step_id: "market",
+        status: "failure",
+        disposition: "policy_denied",
+        fanout_group: "advisors",
+      });
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("exposes sync policy decisions through composite receipt inspection and the CLI shell", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-fanout-inspect-"));
     const receiptDir = path.join(tempDir, "receipts");
@@ -210,6 +285,7 @@ steps:
         receiptDir,
         runxHome: path.join(tempDir, "home"),
         env: process.env,
+        adapters,
       });
       expect(result.status).toBe("success");
       if (result.status !== "success") {

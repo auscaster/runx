@@ -7,12 +7,12 @@ status: "draft"
 task:
   title: "Converge runx onto one real workspace and remove nested-repo hybrid debt"
   summary: >
-    The current parent repo plus nested oss/cloud repos plus local link edges is
-    still a hybrid. The ideal shape from here is a single authoritative
-    workspace rooted at /home/kam/dev/runx, with workspace package edges instead
-    of link:../oss references and no gitlink-style nested repos. Converge the
-    topology so the package graph, tooling, and versioning all describe the same
-    reality.
+    The parent workspace root now exists, but the current parent repo plus
+    nested oss/cloud git repos is still a hybrid. The ideal shape from here is a
+    single authoritative workspace rooted at /home/kam/dev/runx, with manifest
+    dependencies expressed as workspace package edges and no gitlink-style nested
+    repos. Converge the topology so the package graph, tooling, and versioning
+    all describe the same reality.
   size: "large"
   risk_level: "high"
   context:
@@ -24,10 +24,10 @@ task:
     files_impacted:
       - path: "../package.json"
         lines: "all"
-        reason: "Parent repo should become the one authoritative workspace root."
+        reason: "Parent repo is already the workspace root and should become the only authoritative repo root."
       - path: "../pnpm-workspace.yaml"
         lines: "all"
-        reason: "Workspace membership should be declared at the real root."
+        reason: "Workspace membership is declared at the real root and should stay authoritative."
       - path: "../cloud/package.json"
         lines: "all"
         reason: "Cloud should consume @runxhq/* through workspace refs, not local links."
@@ -48,8 +48,8 @@ task:
       - "There is exactly one authoritative git/workspace root."
       - "Cloud and oss remain separately buildable within the unified workspace."
   objectives:
-    - "Promote /home/kam/dev/runx to the only real workspace root."
-    - "Replace cloud link dependencies with workspace package edges."
+    - "Finish promoting /home/kam/dev/runx to the only real workspace root."
+    - "Keep cloud manifest dependencies on workspace package edges instead of link:../oss references."
     - "Remove nested gitlink-style repos and normalize tooling and CI around the root."
   scope:
     in_scope:
@@ -123,23 +123,26 @@ planning_log:
   - timestamp: "2026-04-24T00:45:00Z"
     actor: "agent"
     summary: "Chose one real workspace as the target end state instead of keeping the current parent-plus-nested-repo hybrid."
+  - timestamp: "2026-04-25T14:31:49Z"
+    actor: "agent"
+    summary: "Rebased the draft on the current root workspace manifests; remaining topology risk is nested gitlink removal and root-driven verification."
 
 phases:
   - id: "phase1"
-    name: "Promote the parent repo to the workspace root"
-    objective: "Make /home/kam/dev/runx the one package-manager root with explicit workspace membership."
+    name: "Normalize the existing parent workspace root"
+    objective: "Keep /home/kam/dev/runx as the package-manager root with explicit workspace membership and root-level commands."
     changes:
       - file: "../package.json"
-        action: "create"
+        action: "update"
         lines: "all"
         content_spec: >
-          Add or expand a root package manifest that exposes the authoritative
-          workspace-level scripts and package manager settings.
+          Audit and expand the existing root package manifest so it exposes the
+          authoritative workspace-level scripts and package manager settings.
       - file: "../pnpm-workspace.yaml"
-        action: "create"
+        action: "update"
         lines: "all"
         content_spec: >
-          Declare oss and cloud workspace members from the real root.
+          Keep oss and cloud workspace members declared from the real root.
       - file: "../oss/package.json"
         action: "update"
         lines: "all"
@@ -176,7 +179,10 @@ phases:
         action: "update"
         lines: "all"
         content_spec: >
-          Refresh the lockfile against workspace-based package edges.
+          Refresh the lockfile against workspace-based package edges. PNPM may
+          still render resolved workspace packages as link: entries in the
+          lockfile; the invariant is that package manifests no longer declare
+          link:../oss dependencies.
       - file: "../cloud/tsconfig.base.json"
         action: "update"
         lines: "all"
@@ -233,9 +239,9 @@ phases:
 rollback:
   strategy: "per_phase"
   commands:
-    phase1: "git checkout HEAD -- ../package.json ../pnpm-workspace.yaml ../oss/package.json ../cloud/package.json"
-    phase2: "git checkout HEAD -- ../cloud/package.json ../cloud/pnpm-lock.yaml ../cloud/tsconfig.base.json"
-    phase3: "git checkout HEAD -- ../.github/workflows ../oss ../cloud"
+    phase1: "git -C /home/kam/dev/runx checkout HEAD -- package.json pnpm-workspace.yaml && git -C /home/kam/dev/runx/oss checkout HEAD -- package.json && git -C /home/kam/dev/runx/cloud checkout HEAD -- package.json"
+    phase2: "git -C /home/kam/dev/runx/cloud checkout HEAD -- package.json pnpm-lock.yaml tsconfig.base.json && git -C /home/kam/dev/runx checkout HEAD -- pnpm-lock.yaml"
+    phase3: "git -C /home/kam/dev/runx checkout HEAD -- .github/workflows oss cloud"
 
 metadata:
   estimated_effort_hours: 12

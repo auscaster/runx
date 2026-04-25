@@ -22,7 +22,7 @@ export class HttpCachedRegistryStore implements RegistryStore {
 
   async getVersion(skillId: string, version?: string): Promise<RegistrySkillVersion | undefined> {
     const cached = await this.options.cache.getVersion(skillId, version);
-    if (cached) {
+    if (cached && version) {
       return cached;
     }
 
@@ -35,7 +35,7 @@ export class HttpCachedRegistryStore implements RegistryStore {
       channel: this.options.channel,
     });
     if (!acquired) {
-      return undefined;
+      return cached;
     }
 
     const record = acquiredToRegistrySkillVersion(acquired, this.options.now?.() ?? new Date());

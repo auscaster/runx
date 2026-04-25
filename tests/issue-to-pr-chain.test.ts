@@ -31,7 +31,6 @@ describe("issue-to-PR composite skill", () => {
     const chain = runner.source.chain;
 
     expect(chain.steps.map((step) => step.id)).toEqual([
-      "scafld-init",
       "scafld-new",
       "author-spec",
       "write-spec",
@@ -347,7 +346,6 @@ describe("issue-to-PR composite skill", () => {
         },
       });
       expect(result.receipt.steps.map((step) => [step.step_id, step.status])).toEqual([
-        ["scafld-init", "success"],
         ["scafld-new", "success"],
         ["author-spec", "success"],
         ["write-spec", "success"],

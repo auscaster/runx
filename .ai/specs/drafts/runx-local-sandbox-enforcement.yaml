@@ -1,0 +1,93 @@
+spec_version: "1.1"
+task_id: "runx-local-sandbox-enforcement"
+created: "2026-04-25T15:35:00Z"
+updated: "2026-04-25T15:35:00Z"
+status: "draft"
+
+task:
+  title: "Enforce local sandbox policy instead of recording declarations only"
+  summary: >
+    Local cli-tool and MCP execution currently validate sandbox declarations and
+    record declared policy in receipts, but the spawned processes still receive
+    ambient filesystem, network, cwd, and environment access. Close that trust
+    gap or make unsupported enforcement explicit at admission time.
+  size: "large"
+  risk_level: "high"
+  context:
+    packages:
+      - "packages/core"
+      - "packages/adapters"
+      - "packages/cli"
+    files_impacted:
+      - path: "packages/core/src/policy/sandbox.ts"
+        lines: "all"
+        reason: "Separate policy validation from runtime enforcement capabilities."
+      - path: "packages/adapters/src/cli-tool/index.ts"
+        lines: "process spawn and environment assembly"
+        reason: "Apply cwd, env, filesystem, and network enforcement to local tools."
+      - path: "packages/core/src/mcp/index.ts"
+        lines: "process spawn"
+        reason: "Apply the same enforcement model to MCP stdio servers."
+      - path: "packages/core/src/receipts/index.ts"
+        lines: "sandbox metadata"
+        reason: "Receipts must report enforced, unsupported, or degraded guarantees truthfully."
+  objectives:
+    - "Define which sandbox modes are enforceable on local Node runtimes and which require host support."
+    - "Default local process environments to an explicit allowlist rather than full ambient env."
+    - "Constrain cwd and write access for readonly and workspace-write modes."
+    - "Make MCP server execution use the same sandbox enforcement path as cli-tool execution."
+    - "Fail closed or require approval when a declared sandbox cannot be enforced."
+  scope:
+    in_scope:
+      - "Local process execution for cli-tool and MCP sources."
+      - "Receipt metadata that distinguishes enforced controls from declared-only controls."
+      - "Focused tests for env leakage, cwd escape, write denial, and MCP parity."
+    out_of_scope:
+      - "Container orchestration or remote sandbox providers."
+      - "Changing skill authoring syntax unless required to express enforcement capabilities."
+  acceptance:
+    validation_profile: "strict"
+    definition_of_done:
+      - id: "dod1"
+        description: "A readonly cli-tool skill cannot write outside allowed paths during local execution."
+      - id: "dod2"
+        description: "Ambient secrets are not passed to cli-tool or MCP processes unless explicitly allowlisted."
+      - id: "dod3"
+        description: "Network-disabled declarations are either enforced or denied with a clear policy reason."
+      - id: "dod4"
+        description: "Receipts no longer claim declared-policy-only when controls were actually enforced, and they fail closed when controls are unsupported."
+    validation:
+      - id: "v1"
+        type: "compile"
+        description: "OSS typecheck stays green."
+        command: "pnpm typecheck"
+        cwd: "."
+        expected: "exit code 0"
+      - id: "v2"
+        type: "test"
+        description: "Sandbox coverage proves env, cwd, filesystem, and MCP behavior."
+        command: "pnpm exec vitest run tests/cli-tool-sandbox.test.ts tests/mcp-skill-runner.test.ts packages/adapters/src/cli-tool/index.test.ts packages/adapters/src/mcp/index.test.ts"
+        cwd: "."
+        expected: "exit code 0"
+
+planning_log:
+  - timestamp: "2026-04-25T15:35:00Z"
+    actor: "agent"
+    summary: "Created from deep review finding that sandbox policy is admission and metadata only."
+
+phases:
+  - id: "phase1"
+    name: "Capability Matrix"
+    objective: "Define enforceable local sandbox capabilities and fail-closed behavior."
+    status: "pending"
+  - id: "phase2"
+    name: "Process Enforcement"
+    objective: "Implement shared cli-tool/MCP process sandbox assembly for cwd, env, filesystem, and network controls."
+    status: "pending"
+  - id: "phase3"
+    name: "Receipts And Tests"
+    objective: "Update receipt metadata and add regression coverage for enforcement and unsupported-control denial."
+    status: "pending"
+
+metadata:
+  estimated_effort_hours: 10

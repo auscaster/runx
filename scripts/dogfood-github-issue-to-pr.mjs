@@ -43,7 +43,6 @@ const result = await runLocalSkill({
     fixture: workspace,
     task_id: taskId,
     name: branchName,
-    bind_current: false,
     thread_title: firstNonEmptyString(before.title, `Issue #${issueRef.issue_number}`),
     thread_body: firstIssueBody(before),
     thread_locator: issueRef.thread_locator,
