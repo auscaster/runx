@@ -374,6 +374,7 @@ export function buildHostedOpenApiRuntimeSchemas(): Readonly<Record<string, unkn
           type: "array",
           items: openApiSchemaRef("HostedRunSummary"),
         },
+        next_cursor: { type: "string" },
       },
       required: ["status", "runs"],
       additionalProperties: false,

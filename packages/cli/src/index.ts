@@ -35,6 +35,9 @@ export interface CliServices {
 export interface ParsedArgs {
   readonly command?: string;
   readonly subcommand?: string;
+  readonly surfaceAction?: "run" | "resume" | "inspect";
+  readonly surfaceRef?: string;
+  readonly surfaceInputPath?: string;
   readonly mcpAction?: "serve";
   readonly mcpRefs?: readonly string[];
   readonly doctorPath?: string;
@@ -115,6 +118,7 @@ const builtinRootCommands = new Set([
   "doctor",
   "docs",
   "dev",
+  "surface",
   "mcp",
   "list",
   "tool",
@@ -175,6 +179,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   let nonInteractive = false;
   let json = false;
   let answersPath: string | undefined;
+  let surfaceInputPath: string | undefined;
   let receiptDir: string | undefined;
   let resumeReceiptId: string | undefined;
   let runner: string | undefined;
@@ -216,6 +221,11 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
       continue;
     }
 
+    if (knownKey === "inputJson") {
+      surfaceInputPath = String(value);
+      continue;
+    }
+
     if (knownKey === "receiptDir") {
       receiptDir = String(value);
       continue;
@@ -249,6 +259,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
   const isDiff = command === "diff";
   const isDoctor = command === "doctor";
   const isDocs = command === "docs";
+  const isSurface = command === "surface";
   const isTool = command === "tool";
   const isToolSearch = isTool && positionals[0] === "search";
   const isToolInspect = isTool && positionals[0] === "inspect";
@@ -339,21 +350,28 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
                   ? omitInputs(inputs, ["fix", "explain", "listDiagnostics", "list-diagnostics"])
                   : isDocs
                     ? inputs
-                  : isTool
-                    ? omitInputs(inputs, ["all", "source"])
-                    : isDev
-                      ? omitInputs(inputs, ["lane", "record", "realAgents", "real-agents", "watch"])
-                      : isMcp
-                        ? inputs
-                      : isList
-                        ? omitInputs(inputs, ["okOnly", "ok-only", "invalidOnly", "invalid-only"])
-                          : isExportReceipts
-                          ? omitInputs(inputs, ["trainable", "since", "until", "status", "source"])
-                          : inputs;
+                    : isSurface
+                      ? omitInputs(inputs, ["inputJson", "input-json"])
+                      : isTool
+                        ? omitInputs(inputs, ["all", "source"])
+                        : isDev
+                          ? omitInputs(inputs, ["lane", "record", "realAgents", "real-agents", "watch"])
+                          : isMcp
+                            ? inputs
+                            : isList
+                              ? omitInputs(inputs, ["okOnly", "ok-only", "invalidOnly", "invalid-only"])
+                              : isExportReceipts
+                                ? omitInputs(inputs, ["trainable", "since", "until", "status", "source"])
+                                : inputs;
 
   return {
     command,
     subcommand: positionals[0],
+    surfaceAction: isSurface && (positionals[0] === "run" || positionals[0] === "resume" || positionals[0] === "inspect")
+      ? positionals[0]
+      : undefined,
+    surfaceRef: isSurface ? positionals[1] : undefined,
+    surfaceInputPath,
     mcpAction: isMcp && positionals[0] === "serve" ? "serve" : undefined,
     mcpRefs: isMcp && positionals[0] === "serve" ? positionals.slice(1) : undefined,
     doctorPath: isDoctor ? positionals[0] : undefined,
@@ -458,6 +476,9 @@ function isSupportedCommand(parsed: ParsedArgs): boolean {
     return true;
   }
   if (parsed.command === "docs" && parsed.docsAction) {
+    return true;
+  }
+  if (parsed.command === "surface" && parsed.surfaceAction && parsed.surfaceRef) {
     return true;
   }
   if (parsed.command === "tool" && parsed.toolAction === "search" && parsed.searchQuery) {

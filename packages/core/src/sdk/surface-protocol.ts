@@ -1,4 +1,5 @@
 import type { ResolutionRequest, ResolutionResponse } from "../executor/index.js";
+import { inspectLocalRunState } from "../runner-local/index.js";
 import type { AuthResolver, Caller, ExecutionEvent, RunLocalSkillResult } from "../runner-local/index.js";
 
 // Surface bridges let external hosts act as surfaces over the runx kernel.
@@ -8,6 +9,7 @@ export interface SurfaceRunOptions {
   readonly skillPath: string;
   readonly inputs?: Readonly<Record<string, unknown>>;
   readonly answersPath?: string;
+  readonly runner?: string;
   readonly receiptDir?: string;
   readonly runxHome?: string;
   readonly parentReceipt?: string;
@@ -45,6 +47,7 @@ export type SurfaceBoundaryResolver = (
 
 export interface SurfaceBridgeOptions {
   readonly execute: SurfaceSkillExecutor;
+  readonly inspect?: SurfaceStateInspector;
 }
 
 export interface SurfacePausedResult {
@@ -87,6 +90,83 @@ export type SurfaceRunResult =
   | SurfaceFailedResult
   | SurfaceDeniedResult;
 
+export interface SurfaceRunVerification {
+  readonly status: "verified" | "unverified" | "invalid";
+  readonly reason?: string;
+}
+
+export interface SurfaceRunLineage {
+  readonly kind: "rerun";
+  readonly sourceRunId: string;
+  readonly sourceReceiptId?: string;
+}
+
+export interface SurfaceRunApproval {
+  readonly gateId?: string;
+  readonly gateType?: string;
+  readonly decision?: "approved" | "denied";
+  readonly reason?: string;
+}
+
+export interface SurfaceInspectOptions {
+  readonly receiptDir?: string;
+  readonly runxHome?: string;
+}
+
+export type SurfaceStateInspector = (
+  referenceId: string,
+  options?: SurfaceInspectOptions,
+) => Promise<SurfaceRunState>;
+
+export interface SurfacePausedState {
+  readonly status: "paused";
+  readonly skillName: string;
+  readonly runId: string;
+  readonly requestedPath?: string;
+  readonly resolvedPath?: string;
+  readonly selectedRunner?: string;
+  readonly requests: readonly ResolutionRequest[];
+  readonly stepIds?: readonly string[];
+  readonly stepLabels?: readonly string[];
+  readonly lineage?: SurfaceRunLineage;
+}
+
+interface SurfaceTerminalState {
+  readonly kind: "skill_execution" | "graph_execution";
+  readonly skillName: string;
+  readonly runId: string;
+  readonly receiptId: string;
+  readonly verification: SurfaceRunVerification;
+  readonly sourceType?: string;
+  readonly startedAt?: string;
+  readonly completedAt?: string;
+  readonly disposition?: string;
+  readonly outcomeState?: string;
+  readonly actors?: readonly string[];
+  readonly artifactTypes?: readonly string[];
+  readonly runnerProvider?: string;
+  readonly approval?: SurfaceRunApproval;
+  readonly lineage?: SurfaceRunLineage;
+}
+
+export interface SurfaceCompletedState extends SurfaceTerminalState {
+  readonly status: "completed";
+}
+
+export interface SurfaceFailedState extends SurfaceTerminalState {
+  readonly status: "failed";
+}
+
+export interface SurfaceDeniedState extends SurfaceTerminalState {
+  readonly status: "denied";
+}
+
+export type SurfaceRunState =
+  | SurfacePausedState
+  | SurfaceCompletedState
+  | SurfaceFailedState
+  | SurfaceDeniedState;
+
 export interface SurfaceBridge {
   readonly run: (
     options: SurfaceRunOptions & {
@@ -95,10 +175,15 @@ export interface SurfaceBridge {
   ) => Promise<SurfaceRunResult>;
   readonly resume: (
     runId: string,
-    options: Omit<SurfaceRunOptions, "resumeFromRunId"> & {
+    options: Omit<SurfaceRunOptions, "resumeFromRunId" | "skillPath"> & {
+      readonly skillPath?: string;
       readonly resolver?: SurfaceBoundaryResolver;
     },
   ) => Promise<SurfaceRunResult>;
+  readonly inspect: (
+    referenceId: string,
+    options?: SurfaceInspectOptions,
+  ) => Promise<SurfaceRunState>;
 }
 
 export interface OpenAISurfaceResponse {
@@ -145,7 +230,8 @@ export interface ProviderSurfaceAdapter<TResponse> {
   ) => Promise<TResponse>;
   readonly resume: (
     runId: string,
-    options: Omit<SurfaceRunOptions, "resumeFromRunId"> & {
+    options: Omit<SurfaceRunOptions, "resumeFromRunId" | "skillPath"> & {
+      readonly skillPath?: string;
       readonly resolver?: SurfaceBoundaryResolver;
     },
   ) => Promise<TResponse>;
@@ -173,10 +259,18 @@ export function createSurfaceBridge(options: SurfaceBridgeOptions): SurfaceBridg
       return normalizeRunResult(result, events);
     },
     resume: async (runId, runOptions) => {
+      const skillPath = runOptions.skillPath ?? await resolveSurfaceResumeSkillPath(runId, runOptions, options.inspect);
       return await bridge.run({
         ...runOptions,
+        skillPath,
         resumeFromRunId: runId,
       });
+    },
+    inspect: async (referenceId, inspectOptions) => {
+      if (!options.inspect) {
+        throw new Error("This surface bridge does not support inspect().");
+      }
+      return await options.inspect(referenceId, inspectOptions);
     },
   };
   return bridge;
@@ -292,6 +386,110 @@ function normalizeRunResult(result: RunLocalSkillResult, events: readonly Execut
     error: result.execution.errorMessage ?? (result.execution.stderr || result.execution.stdout),
     events,
   };
+}
+
+export async function inspectLocalSurfaceState(
+  referenceId: string,
+  options: SurfaceInspectOptions & {
+    readonly env?: NodeJS.ProcessEnv;
+  } = {},
+): Promise<SurfaceRunState> {
+  const inspected = await inspectLocalRunState({
+    referenceId,
+    receiptDir: options.receiptDir,
+    runxHome: options.runxHome,
+    env: options.env,
+  });
+  if (inspected.status === "paused") {
+    return {
+      status: "paused",
+      skillName: inspected.pending.skillName ?? deriveSkillNameFromPending(inspected.pending),
+      runId: inspected.runId,
+      requestedPath: inspected.pending.skillPath,
+      resolvedPath: inspected.pending.resolvedSkillPath,
+      selectedRunner: inspected.pending.selectedRunner,
+      requests: inspected.pending.requests ?? [],
+      stepIds: inspected.pending.stepIds,
+      stepLabels: inspected.pending.stepLabels,
+      lineage: inspected.pending.lineage,
+    };
+  }
+
+  const status = inspectStatus(inspected.summary);
+  return {
+    status,
+    kind: inspected.summary.kind,
+    skillName: inspected.summary.name,
+    runId: inspected.runId,
+    receiptId: inspected.receipt.id,
+    verification: inspected.verification,
+    sourceType: inspected.summary.sourceType,
+    startedAt: inspected.summary.startedAt,
+    completedAt: inspected.summary.completedAt,
+    disposition: inspected.summary.disposition,
+    outcomeState: inspected.summary.outcomeState,
+    actors: inspected.summary.actors,
+    artifactTypes: inspected.summary.artifactTypes,
+    runnerProvider: inspected.summary.runnerProvider,
+    approval: inspected.summary.approval,
+    lineage: inspected.summary.lineage,
+  };
+}
+
+function inspectStatus(summary: {
+  readonly status: string;
+  readonly disposition?: string;
+}): SurfaceCompletedState["status"] | SurfaceFailedState["status"] | SurfaceDeniedState["status"] {
+  if (summary.disposition === "policy_denied") {
+    return "denied";
+  }
+  return summary.status === "success" ? "completed" : "failed";
+}
+
+function deriveSkillNameFromPending(pending: {
+  readonly skillName?: string;
+  readonly skillPath?: string;
+  readonly resolvedSkillPath?: string;
+}): string {
+  if (pending.skillName && pending.skillName.trim().length > 0) {
+    return pending.skillName;
+  }
+  const candidate = pending.resolvedSkillPath ?? pending.skillPath;
+  if (!candidate) {
+    return "unknown";
+  }
+  const normalized = candidate.replace(/\\/g, "/");
+  const trimmed = normalized.endsWith("/SKILL.md")
+    ? normalized.slice(0, -"/SKILL.md".length)
+    : normalized.endsWith(".md")
+      ? normalized.slice(0, -".md".length)
+      : normalized;
+  const segments = trimmed.split("/").filter((segment) => segment.length > 0);
+  return segments[segments.length - 1] ?? "unknown";
+}
+
+async function resolveSurfaceResumeSkillPath(
+  runId: string,
+  options: SurfaceInspectOptions & {
+    readonly skillPath?: string;
+  },
+  inspect?: SurfaceStateInspector,
+): Promise<string> {
+  if (options.skillPath) {
+    return options.skillPath;
+  }
+  if (!inspect) {
+    throw new Error(`Run '${runId}' cannot be resumed because this surface bridge cannot resolve pending skill paths.`);
+  }
+  const state = await inspect(runId, options);
+  if (state.status !== "paused") {
+    throw new Error(`Run '${runId}' is not paused and cannot be resumed.`);
+  }
+  const skillPath = state.requestedPath ?? state.resolvedPath;
+  if (!skillPath) {
+    throw new Error(`Run '${runId}' cannot be resumed because no pending skill path was recorded.`);
+  }
+  return skillPath;
 }
 
 function toOpenAiResponse(result: SurfaceRunResult): OpenAISurfaceResponse {

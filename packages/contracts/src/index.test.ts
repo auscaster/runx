@@ -133,6 +133,11 @@ describe("@runxhq/contracts", () => {
         next_cursor: { type: "string" },
       }),
     });
+    expect(schemas.RunListEnvelope).toMatchObject({
+      properties: expect.objectContaining({
+        next_cursor: { type: "string" },
+      }),
+    });
   });
 
   it("validates auxiliary schema payloads", () => {

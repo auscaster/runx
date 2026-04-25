@@ -9,6 +9,7 @@ import { createFileRegistryStore, ingestSkillMarkdown } from "../registry/index.
 import { hashString } from "../receipts/index.js";
 import {
   connectPreprovision,
+  createRunxSurfaceBridge,
   createRunxSdk,
   createStructuredCaller,
   inspect,
@@ -86,6 +87,60 @@ describe("TypeScript SDK", () => {
         }),
       }),
     ]);
+  });
+
+  it("exposes run, inspect, and resume through the shared surface bridge", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-sdk-surface-"));
+    const receiptDir = path.join(tempDir, "receipts");
+
+    try {
+      const bridge = createRunxSurfaceBridge({
+        env: { ...process.env, RUNX_CWD: process.cwd(), RUNX_HOME: path.join(tempDir, "home") },
+        receiptDir,
+        adapters: createDefaultSkillAdapters(),
+      });
+
+      const paused = await bridge.run({
+        skillPath: "fixtures/skills/echo",
+      });
+      expect(paused.status).toBe("paused");
+      if (paused.status !== "paused") {
+        return;
+      }
+
+      const inspectedPaused = await bridge.inspect(paused.runId, { receiptDir });
+      expect(inspectedPaused).toMatchObject({
+        status: "paused",
+        runId: paused.runId,
+        skillName: "echo",
+      });
+
+      const completed = await bridge.resume(paused.runId, {
+        receiptDir,
+        resolver: ({ request }) => (
+          request.kind === "input"
+            ? { message: "from-sdk-surface" }
+            : undefined
+        ),
+      });
+      expect(completed).toMatchObject({
+        status: "completed",
+        skillName: "echo",
+        output: "from-sdk-surface",
+      });
+      if (completed.status !== "completed") {
+        return;
+      }
+
+      await expect(bridge.inspect(completed.receiptId, { receiptDir })).resolves.toMatchObject({
+        status: "completed",
+        receiptId: completed.receiptId,
+        kind: "skill_execution",
+        skillName: "echo",
+      });
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("can inspect imported tools and local manifest-backed tools", async () => {

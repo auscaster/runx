@@ -73,6 +73,7 @@ export async function readResumedSelectedRunner(receiptDir: string, runId: strin
 }
 
 export interface PendingRunState {
+  readonly skillName?: string;
   readonly skillPath?: string;
   readonly resolvedSkillPath?: string;
   readonly selectedRunner?: string;
@@ -93,12 +94,16 @@ export async function readPendingRunState(receiptDir: string, runId: string): Pr
       continue;
     }
     const kind = typeof entry.data.kind === "string" ? entry.data.kind : "";
+    if (kind === "run_completed" || kind === "run_failed") {
+      return undefined;
+    }
     const detail = isPlainRecord(entry.data.detail) ? entry.data.detail : undefined;
     if (!detail || kind !== "resolution_requested") {
       continue;
     }
     const requests = parseRecordedRequests(detail.requests, `ledger(${runId}).detail.requests`);
     return {
+      skillName: entry.meta.producer.skill,
       skillPath: typeof detail.skill_path === "string" ? detail.skill_path : undefined,
       resolvedSkillPath: typeof detail.resolved_path === "string" ? detail.resolved_path : undefined,
       selectedRunner: typeof detail.selected_runner === "string" ? detail.selected_runner : undefined,

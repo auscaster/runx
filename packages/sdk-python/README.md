@@ -30,6 +30,10 @@ for result in client.search_skills("sourcey"):
 # Run a skill
 report = client.run_skill("skills/sourcey", inputs={"project": "."})
 print(report["status"])
+
+# Use the canonical surface control path
+surface = client.surface_run("skills/sourcey", inputs={"project": "."})
+print(surface["status"])
 ```
 
 ## Framework adapters
@@ -44,6 +48,12 @@ response = adapter.run("skills/sourcey")
 ```
 
 The bridge translates paused runs (required inputs, approval gates) into framework-native tool messages, so your agent loop can resolve them and resume.
+
+The same canonical control helpers are available directly on `RunxClient`:
+
+- `surface_run(...)`
+- `surface_resume(...)`
+- `surface_inspect(...)`
 
 ## Links
 

@@ -85,6 +85,7 @@ import {
   renderToolCommandResult,
   type ToolCommandArgs,
 } from "./commands/tool.js";
+import { handleSurfaceCommand } from "./commands/surface.js";
 import { ensureRunxInstallState } from "./runx-state.js";
 import { resolveBundledCliVoiceProfilePath } from "./runtime-assets.js";
 import { resolveRunnableSkillReference, runSkillSearch } from "./skill-refs.js";
@@ -144,6 +145,22 @@ export async function dispatchCli(
       io.stdout.write(renderDoctorResult(result, env));
     }
     return result.status === "success" ? 0 : 1;
+  }
+
+  if (parsed.command === "surface" && parsed.surfaceAction && parsed.surfaceRef) {
+    const result = await handleSurfaceCommand({
+      surfaceAction: parsed.surfaceAction,
+      surfaceRef: parsed.surfaceRef,
+      surfaceInputPath: parsed.surfaceInputPath,
+      inputs: parsed.inputs,
+      receiptDir: parsed.receiptDir,
+      runner: parsed.runner,
+    }, io, env, {
+      resolveRegistryStoreForChains,
+      resolveDefaultReceiptDir,
+    });
+    io.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return 0;
   }
 
   if (parsed.command === "docs" && parsed.docsAction) {

@@ -13,6 +13,7 @@ from runx import (
     create_openai_surface_adapter,
     create_surface_bridge,
     normalize_surface_result,
+    normalize_surface_state,
 )
 
 
@@ -78,6 +79,32 @@ class RunxClientTests(unittest.TestCase):
                 ["skill", "skills/example", "--message", "hi", "--non-interactive", "--json"],
             )
 
+    def test_invokes_surface_cli_commands_with_json_payloads(self) -> None:
+        with TemporaryDirectory() as tmp:
+            fake_runx = Path(tmp) / "fake_runx.py"
+            output_path = Path(tmp) / "payloads.json"
+            fake_runx.write_text(
+                textwrap.dedent(
+                    f"""
+                    import json
+                    import pathlib
+                    import sys
+
+                    args = sys.argv[1:]
+                    payload = sys.stdin.read()
+                    pathlib.Path({str(output_path)!r}).write_text(json.dumps({{"args": args, "payload": payload}}))
+                    print(json.dumps({{"status": "paused", "skillName": "echo", "runId": "run-123", "requests": []}}))
+                    """
+                ).strip()
+            )
+
+            client = RunxClient(command=(sys.executable, str(fake_runx)))
+            client.surface_run("skills/example", inputs={"message": "hi"})
+
+            recorded = json.loads(output_path.read_text())
+            self.assertEqual(recorded["args"], ["surface", "run", "skills/example", "--input-json", "-", "--json"])
+            self.assertEqual(json.loads(recorded["payload"])["inputs"]["message"], "hi")
+
     def test_resume_run_posts_answers_and_approvals_json(self) -> None:
         with TemporaryDirectory() as tmp:
             fake_runx = Path(tmp) / "fake_runx.py"
@@ -110,27 +137,30 @@ class RunxClientTests(unittest.TestCase):
     def test_surface_bridge_resumes_paused_runs(self) -> None:
         class FakeClient:
             def __init__(self) -> None:
-                self.resume_calls: list[tuple[str, dict[str, object], dict[str, bool]]] = []
+                self.resume_calls: list[tuple[str, list[dict[str, object]]]] = []
 
-            def run_skill(self, skill_path: str, inputs=None, non_interactive: bool = True):
+            def surface_run(self, skill_path: str, inputs=None):
                 return {
-                    "status": "needs_resolution",
-                    "run_id": "run-123",
-                    "skill": {"name": skill_path},
+                    "status": "paused",
+                    "runId": "run-123",
+                    "skillName": skill_path,
                     "requests": [
                         {"id": "req-1", "kind": "cognitive_work", "prompt": "Need a fix"},
-                        {"kind": "approval", "gate": {"id": "gate-1"}},
+                        {"id": "gate-1", "kind": "approval", "gate": {"id": "gate-1"}},
                     ],
                 }
 
-            def resume_run(self, run_id: str, answers=None, approvals=None):
-                self.resume_calls.append((run_id, dict(answers or {}), dict(approvals or {})))
+            def surface_resume(self, run_id: str, responses=None):
+                self.resume_calls.append((run_id, list(responses or [])))
                 return {
-                    "status": "success",
-                    "skill": {"name": "skills/sourcey"},
-                    "execution": {"stdout": "done"},
-                    "receipt": {"id": "receipt-123"},
+                    "status": "completed",
+                    "skillName": "skills/sourcey",
+                    "output": "done",
+                    "receiptId": "receipt-123",
                 }
+
+            def surface_inspect(self, reference_id: str):
+                raise AssertionError("surface_inspect should not be called")
 
         bridge = create_surface_bridge(FakeClient())
         result = bridge.run(
@@ -143,23 +173,26 @@ class RunxClientTests(unittest.TestCase):
 
     def test_openai_surface_adapter_formats_framework_result(self) -> None:
         class FakeClient:
-            def run_skill(self, skill_path: str, inputs=None, non_interactive: bool = True):
+            def surface_run(self, skill_path: str, inputs=None):
                 return {
-                    "status": "success",
-                    "skill": {"name": skill_path},
-                    "execution": {"stdout": "built docs"},
-                    "receipt": {"id": "receipt-456"},
+                    "status": "completed",
+                    "skillName": skill_path,
+                    "output": "built docs",
+                    "receiptId": "receipt-456",
                 }
 
-            def resume_run(self, run_id: str, answers=None, approvals=None):
-                raise AssertionError("resume_run should not be called")
+            def surface_resume(self, run_id: str, responses=None):
+                raise AssertionError("surface_resume should not be called")
+
+            def surface_inspect(self, reference_id: str):
+                raise AssertionError("surface_inspect should not be called")
 
         adapter = create_openai_surface_adapter(create_surface_bridge(FakeClient()))
         response = adapter.run("skills/sourcey")
 
         self.assertEqual(response["role"], "tool")
         self.assertEqual(response["structuredContent"]["runx"]["status"], "completed")
-        self.assertEqual(response["structuredContent"]["runx"]["receipt_id"], "receipt-456")
+        self.assertEqual(response["structuredContent"]["runx"]["receiptId"], "receipt-456")
 
     def test_normalize_surface_result_maps_denial(self) -> None:
         result = normalize_surface_result(
@@ -186,6 +219,21 @@ class RunxClientTests(unittest.TestCase):
 
         self.assertEqual(surface.status, "completed")
         self.assertEqual(surface.receipt_id, "receipt-321")
+
+    def test_normalize_surface_state_maps_terminal_snapshot(self) -> None:
+        state = normalize_surface_state(
+            {
+                "status": "completed",
+                "kind": "skill_execution",
+                "skillName": "skills/sourcey",
+                "runId": "run-123",
+                "receiptId": "receipt-321",
+                "verification": {"status": "verified"},
+            }
+        )
+
+        self.assertEqual(state.status, "completed")
+        self.assertEqual(state.receipt_id, "receipt-321")
 
 
 if __name__ == "__main__":

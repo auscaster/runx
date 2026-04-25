@@ -12,7 +12,7 @@ import {
   type ReceiptVerification,
 } from "../receipts/index.js";
 import { defaultReceiptDir } from "./receipt-paths.js";
-import { readPendingRunState } from "./inputs.js";
+import { readPendingRunState, type PendingRunState } from "./inputs.js";
 
 export interface InspectLocalGraphOptions {
   readonly graphId: string;
@@ -33,6 +33,20 @@ export interface InspectLocalReceiptResult {
   readonly verification: ReceiptVerification;
   readonly summary: LocalReceiptSummary;
 }
+
+export type InspectLocalRunStateResult =
+  | {
+      readonly status: "paused";
+      readonly runId: string;
+      readonly pending: PendingRunState;
+    }
+  | {
+      readonly status: "terminal";
+      readonly runId: string;
+      readonly receipt: LocalReceipt;
+      readonly verification: ReceiptVerification;
+      readonly summary: LocalReceiptSummary;
+    };
 
 export interface ListLocalHistoryOptions {
   readonly receiptDir?: string;
@@ -205,6 +219,32 @@ export async function inspectLocalReceipt(options: InspectLocalReceiptOptions): 
     receipt,
     verification,
     summary: await summarizeLocalReceipt(receipt, verification, receiptDir),
+  };
+}
+
+export async function inspectLocalRunState(options: {
+  readonly referenceId: string;
+  readonly receiptDir?: string;
+  readonly runxHome?: string;
+  readonly env?: NodeJS.ProcessEnv;
+}): Promise<InspectLocalRunStateResult> {
+  const receiptDir = options.receiptDir ?? defaultReceiptDir(options.env);
+  const pending = await readPendingRunState(receiptDir, options.referenceId);
+  if (pending) {
+    return {
+      status: "paused",
+      runId: options.referenceId,
+      pending,
+    };
+  }
+
+  const resolved = await resolveLocalRunReference(options.referenceId, receiptDir, options.runxHome ?? options.env?.RUNX_HOME);
+  return {
+    status: "terminal",
+    runId: resolved.runId,
+    receipt: resolved.receipt,
+    verification: resolved.verification,
+    summary: await summarizeLocalReceipt(resolved.receipt, resolved.verification, receiptDir, resolved.ledgerEntries),
   };
 }
 
