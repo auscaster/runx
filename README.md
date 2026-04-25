@@ -77,10 +77,10 @@ The intended extension model is:
 - service repos own their product workflows as local capability packs
 - operators execute those workflows through normal skill invocation
 
-Sourcey is the reference shape for this model: the repo exposes an `outreach`
-skill with multiple runners, and operators invoke it with generic runx verbs
-such as `runx outreach --runner status --issue ...`. There is no privileged
-`runx docs ...` path inside the engine.
+Sourcey is the reference shape for this model: from inside the Sourcey repo,
+`runx outreach --runner status --issue ...` resolves the local
+`skills/outreach` capability pack. `outreach` is not a privileged engine
+command, and there is no privileged `runx docs ...` path inside the engine.
 
 ## Standalone Skill Packages
 
