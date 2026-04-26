@@ -1,7 +1,6 @@
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { PassThrough } from "node:stream";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -1183,97 +1182,6 @@ Answer the prompt directly.
     expect(resumed.skill).toBe("sourcey");
   });
 
-  it("exposes a canonical local surface control path", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-cli-surface-"));
-    tempDirs.push(tempDir);
-    const stdout = createMemoryStream();
-    const stderr = createMemoryStream();
-    const env = { ...process.env, RUNX_CWD: process.cwd(), RUNX_RECEIPT_DIR: tempDir };
-
-    const startExit = await runCli(
-      ["surface", "run", "fixtures/skills/echo", "--receipt-dir", tempDir],
-      { stdin: process.stdin, stdout, stderr },
-      env,
-    );
-
-    expect(startExit).toBe(0);
-    expect(stderr.contents()).toBe("");
-    const started = JSON.parse(stdout.contents()) as {
-      status: string;
-      runId: string;
-      skillName: string;
-      requests: Array<{ id: string; kind: string }>;
-    };
-    expect(started).toMatchObject({
-      status: "paused",
-      skillName: "echo",
-      requests: [
-        {
-          kind: "input",
-        },
-      ],
-    });
-
-    stdout.clear();
-    const inspectExit = await runCli(
-      ["surface", "inspect", started.runId, "--receipt-dir", tempDir],
-      { stdin: process.stdin, stdout, stderr },
-      env,
-    );
-
-    expect(inspectExit).toBe(0);
-    const inspectedPaused = JSON.parse(stdout.contents()) as { status: string; runId: string; skillName: string };
-    expect(inspectedPaused).toMatchObject({
-      status: "paused",
-      runId: started.runId,
-      skillName: "echo",
-    });
-
-    stdout.clear();
-    const resumeInput = new PassThrough();
-    const resumeExitPromise = runCli(
-      ["surface", "resume", started.runId, "--receipt-dir", tempDir, "--input-json", "-"],
-      { stdin: resumeInput as unknown as NodeJS.ReadStream, stdout, stderr },
-      env,
-    );
-    resumeInput.end(`${JSON.stringify({
-      responses: [
-        {
-          requestId: started.requests[0]?.id,
-          payload: { message: "from-surface-command" },
-        },
-      ],
-    })}\n`);
-    const resumeExit = await resumeExitPromise;
-
-    expect(resumeExit).toBe(0);
-    const resumed = JSON.parse(stdout.contents()) as {
-      status: string;
-      skillName: string;
-      receiptId: string;
-      output: string;
-    };
-    expect(resumed).toMatchObject({
-      status: "completed",
-      skillName: "echo",
-      output: "from-surface-command",
-    });
-
-    stdout.clear();
-    const inspectCompletedExit = await runCli(
-      ["surface", "inspect", resumed.receiptId, "--receipt-dir", tempDir],
-      { stdin: process.stdin, stdout, stderr },
-      env,
-    );
-
-    expect(inspectCompletedExit).toBe(0);
-    expect(JSON.parse(stdout.contents())).toMatchObject({
-      status: "completed",
-      receiptId: resumed.receiptId,
-      kind: "skill_execution",
-      skillName: "echo",
-    });
-  });
 });
 
 describe("runx list", () => {

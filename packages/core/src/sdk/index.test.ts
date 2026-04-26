@@ -107,6 +107,16 @@ describe("TypeScript SDK", () => {
       if (paused.status !== "paused") {
         return;
       }
+      expect(paused).toMatchObject({
+        skillName: "echo",
+        requests: [
+          {
+            kind: "input",
+          },
+        ],
+      });
+      expect(paused.requests[0]?.id).toBeTruthy();
+      expect(Array.isArray(paused.events)).toBe(true);
 
       const inspectedPaused = await bridge.inspect(paused.runId, { receiptDir });
       expect(inspectedPaused).toMatchObject({
@@ -114,6 +124,17 @@ describe("TypeScript SDK", () => {
         runId: paused.runId,
         skillName: "echo",
       });
+      if (inspectedPaused.status !== "paused") {
+        return;
+      }
+      expect(inspectedPaused.requests).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: paused.requests[0]?.id,
+            kind: "input",
+          }),
+        ]),
+      );
 
       const completed = await bridge.resume(paused.runId, {
         receiptDir,
@@ -131,6 +152,7 @@ describe("TypeScript SDK", () => {
       if (completed.status !== "completed") {
         return;
       }
+      expect(Array.isArray(completed.events)).toBe(true);
 
       await expect(bridge.inspect(completed.receiptId, { receiptDir })).resolves.toMatchObject({
         status: "completed",

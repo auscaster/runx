@@ -45,7 +45,7 @@ importers:
   packages/adapters:
     dependencies:
       '@runxhq/core':
-        specifier: workspace:^0.1.1
+        specifier: workspace:^0.1.4
         version: link:../core
 
   packages/authoring:
@@ -57,16 +57,16 @@ importers:
   packages/cli:
     dependencies:
       '@runxhq/adapters':
-        specifier: workspace:^0.1.1
+        specifier: workspace:^0.1.4
         version: link:../adapters
       '@runxhq/authoring':
-        specifier: workspace:^0.1.1
+        specifier: workspace:^0.1.3
         version: link:../authoring
       '@runxhq/contracts':
-        specifier: workspace:^0.2.0
+        specifier: workspace:^0.2.3
         version: link:../contracts
       '@runxhq/core':
-        specifier: workspace:^0.1.1
+        specifier: workspace:^0.1.4
         version: link:../core
       yaml:
         specifier: ^2.8.3
@@ -81,7 +81,7 @@ importers:
   packages/core:
     dependencies:
       '@runxhq/contracts':
-        specifier: workspace:^0.2.0
+        specifier: workspace:^0.2.3
         version: link:../contracts
       yaml:
         specifier: ^2.8.3
@@ -90,7 +90,7 @@ importers:
   packages/create-skill:
     dependencies:
       '@runxhq/cli':
-        specifier: workspace:^0.5.1
+        specifier: workspace:^0.5.20
         version: link:../cli
 
   packages/langchain:
@@ -99,7 +99,7 @@ importers:
         specifier: ^1.0.6
         version: 1.1.41
       '@runxhq/core':
-        specifier: workspace:^0.1.1
+        specifier: workspace:^0.1.4
         version: link:../core
       zod:
         specifier: ^4.1.12
