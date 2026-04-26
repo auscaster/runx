@@ -48,4 +48,8 @@ export const workspaceAliases: readonly WorkspaceAlias[] = [
     find: /^@runxhq\/core\/(.+)$/,
     replacement: workspacePath("packages/core/src/$1/index.ts"),
   },
+  {
+    find: /^@runxhq\/host-adapters$/,
+    replacement: workspacePath("packages/host-adapters/src/index.ts"),
+  },
 ];

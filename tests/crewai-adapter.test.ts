@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createCrewAiSurfaceAdapter } from "@runxhq/core/sdk";
+import { createCrewAiSurfaceAdapter } from "@runxhq/host-adapters";
 import { createSurfaceHarness } from "./surface-protocol-test-utils.js";
 
 const cleanups: Array<() => Promise<void>> = [];

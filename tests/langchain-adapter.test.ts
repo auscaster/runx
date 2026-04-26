@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createLangChainSurfaceAdapter } from "@runxhq/core/sdk";
+import { createLangChainSurfaceAdapter } from "@runxhq/host-adapters";
 import { createSurfaceHarness } from "./surface-protocol-test-utils.js";
 
 const cleanups: Array<() => Promise<void>> = [];

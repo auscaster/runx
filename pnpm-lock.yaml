@@ -20,6 +20,9 @@ importers:
       '@runxhq/core':
         specifier: workspace:^0.1.0
         version: link:packages/core
+      '@runxhq/host-adapters':
+        specifier: workspace:^0.1.0
+        version: link:packages/host-adapters
       '@sinclair/typebox':
         specifier: ^0.34.41
         version: 0.34.49
@@ -92,6 +95,12 @@ importers:
       '@runxhq/cli':
         specifier: workspace:^0.5.20
         version: link:../cli
+
+  packages/host-adapters:
+    dependencies:
+      '@runxhq/core':
+        specifier: workspace:^0.1.4
+        version: link:../core
 
   packages/langchain:
     dependencies:

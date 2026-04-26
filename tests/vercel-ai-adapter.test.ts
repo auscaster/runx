@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createVercelAiSurfaceAdapter } from "@runxhq/core/sdk";
+import { createVercelAiSurfaceAdapter } from "@runxhq/host-adapters";
 import { createSurfaceHarness } from "./surface-protocol-test-utils.js";
 
 const cleanups: Array<() => Promise<void>> = [];

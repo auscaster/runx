@@ -1,4 +1,5 @@
-import { createOpenAiSurfaceAdapter, createRunxSdk, createSurfaceBridge } from "@runx/sdk";
+import { createRunxSdk, createSurfaceBridge } from "@runx/sdk";
+import { createOpenAiSurfaceAdapter } from "@runxhq/host-adapters";
 
 async function main(): Promise<void> {
   const sdk = createRunxSdk({ callerOptions: { maxAttempts: 1 } });

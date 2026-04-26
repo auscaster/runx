@@ -1,0 +1,23 @@
+{
+  "name": "@runxhq/host-adapters",
+  "version": "0.1.0",
+  "description": "Thin host response adapters over the runx surface protocol.",
+  "private": false,
+  "license": "Apache-2.0",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@runxhq/core": "workspace:^0.1.4"
+  }
+}

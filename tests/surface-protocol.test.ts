@@ -4,7 +4,8 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createOpenAiSurfaceAdapter, createRunxSdk, createSurfaceBridge } from "@runxhq/core/sdk";
+import { createRunxSdk, createSurfaceBridge } from "@runxhq/core/sdk";
+import { createOpenAiSurfaceAdapter } from "@runxhq/host-adapters";
 
 const cleanups: Array<() => Promise<void>> = [];
 
