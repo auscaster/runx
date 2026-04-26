@@ -3,6 +3,7 @@ export const sdkJsPackage = "@runxhq/core/sdk";
 export * from "./caller.js";
 export * from "./capability-execution.js";
 export * from "./surface-protocol.js";
+export * from "./trusted-surface-outcome.js";
 
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";

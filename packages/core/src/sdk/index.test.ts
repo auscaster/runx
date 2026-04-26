@@ -12,6 +12,7 @@ import {
   createRunxSurfaceBridge,
   createRunxSdk,
   createStructuredCaller,
+  createTrustedSurfaceOutcome,
   inspect,
   type ConnectService,
 } from "./index.js";
@@ -163,6 +164,100 @@ describe("TypeScript SDK", () => {
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
+  });
+
+  it("projects trusted first-party surface outcomes without exposing a second public protocol", () => {
+    const paused = createTrustedSurfaceOutcome(
+      {
+        status: "paused",
+        skillName: "echo",
+        runId: "rx_paused",
+        requests: [{ id: "req_1", kind: "input", questions: [] }],
+        events: [],
+      },
+      {
+        status: "needs_resolution",
+        skill: { name: "echo" },
+        skillPath: "fixtures/skills/echo/SKILL.md",
+        inputs: {},
+        runId: "rx_paused",
+        requests: [{ id: "req_1", kind: "input", questions: [] }],
+      } as any,
+    );
+    expect(paused).toMatchObject({
+      kernelStatus: "needs_resolution",
+      kernelRunId: "rx_paused",
+      ledgerRunId: "rx_paused",
+      requests: [
+        {
+          id: "req_1",
+          kind: "input",
+        },
+      ],
+    });
+
+    const completed = createTrustedSurfaceOutcome(
+      {
+        status: "completed",
+        skillName: "echo",
+        receiptId: "rx_done",
+        output: "ok",
+        events: [],
+      },
+      {
+        status: "success",
+        skill: { name: "echo" },
+        inputs: {},
+        execution: { stdout: "ok" },
+        state: {},
+        receipt: { id: "rx_done", kind: "skill_execution", status: "success" },
+      } as any,
+    );
+    expect(completed).toMatchObject({
+      kernelStatus: "success",
+      ledgerRunId: "rx_done",
+      receiptId: "rx_done",
+      receiptKind: "skill_execution",
+      stdout: "ok",
+    });
+
+    const denied = createTrustedSurfaceOutcome(
+      {
+        status: "denied",
+        skillName: "guarded",
+        reasons: ["approval required"],
+        events: [],
+      },
+      {
+        status: "policy_denied",
+        skill: { name: "guarded" },
+        reasons: ["approval required"],
+      } as any,
+    );
+    expect(denied).toMatchObject({
+      kernelStatus: "policy_denied",
+      denialReasons: ["approval required"],
+    });
+
+    expect(() =>
+      createTrustedSurfaceOutcome(
+        {
+          status: "completed",
+          skillName: "echo",
+          receiptId: "rx_wrong",
+          output: "",
+          events: [],
+        },
+        {
+          status: "failure",
+          skill: { name: "echo" },
+          inputs: {},
+          execution: { stdout: "", errorMessage: "nope" },
+          state: {},
+          receipt: { id: "rx_wrong", kind: "skill_execution", status: "failure" },
+        } as any,
+      ),
+    ).toThrow(/did not match kernel status/);
   });
 
   it("can inspect imported tools and local manifest-backed tools", async () => {
