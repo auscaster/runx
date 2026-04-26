@@ -1,8 +1,8 @@
 spec_version: "1.1"
 task_id: "runx-hosted-api-domain-service-split"
 created: "2026-04-24T00:35:00Z"
-updated: "2026-04-24T00:35:00Z"
-status: "draft"
+updated: "2026-04-26T12:04:40Z"
+status: "completed"
 
 task:
   title: "Close residual hosted API domain-service cleanup"
@@ -119,6 +119,13 @@ planning_log:
   - timestamp: "2026-04-25T14:31:49Z"
     actor: "agent"
     summary: "Rebased the draft on the current cloud state, where hosted API entrypoints are already thin and remaining work is regression-proof cleanup."
+  - timestamp: "2026-04-26T12:04:40Z"
+    actor: "agent"
+    summary: "Audited the current cloud tree and found this cleanup already satisfied."
+    notes: >
+      packages/api/src/index.ts is 102 lines, openapi.ts is 79 lines,
+      public-site.ts is 29 lines, focused openapi/public-site helper modules
+      exist, and no duplicate routes/ or services/ trees are present.
 
 phases:
   - id: "phase1"
@@ -156,7 +163,7 @@ phases:
         command: "test ! -d packages/api/src/routes && test ! -d packages/api/src/services"
         cwd: "../cloud"
         expected: "exit code 0"
-    status: "pending"
+    status: "completed"
 
   - id: "phase2"
     name: "Consolidate OpenAPI builder ownership"
@@ -190,7 +197,7 @@ phases:
         command: "test $(wc -l < packages/api/src/openapi.ts) -le 150"
         cwd: "../cloud"
         expected: "exit code 0"
-    status: "pending"
+    status: "completed"
 
   - id: "phase3"
     name: "Consolidate public-site model and render ownership"
@@ -224,7 +231,7 @@ phases:
         command: "test $(wc -l < packages/api/src/index.ts) -le 150 && test $(wc -l < packages/api/src/openapi.ts) -le 150 && test $(wc -l < packages/api/src/public-site.ts) -le 100"
         cwd: "../cloud"
         expected: "exit code 0"
-    status: "pending"
+    status: "completed"
 
 rollback:
   strategy: "per_phase"

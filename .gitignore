@@ -1,6 +1,7 @@
 # scafld
 .ai/logs/
 .ai/reviews/
+.ai/runs/
 
 # dependencies
 node_modules/
