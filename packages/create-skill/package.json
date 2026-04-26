@@ -32,6 +32,6 @@
     }
   },
   "dependencies": {
-    "@runxhq/cli": "^0.5.20"
+    "@runxhq/cli": "workspace:^0.5.20"
   }
 }

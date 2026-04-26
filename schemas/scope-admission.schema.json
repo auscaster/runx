@@ -1,0 +1,52 @@
+{
+  "$id": "https://runx.ai/spec/scope-admission.schema.json",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "status",
+    "requested_scopes",
+    "granted_scopes"
+  ],
+  "properties": {
+    "status": {
+      "anyOf": [
+        {
+          "const": "allow",
+          "type": "string"
+        },
+        {
+          "const": "deny",
+          "type": "string"
+        }
+      ]
+    },
+    "requested_scopes": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "granted_scopes": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "grant_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "decision_summary": {
+      "type": "string"
+    }
+  }
+}

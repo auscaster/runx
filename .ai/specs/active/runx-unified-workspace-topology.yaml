@@ -1,8 +1,8 @@
 spec_version: "1.1"
 task_id: "runx-unified-workspace-topology"
 created: "2026-04-24T00:45:00Z"
-updated: "2026-04-24T00:45:00Z"
-status: "draft"
+updated: "2026-04-26T12:58:00Z"
+status: "in_progress"
 
 task:
   title: "Converge runx onto one real workspace and remove nested-repo hybrid debt"
@@ -126,6 +126,12 @@ planning_log:
   - timestamp: "2026-04-25T14:31:49Z"
     actor: "agent"
     summary: "Rebased the draft on the current root workspace manifests; remaining topology risk is nested gitlink removal and root-driven verification."
+  - timestamp: "2026-04-26T12:58:00Z"
+    actor: "agent"
+    summary: "Executed root workspace install and fixed the blocking workspace-edge issue by including oss/cloud roots and converting local @runxhq package edges to workspace refs."
+  - timestamp: "2026-04-26T12:58:00Z"
+    actor: "agent"
+    summary: "Adversarial review kept phase3 open because parent git still tracks oss and cloud as 160000 gitlinks; removing nested repo history requires an explicit destructive topology cutover."
 
 phases:
   - id: "phase1"
@@ -161,7 +167,7 @@ phases:
         command: "pnpm install"
         cwd: ".."
         expected: "exit code 0"
-    status: "pending"
+    status: "completed"
 
   - id: "phase2"
     name: "Replace link edges with workspace edges"
@@ -196,7 +202,7 @@ phases:
         command: "! rg -n 'link:\\.\\./oss/packages' cloud -g 'package.json'"
         cwd: ".."
         expected: "exit code 0"
-    status: "pending"
+    status: "completed"
 
   - id: "phase3"
     name: "Remove nested gitlink topology and normalize tooling"
@@ -235,6 +241,7 @@ phases:
         cwd: ".."
         expected: "exit code 0"
     status: "pending"
+    blocked_reason: "Parent git still tracks oss and cloud as 160000 gitlinks. Completing this phase requires removing nested .git directories or otherwise converting both trees into parent-tracked files, which is intentionally not hidden inside this spec execution while both nested repos have active dirt."
 
 rollback:
   strategy: "per_phase"
@@ -242,6 +249,26 @@ rollback:
     phase1: "git -C /home/kam/dev/runx checkout HEAD -- package.json pnpm-workspace.yaml && git -C /home/kam/dev/runx/oss checkout HEAD -- package.json && git -C /home/kam/dev/runx/cloud checkout HEAD -- package.json"
     phase2: "git -C /home/kam/dev/runx/cloud checkout HEAD -- package.json pnpm-lock.yaml tsconfig.base.json && git -C /home/kam/dev/runx checkout HEAD -- pnpm-lock.yaml"
     phase3: "git -C /home/kam/dev/runx checkout HEAD -- .github/workflows oss cloud"
+
+review:
+  verdict: "blocked"
+  reviewed_at: "2026-04-26T12:58:00Z"
+  reviewer: "agent"
+  finding_counts:
+    critical: 0
+    high: 1
+    medium: 0
+    low: 0
+  findings:
+    - severity: "high"
+      area: "repo topology"
+      evidence: "git ls-files -s oss cloud still returns mode 160000 entries for both directories."
+      impact: "The parent repo is not yet the only authoritative git root, so definition-of-done item dod3 remains unmet."
+      recommendation: "Schedule a dedicated cutover that commits nested repos, removes gitlinks, removes or migrates nested .git directories, and adds the full oss/cloud trees to the parent repo in one reviewed operation."
+  notes:
+    - "Root workspace install now succeeds with 25 workspace projects."
+    - "Cloud package manifests no longer declare link:../oss package edges."
+    - "Root-driven oss and cloud typechecks pass."
 
 metadata:
   estimated_effort_hours: 12

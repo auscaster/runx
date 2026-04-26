@@ -1,8 +1,9 @@
 spec_version: "1.1"
 task_id: "runx-contracts-single-authority"
 created: "2026-04-24T00:40:00Z"
-updated: "2026-04-24T00:40:00Z"
-status: "draft"
+updated: "2026-04-26T12:58:00Z"
+status: "completed"
+harden_status: "reviewed"
 
 task:
   title: "Make contracts the single authority for machine-readable runx schemas"
@@ -76,12 +77,20 @@ task:
     definition_of_done:
       - id: "dod1"
         description: "CLI and hosted machine-readable report envelopes are defined in packages/contracts."
+        status: "done"
+        checked_at: "2026-04-26T12:58:00Z"
       - id: "dod2"
         description: "Receipt, manifest, and packet-oriented schemas are generated from packages/contracts."
+        status: "done"
+        checked_at: "2026-04-26T12:58:00Z"
       - id: "dod3"
         description: "Imperative validators in executor/runtime are removed or reduced to glue around contract-generated validators."
+        status: "done"
+        checked_at: "2026-04-26T12:58:00Z"
       - id: "dod4"
         description: "Schema generation produces no unchecked drift."
+        status: "done"
+        checked_at: "2026-04-26T12:58:00Z"
     validation:
       - id: "v1"
         type: "integration"
@@ -118,6 +127,12 @@ planning_log:
   - timestamp: "2026-04-25T14:31:49Z"
     actor: "agent"
     summary: "Updated rollback scope for the current split git topology; cross-repo rollback must use explicit git roots."
+  - timestamp: "2026-04-26T12:58:00Z"
+    actor: "agent"
+    summary: "Added contract-owned executor control protocol schemas, validators, generated artifacts, and core executor wrappers that delegate structural validation to packages/contracts."
+  - timestamp: "2026-04-26T12:58:00Z"
+    actor: "agent"
+    summary: "Adversarial validation exposed a CLI process-tree cancellation bug in the fast suite; fixed POSIX process-group termination and bubblewrap session handling before completion."
 
 phases:
   - id: "phase1"
@@ -155,7 +170,7 @@ phases:
         command: "pnpm typecheck"
         cwd: "../cloud"
         expected: "exit code 0"
-    status: "pending"
+    status: "completed"
 
   - id: "phase2"
     name: "Migrate receipt, manifest, and packet schemas"
@@ -194,7 +209,7 @@ phases:
         command: "pnpm schemas:generate && git diff --exit-code packages/contracts/src schemas"
         cwd: "."
         expected: "exit code 0"
-    status: "pending"
+    status: "completed"
 
   - id: "phase3"
     name: "Retire imperative validator duplication"
@@ -222,7 +237,7 @@ phases:
         command: "pnpm typecheck"
         cwd: "."
         expected: "exit code 0"
-    status: "pending"
+    status: "completed"
 
 rollback:
   strategy: "per_phase"
@@ -230,6 +245,32 @@ rollback:
     phase1: "git -C /home/kam/dev/runx/oss checkout HEAD -- packages/contracts/src/index.ts packages/cli/src && git -C /home/kam/dev/runx/cloud checkout HEAD -- packages/api/src"
     phase2: "git -C /home/kam/dev/runx/oss checkout HEAD -- packages/contracts/src/index.ts schemas scripts/generate-contract-schemas.ts"
     phase3: "git -C /home/kam/dev/runx/oss checkout HEAD -- packages/core/src/executor packages/core/src"
+
+review:
+  verdict: "pass"
+  reviewed_at: "2026-04-26T12:58:00Z"
+  reviewer: "agent"
+  finding_counts:
+    critical: 0
+    high: 0
+    medium: 0
+    low: 0
+  notes:
+    - "Structural executor contracts now originate in packages/contracts; core keeps only runtime-dependent resolution-response glue."
+    - "Generated schema artifacts include executor control protocol, credential envelope, and scope admission schemas."
+    - "Cloud credential envelope typing now consumes the contract package."
+    - "Second-pass validation found and fixed unrelated process-tree cancellation flake before marking the spec complete."
+
+self_eval:
+  completeness: 3
+  architecture_fidelity: 3
+  spec_alignment: 3
+  validation_depth: 3
+  total: 12
+  notes: "Contracts are the authority for the executor control protocol and existing machine schemas; generation, OSS typecheck/test, and cloud typecheck passed."
+  second_pass_performed: true
+
+deviations: []
 
 metadata:
   estimated_effort_hours: 10

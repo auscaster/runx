@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runx.ai/spec/resolution-response.schema.json",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "actor",
+    "payload"
+  ],
+  "properties": {
+    "actor": {
+      "anyOf": [
+        {
+          "const": "human",
+          "type": "string"
+        },
+        {
+          "const": "agent",
+          "type": "string"
+        }
+      ]
+    },
+    "payload": {}
+  }
+}

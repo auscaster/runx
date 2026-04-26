@@ -88,6 +88,57 @@ export const RUNX_AUXILIARY_SCHEMA_IDS = {
 
 const authorityKinds = ["read_only", "constructive", "destructive"] as const;
 const scopeAdmissionStatuses = ["allow", "deny"] as const;
+const outputContractScalarKinds = [
+  "string",
+  "number",
+  "integer",
+  "boolean",
+  "array",
+  "object",
+  "null",
+] as const;
+const agentWorkSourceTypes = ["agent", "agent-step"] as const;
+const resolutionResponseActors = ["human", "agent"] as const;
+const adapterInvokeTerminalStatuses = ["success", "failure"] as const;
+const nodeSignalNames = [
+  "SIGABRT",
+  "SIGALRM",
+  "SIGBUS",
+  "SIGCHLD",
+  "SIGCONT",
+  "SIGFPE",
+  "SIGHUP",
+  "SIGILL",
+  "SIGINT",
+  "SIGIO",
+  "SIGIOT",
+  "SIGKILL",
+  "SIGPIPE",
+  "SIGPOLL",
+  "SIGPROF",
+  "SIGPWR",
+  "SIGQUIT",
+  "SIGSEGV",
+  "SIGSTKFLT",
+  "SIGSTOP",
+  "SIGSYS",
+  "SIGTERM",
+  "SIGTRAP",
+  "SIGTSTP",
+  "SIGTTIN",
+  "SIGTTOU",
+  "SIGUNUSED",
+  "SIGURG",
+  "SIGUSR1",
+  "SIGUSR2",
+  "SIGVTALRM",
+  "SIGWINCH",
+  "SIGXCPU",
+  "SIGXFSZ",
+  "SIGBREAK",
+  "SIGLOST",
+  "SIGINFO",
+] as const;
 const registryBindingStates = [
   "registry_binding_drafted",
   "registry_bound",
@@ -212,6 +263,407 @@ export const scopeAdmissionSchema = Type.Object(
 );
 
 export type ScopeAdmissionContract = DeepReadonly<Static<typeof scopeAdmissionSchema>>;
+
+export const outputContractScalarSchema = stringEnum(outputContractScalarKinds);
+
+export type OutputContractScalarContract = DeepReadonly<Static<typeof outputContractScalarSchema>>;
+
+export const outputContractObjectEntrySchema = Type.Object(
+  {
+    type: Type.Optional(outputContractScalarSchema),
+    description: Type.Optional(Type.String()),
+    required: Type.Optional(Type.Boolean()),
+    wrap_as: Type.Optional(Type.String({ minLength: 1 })),
+    enum: Type.Optional(Type.Array(Type.String())),
+  },
+  {
+    additionalProperties: false,
+    minProperties: 1,
+  },
+);
+
+export type OutputContractObjectEntryContract = DeepReadonly<Static<typeof outputContractObjectEntrySchema>>;
+
+export const outputContractEntrySchema = Type.Union([
+  outputContractScalarSchema,
+  outputContractObjectEntrySchema,
+]);
+
+export type OutputContractEntryContract = DeepReadonly<Static<typeof outputContractEntrySchema>>;
+
+export const outputContractSchema = Type.Record(
+  Type.String(),
+  outputContractEntrySchema,
+  {
+    $schema: JSON_SCHEMA_DRAFT_2020_12,
+    $id: RUNX_CONTROL_SCHEMA_REFS.output_contract,
+  },
+);
+
+export type OutputContractContract = DeepReadonly<Static<typeof outputContractSchema>>;
+
+export const artifactProducerSchema = Type.Object(
+  {
+    skill: Type.String({ minLength: 1 }),
+    runner: Type.String({ minLength: 1 }),
+  },
+  { additionalProperties: false },
+);
+
+export type ArtifactProducerContract = DeepReadonly<Static<typeof artifactProducerSchema>>;
+
+export const artifactMetaSchema = Type.Object(
+  {
+    artifact_id: Type.String({ minLength: 1 }),
+    run_id: Type.String({ minLength: 1 }),
+    step_id: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
+    producer: artifactProducerSchema,
+    created_at: Type.String({ minLength: 1 }),
+    hash: Type.String({ minLength: 1 }),
+    size_bytes: Type.Integer({ minimum: 0 }),
+    parent_artifact_id: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
+    receipt_id: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
+    redacted: Type.Boolean(),
+  },
+  { additionalProperties: false },
+);
+
+export type ArtifactMetaContract = DeepReadonly<Static<typeof artifactMetaSchema>>;
+
+export const artifactEnvelopeSchema = Type.Object(
+  {
+    type: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
+    version: Type.Literal("1"),
+    data: unknownRecordSchema(),
+    meta: artifactMetaSchema,
+  },
+  { additionalProperties: false },
+);
+
+export type ArtifactEnvelopeContract = DeepReadonly<Static<typeof artifactEnvelopeSchema>>;
+
+export const agentContextProvenanceSchema = Type.Object(
+  {
+    input: Type.String({ minLength: 1 }),
+    output: Type.String({ minLength: 1 }),
+    from_step: Type.Optional(Type.String()),
+    artifact_id: Type.Optional(Type.String()),
+    receipt_id: Type.Optional(Type.String()),
+  },
+  { additionalProperties: false },
+);
+
+export type AgentContextProvenanceContract = DeepReadonly<Static<typeof agentContextProvenanceSchema>>;
+
+export const contextDocumentSchema = Type.Object(
+  {
+    root_path: Type.String({ minLength: 1 }),
+    path: Type.String({ minLength: 1 }),
+    sha256: Type.String({ minLength: 1 }),
+    content: Type.String(),
+  },
+  { additionalProperties: false },
+);
+
+export type ContextDocumentContract = DeepReadonly<Static<typeof contextDocumentSchema>>;
+
+export const contextSchema = Type.Object(
+  {
+    memory: Type.Optional(contextDocumentSchema),
+    conventions: Type.Optional(contextDocumentSchema),
+  },
+  { additionalProperties: false },
+);
+
+export type ContextContract = DeepReadonly<Static<typeof contextSchema>>;
+
+export const qualityProfileContextSchema = Type.Object(
+  {
+    source: Type.Literal("SKILL.md#quality-profile"),
+    sha256: Type.String({ minLength: 1 }),
+    content: Type.String(),
+  },
+  { additionalProperties: false },
+);
+
+export type QualityProfileContextContract = DeepReadonly<Static<typeof qualityProfileContextSchema>>;
+
+export const executionLocationSchema = Type.Object(
+  {
+    skill_directory: Type.String({ minLength: 1 }),
+    tool_roots: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
+  },
+  { additionalProperties: false },
+);
+
+export type ExecutionLocationContract = DeepReadonly<Static<typeof executionLocationSchema>>;
+
+export const agentContextEnvelopeSchema = Type.Object(
+  {
+    run_id: Type.String({ minLength: 1 }),
+    step_id: Type.Optional(Type.String({ minLength: 1 })),
+    skill: Type.String({ minLength: 1 }),
+    instructions: Type.String({ minLength: 1 }),
+    inputs: unknownRecordSchema(),
+    allowed_tools: Type.Array(Type.String({ minLength: 1 })),
+    current_context: Type.Array(artifactEnvelopeSchema),
+    historical_context: Type.Array(artifactEnvelopeSchema),
+    provenance: Type.Array(agentContextProvenanceSchema),
+    context: Type.Optional(contextSchema),
+    voice_profile: Type.Optional(contextDocumentSchema),
+    quality_profile: Type.Optional(qualityProfileContextSchema),
+    execution_location: Type.Optional(executionLocationSchema),
+    expected_outputs: Type.Optional(outputContractSchema),
+    trust_boundary: Type.String({ minLength: 1 }),
+  },
+  {
+    $schema: JSON_SCHEMA_DRAFT_2020_12,
+    $id: RUNX_CONTROL_SCHEMA_REFS.agent_context_envelope,
+    additionalProperties: false,
+  },
+);
+
+export type AgentContextEnvelopeContract = DeepReadonly<Static<typeof agentContextEnvelopeSchema>>;
+
+export const agentWorkRequestSchema = Type.Object(
+  {
+    id: Type.String({ minLength: 1 }),
+    source_type: stringEnum(agentWorkSourceTypes),
+    agent: Type.Optional(Type.String({ minLength: 1 })),
+    task: Type.Optional(Type.String({ minLength: 1 })),
+    envelope: agentContextEnvelopeSchema,
+  },
+  {
+    $schema: JSON_SCHEMA_DRAFT_2020_12,
+    $id: RUNX_CONTROL_SCHEMA_REFS.agent_work_request,
+    additionalProperties: false,
+  },
+);
+
+export type AgentWorkRequestContract = DeepReadonly<Static<typeof agentWorkRequestSchema>>;
+
+export const questionSchema = Type.Object(
+  {
+    id: Type.String({ minLength: 1 }),
+    prompt: Type.String({ minLength: 1 }),
+    description: Type.Optional(Type.String()),
+    required: Type.Boolean(),
+    type: Type.String({ minLength: 1 }),
+  },
+  {
+    $schema: JSON_SCHEMA_DRAFT_2020_12,
+    $id: RUNX_CONTROL_SCHEMA_REFS.question,
+    additionalProperties: false,
+  },
+);
+
+export type QuestionContract = DeepReadonly<Static<typeof questionSchema>>;
+
+export const approvalGateSchema = Type.Object(
+  {
+    id: Type.String({ minLength: 1 }),
+    reason: Type.String({ minLength: 1 }),
+    type: Type.Optional(Type.String()),
+    summary: Type.Optional(unknownRecordSchema()),
+  },
+  {
+    $schema: JSON_SCHEMA_DRAFT_2020_12,
+    $id: RUNX_CONTROL_SCHEMA_REFS.approval_gate,
+    additionalProperties: false,
+  },
+);
+
+export type ApprovalGateContract = DeepReadonly<Static<typeof approvalGateSchema>>;
+
+export const inputResolutionRequestSchema = Type.Object(
+  {
+    id: Type.String({ minLength: 1 }),
+    kind: Type.Literal("input"),
+    questions: Type.Array(questionSchema),
+  },
+  { additionalProperties: false },
+);
+
+export type InputResolutionRequestContract = DeepReadonly<Static<typeof inputResolutionRequestSchema>>;
+
+export const approvalResolutionRequestSchema = Type.Object(
+  {
+    id: Type.String({ minLength: 1 }),
+    kind: Type.Literal("approval"),
+    gate: approvalGateSchema,
+  },
+  { additionalProperties: false },
+);
+
+export type ApprovalResolutionRequestContract = DeepReadonly<Static<typeof approvalResolutionRequestSchema>>;
+
+export const cognitiveResolutionRequestSchema = Type.Object(
+  {
+    id: Type.String({ minLength: 1 }),
+    kind: Type.Literal("cognitive_work"),
+    work: agentWorkRequestSchema,
+  },
+  { additionalProperties: false },
+);
+
+export type CognitiveResolutionRequestContract = DeepReadonly<Static<typeof cognitiveResolutionRequestSchema>>;
+
+export const resolutionRequestSchema = Type.Union(
+  [
+    inputResolutionRequestSchema,
+    approvalResolutionRequestSchema,
+    cognitiveResolutionRequestSchema,
+  ],
+  {
+    $schema: JSON_SCHEMA_DRAFT_2020_12,
+    $id: RUNX_CONTROL_SCHEMA_REFS.resolution_request,
+  },
+);
+
+export type ResolutionRequestContract = DeepReadonly<Static<typeof resolutionRequestSchema>>;
+
+export const resolutionResponseSchema = Type.Object(
+  {
+    actor: stringEnum(resolutionResponseActors),
+    payload: Type.Unknown(),
+  },
+  {
+    $schema: JSON_SCHEMA_DRAFT_2020_12,
+    $id: RUNX_CONTROL_SCHEMA_REFS.resolution_response,
+    additionalProperties: false,
+  },
+);
+
+export type ResolutionResponseContract = DeepReadonly<Static<typeof resolutionResponseSchema>>;
+
+export const adapterInvokeTerminalResultSchema = Type.Object(
+  {
+    status: stringEnum(adapterInvokeTerminalStatuses),
+    stdout: Type.String(),
+    stderr: Type.String(),
+    exitCode: Type.Union([Type.Integer(), Type.Null()]),
+    signal: Type.Union([stringEnum(nodeSignalNames), Type.Null()]),
+    durationMs: Type.Integer({ minimum: 0 }),
+    errorMessage: Type.Optional(Type.String()),
+    metadata: Type.Optional(unknownRecordSchema()),
+  },
+  { additionalProperties: false },
+);
+
+export const adapterInvokeNeedsResolutionResultSchema = Type.Object(
+  {
+    status: Type.Literal("needs_resolution"),
+    stdout: Type.String(),
+    stderr: Type.String(),
+    exitCode: Type.Null(),
+    signal: Type.Null(),
+    durationMs: Type.Integer({ minimum: 0 }),
+    request: resolutionRequestSchema,
+    errorMessage: Type.Optional(Type.String()),
+    metadata: Type.Optional(unknownRecordSchema()),
+  },
+  { additionalProperties: false },
+);
+
+const adapterInvokeNeedsResolutionResultEnvelopeSchema = Type.Object(
+  {
+    status: Type.Literal("needs_resolution"),
+    stdout: Type.String(),
+    stderr: Type.String(),
+    exitCode: Type.Null(),
+    signal: Type.Null(),
+    durationMs: Type.Integer({ minimum: 0 }),
+    request: Type.Unknown(),
+    errorMessage: Type.Optional(Type.String()),
+    metadata: Type.Optional(unknownRecordSchema()),
+  },
+  { additionalProperties: false },
+);
+
+export const adapterInvokeResultSchema = Type.Union(
+  [
+    adapterInvokeTerminalResultSchema,
+    adapterInvokeNeedsResolutionResultSchema,
+  ],
+  {
+    $schema: JSON_SCHEMA_DRAFT_2020_12,
+    $id: RUNX_CONTROL_SCHEMA_REFS.adapter_invoke_result,
+  },
+);
+
+export type AdapterInvokeResultContract = DeepReadonly<Static<typeof adapterInvokeResultSchema>>;
+
+export function validateOutputContractContract(
+  value: unknown,
+  label = "output_contract",
+): OutputContractContract {
+  return validateContractSchema(outputContractSchema, value, label);
+}
+
+export function validateAgentContextEnvelopeContract(
+  value: unknown,
+  label = "agent_context_envelope",
+): AgentContextEnvelopeContract {
+  rejectLegacyVoiceGrammar(value, label);
+  return validateContractSchema(agentContextEnvelopeSchema, value, label);
+}
+
+export function validateAgentWorkRequestContract(
+  value: unknown,
+  label = "agent_work_request",
+): AgentWorkRequestContract {
+  return validateContractSchema(agentWorkRequestSchema, value, label);
+}
+
+export function validateQuestionContract(value: unknown, label = "question"): QuestionContract {
+  return validateContractSchema(questionSchema, value, label);
+}
+
+export function validateApprovalGateContract(value: unknown, label = "approval_gate"): ApprovalGateContract {
+  return validateContractSchema(approvalGateSchema, value, label);
+}
+
+export function validateResolutionRequestContract(
+  value: unknown,
+  label = "resolution_request",
+): ResolutionRequestContract {
+  const record = asUnknownRecord(value);
+  if (record?.kind === "input") {
+    return validateContractSchema(inputResolutionRequestSchema, value, label) as ResolutionRequestContract;
+  }
+  if (record?.kind === "approval") {
+    return validateContractSchema(approvalResolutionRequestSchema, value, label) as ResolutionRequestContract;
+  }
+  if (record?.kind === "cognitive_work") {
+    return validateContractSchema(cognitiveResolutionRequestSchema, value, label) as ResolutionRequestContract;
+  }
+  return validateContractSchema(resolutionRequestSchema, value, label);
+}
+
+export function validateResolutionResponseContract(
+  value: unknown,
+  label = "resolution_response",
+): ResolutionResponseContract {
+  return validateContractSchema(resolutionResponseSchema, value, label);
+}
+
+export function validateAdapterInvokeResultContract(
+  value: unknown,
+  label = "adapter_invoke_result",
+): AdapterInvokeResultContract {
+  const record = asUnknownRecord(value);
+  if (record?.status === "success" || record?.status === "failure") {
+    return validateContractSchema(adapterInvokeTerminalResultSchema, value, label) as AdapterInvokeResultContract;
+  }
+  if (record?.status === "needs_resolution") {
+    const result = validateContractSchema(adapterInvokeNeedsResolutionResultEnvelopeSchema, value, label);
+    return {
+      ...result,
+      request: validateResolutionRequestContract(result.request, `${label}.request`),
+    } as AdapterInvokeResultContract;
+  }
+  return validateContractSchema(adapterInvokeResultSchema, value, label);
+}
 
 export function validateCredentialEnvelopeContract(
   value: unknown,
@@ -358,8 +810,28 @@ function validateContractSchema<TSchemaValue extends TSchema>(
     ? [...Value.Errors(schema, normalizedReferences, value)][0]
     : [...Value.Errors(schema, value)][0];
   const schemaRef = typeof schema.$id === "string" ? schema.$id : "contract schema";
-  const path = firstError?.path ? `${label}${firstError.path}` : label;
+  const path = firstError?.path ? `${label}${formatSchemaErrorPath(firstError.path)}` : label;
   throw new Error(`${path} must match ${schemaRef}.`);
+}
+
+function formatSchemaErrorPath(path: string): string {
+  const segments = path.split("/").filter((segment) => segment.length > 0);
+  return segments.map((segment) => {
+    const decoded = segment.replace(/~1/g, "/").replace(/~0/g, "~");
+    return /^\d+$/u.test(decoded) ? `[${decoded}]` : `.${decoded}`;
+  }).join("");
+}
+
+function rejectLegacyVoiceGrammar(value: unknown, label: string): void {
+  const envelope = asUnknownRecord(value);
+  const context = asUnknownRecord(envelope?.context);
+  if (context?.voice_grammar !== undefined) {
+    throw new Error(`${label}.context.voice_grammar is no longer supported; use voice_profile (${RUNX_CONTROL_SCHEMA_REFS.agent_context_envelope}).`);
+  }
+}
+
+function asUnknownRecord(value: unknown): UnknownRecord | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as UnknownRecord : undefined;
 }
 
 const doctorTargetSchema = unknownRecordSchema();
@@ -831,6 +1303,16 @@ export function validateSuppressionRecordContract(
 }
 
 export const runxContractSchemas = {
+  outputContract: outputContractSchema,
+  agentContextEnvelope: agentContextEnvelopeSchema,
+  agentWorkRequest: agentWorkRequestSchema,
+  question: questionSchema,
+  approvalGate: approvalGateSchema,
+  resolutionRequest: resolutionRequestSchema,
+  resolutionResponse: resolutionResponseSchema,
+  adapterInvokeResult: adapterInvokeResultSchema,
+  credentialEnvelope: credentialEnvelopeSchema,
+  scopeAdmission: scopeAdmissionSchema,
   doctor: doctorV1Schema,
   dev: devV1Schema,
   list: listV1Schema,
@@ -850,6 +1332,16 @@ export const runxAuxiliarySchemas = {
 } as const;
 
 export const runxGeneratedSchemaArtifacts = {
+  "output-contract.schema.json": outputContractSchema,
+  "agent-context-envelope.schema.json": agentContextEnvelopeSchema,
+  "agent-work-request.schema.json": agentWorkRequestSchema,
+  "question.schema.json": questionSchema,
+  "approval-gate.schema.json": approvalGateSchema,
+  "resolution-request.schema.json": resolutionRequestSchema,
+  "resolution-response.schema.json": resolutionResponseSchema,
+  "adapter-invoke-result.schema.json": adapterInvokeResultSchema,
+  "credential-envelope.schema.json": credentialEnvelopeSchema,
+  "scope-admission.schema.json": scopeAdmissionSchema,
   "doctor.schema.json": doctorV1Schema,
   "dev.schema.json": devV1Schema,
   "list.schema.json": listV1Schema,

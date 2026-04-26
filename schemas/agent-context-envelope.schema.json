@@ -1,0 +1,565 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runx.ai/spec/agent-context-envelope.schema.json",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "run_id",
+    "skill",
+    "instructions",
+    "inputs",
+    "allowed_tools",
+    "current_context",
+    "historical_context",
+    "provenance",
+    "trust_boundary"
+  ],
+  "properties": {
+    "run_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "step_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "skill": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "instructions": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "inputs": {
+      "type": "object",
+      "patternProperties": {
+        "^(.*)$": {}
+      }
+    },
+    "allowed_tools": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "current_context": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "version",
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "type": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "const": "1",
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "patternProperties": {
+              "^(.*)$": {}
+            }
+          },
+          "meta": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "artifact_id",
+              "run_id",
+              "step_id",
+              "producer",
+              "created_at",
+              "hash",
+              "size_bytes",
+              "parent_artifact_id",
+              "receipt_id",
+              "redacted"
+            ],
+            "properties": {
+              "artifact_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "run_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "step_id": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "producer": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "skill",
+                  "runner"
+                ],
+                "properties": {
+                  "skill": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "runner": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                }
+              },
+              "created_at": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "hash": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "size_bytes": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "parent_artifact_id": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "receipt_id": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "redacted": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "historical_context": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "version",
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "type": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "const": "1",
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "patternProperties": {
+              "^(.*)$": {}
+            }
+          },
+          "meta": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "artifact_id",
+              "run_id",
+              "step_id",
+              "producer",
+              "created_at",
+              "hash",
+              "size_bytes",
+              "parent_artifact_id",
+              "receipt_id",
+              "redacted"
+            ],
+            "properties": {
+              "artifact_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "run_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "step_id": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "producer": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "skill",
+                  "runner"
+                ],
+                "properties": {
+                  "skill": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "runner": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                }
+              },
+              "created_at": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "hash": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "size_bytes": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "parent_artifact_id": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "receipt_id": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "redacted": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "input",
+          "output"
+        ],
+        "properties": {
+          "input": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "output": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "from_step": {
+            "type": "string"
+          },
+          "artifact_id": {
+            "type": "string"
+          },
+          "receipt_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "context": {
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "memory": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "root_path",
+            "path",
+            "sha256",
+            "content"
+          ],
+          "properties": {
+            "root_path": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "path": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "sha256": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "content": {
+              "type": "string"
+            }
+          }
+        },
+        "conventions": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "root_path",
+            "path",
+            "sha256",
+            "content"
+          ],
+          "properties": {
+            "root_path": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "path": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "sha256": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "content": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "voice_profile": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "root_path",
+        "path",
+        "sha256",
+        "content"
+      ],
+      "properties": {
+        "root_path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sha256": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        }
+      }
+    },
+    "quality_profile": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "source",
+        "sha256",
+        "content"
+      ],
+      "properties": {
+        "source": {
+          "const": "SKILL.md#quality-profile",
+          "type": "string"
+        },
+        "sha256": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        }
+      }
+    },
+    "execution_location": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "skill_directory"
+      ],
+      "properties": {
+        "skill_directory": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "tool_roots": {
+          "type": "array",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      }
+    },
+    "expected_outputs": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "https://runx.ai/spec/output-contract.schema.json",
+      "type": "object",
+      "patternProperties": {
+        "^(.*)$": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "const": "string",
+                  "type": "string"
+                },
+                {
+                  "const": "number",
+                  "type": "string"
+                },
+                {
+                  "const": "integer",
+                  "type": "string"
+                },
+                {
+                  "const": "boolean",
+                  "type": "string"
+                },
+                {
+                  "const": "array",
+                  "type": "string"
+                },
+                {
+                  "const": "object",
+                  "type": "string"
+                },
+                {
+                  "const": "null",
+                  "type": "string"
+                }
+              ]
+            },
+            {
+              "additionalProperties": false,
+              "minProperties": 1,
+              "type": "object",
+              "properties": {
+                "type": {
+                  "anyOf": [
+                    {
+                      "const": "string",
+                      "type": "string"
+                    },
+                    {
+                      "const": "number",
+                      "type": "string"
+                    },
+                    {
+                      "const": "integer",
+                      "type": "string"
+                    },
+                    {
+                      "const": "boolean",
+                      "type": "string"
+                    },
+                    {
+                      "const": "array",
+                      "type": "string"
+                    },
+                    {
+                      "const": "object",
+                      "type": "string"
+                    },
+                    {
+                      "const": "null",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "description": {
+                  "type": "string"
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "wrap_as": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "enum": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "trust_boundary": {
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}

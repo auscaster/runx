@@ -114,6 +114,7 @@ export async function invokeCliTool(request: CliToolInvokeRequest): Promise<CliT
     const child = spawn(command as string, spawnArgs, {
       cwd,
       env: childEnv,
+      detached: process.platform !== "win32",
       shell: false,
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -131,23 +132,23 @@ export async function invokeCliTool(request: CliToolInvokeRequest): Promise<CliT
     const timeoutMs = Math.max(0.05, request.source.timeoutSeconds ?? 60) * 1000;
     const timeout = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGTERM");
+      signalChildProcessTree(child.pid, "SIGTERM", child);
       forceKill = setTimeout(() => {
-        child.kill("SIGKILL");
+        signalChildProcessTree(child.pid, "SIGKILL", child);
       }, forceKillGraceMs);
     }, timeoutMs);
 
     // Cooperative cancellation via AbortSignal
+    const abortListener = () => {
+      aborted = true;
+      signalChildProcessTree(child.pid, "SIGTERM", child);
+      forceKill = setTimeout(() => signalChildProcessTree(child.pid, "SIGKILL", child), forceKillGraceMs);
+    };
     if (request.signal) {
       if (request.signal.aborted) {
-        child.kill("SIGTERM");
-        aborted = true;
+        abortListener();
       } else {
-        request.signal.addEventListener("abort", () => {
-          aborted = true;
-          child.kill("SIGTERM");
-          forceKill = setTimeout(() => child.kill("SIGKILL"), forceKillGraceMs);
-        }, { once: true });
+        request.signal.addEventListener("abort", abortListener, { once: true });
       }
     }
 
@@ -174,6 +175,7 @@ export async function invokeCliTool(request: CliToolInvokeRequest): Promise<CliT
       finished = true;
       clearTimeout(timeout);
       if (forceKill) clearTimeout(forceKill);
+      request.signal?.removeEventListener("abort", abortListener);
       cleanupLocalProcessSandbox(sandbox);
 
       const durationMs = Math.round(performance.now() - started);
@@ -205,6 +207,19 @@ export async function invokeCliTool(request: CliToolInvokeRequest): Promise<CliT
       child.stdin.end();
     }
   });
+}
+
+function signalChildProcessTree(pid: number | undefined, signal: NodeJS.Signals, child: ReturnType<typeof spawn>): void {
+  if (process.platform !== "win32" && pid !== undefined) {
+    try {
+      process.kill(-pid, signal);
+      return;
+    } catch {
+      // Fall back to the direct child below. The process may have exited
+      // between scheduling the signal and sending it.
+    }
+  }
+  child.kill(signal);
 }
 
 function buildChildEnv(

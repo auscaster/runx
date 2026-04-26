@@ -350,7 +350,6 @@ function buildBubblewrapSpawnPlan(options: {
     "--unshare-all",
     ...(options.network ? ["--share-net"] : []),
     "--die-with-parent",
-    "--new-session",
     "--proc",
     "/proc",
     "--dev",
@@ -451,13 +450,14 @@ function findExecutable(command: string, searchPath: string | undefined): string
 
 function findPackageRoot(start: string): string | undefined {
   let current = path.resolve(start);
+  let found: string | undefined;
   while (true) {
-    if (existsSync(path.join(current, "package.json"))) {
-      return current;
+    if (existsSync(path.join(current, "package.json")) || existsSync(path.join(current, "pnpm-workspace.yaml"))) {
+      found = current;
     }
     const parent = path.dirname(current);
     if (parent === current) {
-      return undefined;
+      return found;
     }
     current = parent;
   }

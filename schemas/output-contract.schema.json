@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runx.ai/spec/output-contract.schema.json",
+  "type": "object",
+  "patternProperties": {
+    "^(.*)$": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "const": "string",
+              "type": "string"
+            },
+            {
+              "const": "number",
+              "type": "string"
+            },
+            {
+              "const": "integer",
+              "type": "string"
+            },
+            {
+              "const": "boolean",
+              "type": "string"
+            },
+            {
+              "const": "array",
+              "type": "string"
+            },
+            {
+              "const": "object",
+              "type": "string"
+            },
+            {
+              "const": "null",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "additionalProperties": false,
+          "minProperties": 1,
+          "type": "object",
+          "properties": {
+            "type": {
+              "anyOf": [
+                {
+                  "const": "string",
+                  "type": "string"
+                },
+                {
+                  "const": "number",
+                  "type": "string"
+                },
+                {
+                  "const": "integer",
+                  "type": "string"
+                },
+                {
+                  "const": "boolean",
+                  "type": "string"
+                },
+                {
+                  "const": "array",
+                  "type": "string"
+                },
+                {
+                  "const": "object",
+                  "type": "string"
+                },
+                {
+                  "const": "null",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": {
+              "type": "string"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "wrap_as": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "enum": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

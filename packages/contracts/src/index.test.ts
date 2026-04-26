@@ -6,12 +6,19 @@ import {
   RUNX_CONTROL_SCHEMA_REFS,
   RUNX_LOGICAL_SCHEMAS,
   buildHostedOpenApiSchemas,
+  agentContextEnvelopeSchema,
+  adapterInvokeResultSchema,
+  outputContractSchema,
   credentialEnvelopeSchema,
   registryBindingSchema,
   reviewReceiptOutputSchema,
   runxContractSchemas,
   runxAuxiliarySchemas,
   runxGeneratedSchemaArtifacts,
+  validateAdapterInvokeResultContract,
+  validateAgentContextEnvelopeContract,
+  validateOutputContractContract,
+  validateResolutionRequestContract,
   validateCredentialEnvelopeContract,
   validateCapabilityExecutionContract,
   validateDevReportContract,
@@ -80,6 +87,85 @@ describe("@runxhq/contracts", () => {
       requested_scopes: ["repo:status"],
       granted_scopes: ["repo:*"],
     })).toThrow(/scope-admission\.schema\.json/);
+  });
+
+  it("owns executor control protocol schemas and runtime validation", () => {
+    expect(outputContractSchema.$id).toBe(RUNX_CONTROL_SCHEMA_REFS.output_contract);
+    expect(agentContextEnvelopeSchema.$id).toBe(RUNX_CONTROL_SCHEMA_REFS.agent_context_envelope);
+    expect(adapterInvokeResultSchema.$id).toBe(RUNX_CONTROL_SCHEMA_REFS.adapter_invoke_result);
+    expect(runxGeneratedSchemaArtifacts["output-contract.schema.json"]).toBe(outputContractSchema);
+    expect(runxGeneratedSchemaArtifacts["agent-context-envelope.schema.json"]).toBe(agentContextEnvelopeSchema);
+    expect(runxGeneratedSchemaArtifacts["adapter-invoke-result.schema.json"]).toBe(adapterInvokeResultSchema);
+
+    expect(validateOutputContractContract({
+      summary: "string",
+      verdict: {
+        type: "string",
+        enum: ["pass", "fail"],
+        required: true,
+      },
+    })).toMatchObject({
+      summary: "string",
+    });
+
+    expect(validateAgentContextEnvelopeContract({
+      run_id: "rx_contract",
+      skill: "demo.skill",
+      instructions: "Do the work.",
+      inputs: {},
+      allowed_tools: ["fs.read"],
+      current_context: [],
+      historical_context: [],
+      provenance: [],
+      expected_outputs: {
+        summary: "string",
+      },
+      trust_boundary: "test",
+    })).toMatchObject({
+      run_id: "rx_contract",
+      expected_outputs: {
+        summary: "string",
+      },
+    });
+
+    expect(() => validateAgentContextEnvelopeContract({
+      run_id: "rx_contract",
+      skill: "demo.skill",
+      instructions: "Do the work.",
+      inputs: {},
+      allowed_tools: [],
+      current_context: [],
+      historical_context: [],
+      provenance: [],
+      context: {
+        voice_grammar: {},
+      },
+      trust_boundary: "test",
+    })).toThrow("context.voice_grammar is no longer supported; use voice_profile");
+
+    const resolutionRequest = validateResolutionRequestContract({
+      id: "approval.demo",
+      kind: "approval",
+      gate: {
+        id: "gate.demo",
+        reason: "Needs human approval.",
+      },
+    });
+
+    expect(validateAdapterInvokeResultContract({
+      status: "needs_resolution",
+      stdout: "",
+      stderr: "",
+      exitCode: null,
+      signal: null,
+      durationMs: 0,
+      request: resolutionRequest,
+    })).toMatchObject({
+      status: "needs_resolution",
+      request: {
+        kind: "approval",
+      },
+    });
   });
 
   it("owns generated auxiliary schemas", () => {

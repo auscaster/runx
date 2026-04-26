@@ -68,6 +68,7 @@ task:
       - "No raw GitHub OAuth token or GitHub App installation access token is persisted."
       - "Future sync is keyed by repo_full_name plus installation_id and never downgrades verified or first_party listings."
       - "Nango claim remains valid during migration; this spec adds a cleaner GitHub App path instead of breaking existing sessions."
+      - "Nango/provider implementation details are never surfaced in browser code, package dependencies, public integration docs links, or frontend-visible URLs."
     related_docs:
       - ".ai/specs/approved/runx-claim-via-nango.yaml"
       - ".ai/specs/active/runx-url-as-publish.yaml"
@@ -104,6 +105,9 @@ task:
     - "Installation access tokens are short-lived runtime credentials. They may be used to verify repo access and sync immediately, but are never written to session or enrollment records."
     - "The successful enrollment stores installation_id, app_account_login, app_account_type, repo_full_name, active listing id/version, and claim session id."
     - "GitHub App webhooks use GitHub's X-Hub-Signature-256 with a distinct app webhook secret. Do not reuse the Nango webhook secret or legacy self-publish shared secret."
+    - "If the GitHub App is already installed on the exact repo, start may verify and promote immediately instead of redirecting the user through another install screen."
+    - "Installation removal, suspension, or repo-access removal disables sync for the matching binding; only repository deletion tombstones registry versions."
+    - "Keep raw provider docs/logo metadata internally, but strip vendor-hosted docs links from public payloads and serve vendor-hosted logos through runx-owned URLs."
   acceptance:
     validation_profile: "standard"
     definition_of_done:
@@ -124,6 +128,9 @@ task:
         status: "pending"
       - id: "dod6"
         description: "No code path stores raw GitHub OAuth tokens or GitHub App installation access tokens."
+        status: "pending"
+      - id: "dod7"
+        description: "Frontend packages and web routes contain no Nango references; public integration logos resolve through runx-owned URLs, and vendor docs links are not exposed."
         status: "pending"
     validation:
       - id: "v1"
@@ -155,6 +162,11 @@ task:
         type: "compile"
         description: "Cloud and OSS builds stay green after public schema changes."
         command: "cd ../cloud && pnpm build && cd ../oss && pnpm build"
+        expected: "exit code 0"
+      - id: "v7"
+        type: "boundary"
+        description: "Frontend code and package metadata do not mention Nango."
+        command: "cd ../cloud && ! rg -n 'Nango|nango|@nangohq' apps/web packages/ui"
         expected: "exit code 0"
 
 planning_log:
@@ -203,6 +215,8 @@ phases:
           Add successful binding metadata only:
             github_app_claim_session_id?, github_app_installation_id?,
             github_app_account_login?, github_app_account_type?.
+          Add `sync_disabled` status plus disabled timestamp/reason for app
+          access removal without tombstoning still-visible listings.
           Do not add pending/rejected GitHub App statuses to SelfPublishEnrollmentRecord.
     acceptance_criteria:
       - id: "ac1_1"
@@ -267,6 +281,9 @@ phases:
               URL-publish indexing for the repo URL and choose the matching
               listing target when exactly one listing is produced.
             - Snapshot current versions for the target listing.
+            - If the GitHub App is already installed on the exact repo,
+              verify repo access and promote immediately without returning
+              an install redirect.
             - Persist pending session before returning install_url.
 
           finalize({ request_id, state, installation_id, setup_action }):
@@ -282,6 +299,9 @@ phases:
       - id: "ac3_1"
         type: "test"
         description: "Start indexes a missing URL-published listing before returning an install URL."
+      - id: "ac3_1b"
+        type: "test"
+        description: "Start fast-paths already-installed repos to verified without returning an install URL."
       - id: "ac3_2"
         type: "test"
         description: "Finalize promotes only snapshot-matched versions and writes installation metadata."
@@ -343,15 +363,16 @@ phases:
         content_spec: |
           Add handling for GitHub App installation metadata. Reindex only
           enrollments whose repo_full_name and installation_id match. Treat
-          installation removed/suspended or repository removed as tombstone or
-          sync-disabled according to event semantics.
+          installation removed/suspended or repository access removed as
+          sync_disabled, and tombstone only when the repository itself is
+          deleted.
     acceptance_criteria:
       - id: "ac5_1"
         type: "test"
         description: "Push/tag webhooks reindex bound repos and preserve verified trust tier."
       - id: "ac5_2"
         type: "test"
-        description: "Repository deleted or installation repository removal tombstones or disables the matching binding only."
+        description: "Repository deleted tombstones the matching binding only; installation/repo access removal marks only the matching binding sync_disabled."
       - id: "ac5_3"
         type: "boundary"
         description: "Legacy shared-secret webhook route remains isolated from GitHub App webhook handling."
@@ -369,7 +390,8 @@ phases:
           Support repo_url input and owner/name prefill. On start, render the
           install_url returned by the API and navigate or open it. On callback,
           make exactly one finalize request. Pending state shows a manual retry
-          button. No setInterval, recursive timeout, or long-poll request.
+          button. Already-verified start responses render success immediately.
+          No setInterval, recursive timeout, or long-poll request.
       - file: "../cloud/apps/web/src/pages/x/claim/index.astro"
         action: "update"
         content_spec: |
@@ -386,8 +408,8 @@ phases:
       - id: "ac6_3"
         type: "boundary"
         description: "ClaimAction contains no polling loop."
-        command: "cd ../cloud && rg -n 'setInterval|setTimeout|while \\(|/await' packages/ui/src/ClaimAction apps/web/src/pages/api/claim"
-        expected: "No polling matches."
+        command: "cd ../cloud && ! rg -n 'setInterval|setTimeout|while \\(|/await' packages/ui/src/ClaimAction apps/web/src/pages/api/claim"
+        expected: "exit code 0"
     status: "pending"
 
 rollback:

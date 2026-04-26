@@ -41,12 +41,7 @@
       "import": "./dist/src/runtime.js"
     }
   },
-  "peerDependencies": {
-    "@runxhq/core": "^0.1.4"
-  },
-  "peerDependenciesMeta": {
-    "@runxhq/core": {
-      "optional": true
-    }
+  "dependencies": {
+    "@runxhq/core": "workspace:^0.1.4"
   }
 }
