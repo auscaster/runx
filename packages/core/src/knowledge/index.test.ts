@@ -9,13 +9,20 @@ import { writeLocalReceipt } from "../receipts/index.js";
 import {
   createFileKnowledgeStore,
   fetchThreadViaAdapter,
+  findLatestControlOutboxEntry,
+  findLatestOutboxEntry,
   findOutboxEntry,
   findActiveSuppressionRecord,
   handoffIsSuppressed,
+  handoffStateAllowsOutboxPush,
+  handoffStateAllowsSignalDisposition,
   latestDecisionForGate,
   latestHandoffSignal,
+  materializeOutboxEntryFiles,
   pushOutboxEntryViaAdapter,
   reduceHandoffState,
+  readOutboxEntryControl,
+  sortOutboxEntriesByRecency,
   threadAllowsGate,
   summarizeThread,
   validateHandoffSignal,
@@ -150,6 +157,139 @@ describe("thread contract", () => {
     expect(summarizeThread(state)).toBe(
       "work_item:linear://issue/ENG-42 via ticketing | entries=2 decisions=0 outbox=draft_change",
     );
+  });
+
+  it("finds the latest control outbox entries without product-specific logic", () => {
+    const state = validateThread({
+      kind: "runx.thread.v1",
+      adapter: {
+        type: "github",
+      },
+      thread_kind: "work_item",
+      thread_locator: "github://example/repo/issues/123",
+      entries: [],
+      decisions: [],
+      outbox: [
+        {
+          entry_id: "message:task:review",
+          kind: "message",
+          status: "published",
+          thread_locator: "github://example/repo/issues/123",
+          metadata: {
+            updated_at: "2026-04-23T00:00:00Z",
+          },
+        },
+        {
+          entry_id: "message:task:controlled-review",
+          kind: "message",
+          status: "published",
+          thread_locator: "github://example/repo/issues/123",
+          metadata: {
+            updated_at: "2026-04-24T00:00:00Z",
+            control: {
+              workflow: "docs",
+              lane: "review",
+            },
+          },
+        },
+        {
+          entry_id: "message:task:signal",
+          kind: "message",
+          status: "published",
+          thread_locator: "github://example/repo/issues/123",
+          metadata: {
+            updated_at: "2026-04-25T00:00:00Z",
+            control: {
+              workflow: "docs",
+              lane: "signal",
+            },
+          },
+        },
+        {
+          entry_id: "pull_request:task",
+          kind: "pull_request",
+          locator: "https://github.com/example/repo/pull/1",
+          metadata: {
+            pushed_at: "2026-04-26T00:00:00Z",
+          },
+        },
+      ],
+      source_refs: [],
+    });
+
+    expect(readOutboxEntryControl(state.outbox[1])?.lane).toBe("review");
+    expect(findLatestControlOutboxEntry(state, {
+      kinds: ["message"],
+      workflow: "docs",
+      lanes: ["review"],
+      entryIdPattern: /^message:[^:]+:review$/i,
+    })?.entry_id).toBe("message:task:controlled-review");
+    expect(findLatestControlOutboxEntry(state, {
+      kinds: ["message"],
+      workflow: "docs",
+      lanes: ["signal"],
+    })?.entry_id).toBe("message:task:signal");
+    expect(findLatestControlOutboxEntry(state, {
+      kinds: ["message"],
+      entryIdPattern: /^message:[^:]+:review$/i,
+    })?.entry_id).toBe("message:task:review");
+    const globalPattern = /^message:[^:]+:signal$/gi;
+    expect(findLatestControlOutboxEntry(state, {
+      kinds: ["message"],
+      entryIdPattern: globalPattern,
+    })?.entry_id).toBe("message:task:signal");
+    expect(findLatestControlOutboxEntry(state, {
+      kinds: ["message"],
+      entryIdPattern: globalPattern,
+    })?.entry_id).toBe("message:task:signal");
+    expect(findLatestOutboxEntry(state, { kinds: ["pull_request"] })?.locator)
+      .toBe("https://github.com/example/repo/pull/1");
+    expect(sortOutboxEntriesByRecency(state.outbox).map((entry) => entry.entry_id)).toEqual([
+      "pull_request:task",
+      "message:task:signal",
+      "message:task:controlled-review",
+      "message:task:review",
+    ]);
+  });
+
+  it("centralizes generic handoff transition checks", () => {
+    expect(handoffStateAllowsSignalDisposition({ status: "accepted" }, "approved_to_send")).toBe(true);
+    expect(handoffStateAllowsSignalDisposition({ status: "needs_revision" }, "approved_to_send")).toBe(false);
+    expect(handoffStateAllowsSignalDisposition({ status: "needs_revision" }, "requested_changes")).toBe(true);
+    expect(handoffStateAllowsOutboxPush({ status: "approved_to_send" })).toBe(true);
+    expect(handoffStateAllowsOutboxPush({ status: "accepted" })).toBe(false);
+  });
+
+  it("materializes reviewed outbox files through a generic reader", async () => {
+    const files = await materializeOutboxEntryFiles({
+      outboxEntry: {
+        entry_id: "pull_request:task",
+        kind: "pull_request",
+        metadata: {
+          changed_files: ["README.md", " ./docs/index.md ", "README.md"],
+        },
+      },
+      async readFile(relativePath) {
+        return `contents:${relativePath}`;
+      },
+    });
+
+    expect(files).toEqual([
+      { path: "README.md", contents: "contents:README.md" },
+      { path: "docs/index.md", contents: "contents:docs/index.md" },
+    ]);
+    await expect(materializeOutboxEntryFiles({
+      outboxEntry: {
+        entry_id: "pull_request:task",
+        kind: "pull_request",
+        metadata: {
+          changed_files: ["../secret.txt"],
+        },
+      },
+      async readFile() {
+        return "never";
+      },
+    })).rejects.toThrow(/relative path inside the workspace/);
   });
 
   it("rejects missing thread locator fields", () => {

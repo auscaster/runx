@@ -1,0 +1,77 @@
+{
+  "schema": "runx.tool.manifest.v1",
+  "name": "thread.handoff_state",
+  "description": "Reduce generic post-handoff signals and suppression records into the current handoff state.",
+  "source": {
+    "type": "cli-tool",
+    "command": "node",
+    "args": [
+      "./run.mjs"
+    ]
+  },
+  "inputs": {
+    "handoff_id": {
+      "type": "string",
+      "required": true,
+      "description": "Stable id for the outward handoff being reduced."
+    },
+    "boundary_kind": {
+      "type": "string",
+      "required": false,
+      "description": "Optional boundary kind for the far side of the handoff."
+    },
+    "target_repo": {
+      "type": "string",
+      "required": false,
+      "description": "Optional target repository slug for repo-scoped suppression matching."
+    },
+    "target_locator": {
+      "type": "string",
+      "required": false,
+      "description": "Optional target locator for target-scoped suppression matching."
+    },
+    "contact_locator": {
+      "type": "string",
+      "required": false,
+      "description": "Optional contact locator for contact-scoped suppression matching."
+    },
+    "signals": {
+      "type": "json",
+      "required": false,
+      "description": "Observed handoff_signal records to replay for this handoff."
+    },
+    "suppressions": {
+      "type": "json",
+      "required": false,
+      "description": "Durable suppression_record policies to apply after signal replay."
+    },
+    "now": {
+      "type": "string",
+      "required": false,
+      "description": "Optional ISO timestamp used for suppression expiry checks."
+    },
+    "candidate_disposition": {
+      "type": "string",
+      "required": false,
+      "description": "Optional signal disposition to check against the reduced state."
+    },
+    "required_outbox_status": {
+      "type": "string",
+      "required": false,
+      "description": "Optional handoff_state status required before an outbox push. Defaults to approved_to_send."
+    }
+  },
+  "output": {},
+  "scopes": [
+    "thread:read"
+  ],
+  "runtime": {
+    "command": "node",
+    "args": [
+      "./run.mjs"
+    ]
+  },
+  "source_hash": "sha256:20d6e6605cffbff0488093d5b159c8d7924ef08b671ebe577750d358013eb00b",
+  "schema_hash": "sha256:2ab0a5a2bd93e2bd78e9e014ad5105df603480d36a57507f24a6bfec63b6894b",
+  "toolkit_version": "0.1.3"
+}

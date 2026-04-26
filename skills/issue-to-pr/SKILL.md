@@ -109,6 +109,14 @@ minting a parallel one. When `thread.adapter` is backed by a push-capable
 runtime adapter, the lane then pushes that refreshed outbox entry upstream and
 returns the rehydrated provider state directly.
 
+Post-handoff signal capture is deliberately outside this lane. `issue-to-pr`
+owns packaging, visible approval boundaries, and adapter push. Once the
+handoff has crossed that boundary, generic `handoff_signal`,
+`handoff_state`, and `suppression_record` contracts own response reduction and
+send/suppression gating. Sourcey docs PRs, future skill-upstream lanes, and
+outreach flows should consume those generic handoff helpers instead of adding
+product-specific signal state to this skill.
+
 ## Spec authoring contract
 
 The `issue-to-pr-author-spec` boundary must emit a full scafld `spec_version:

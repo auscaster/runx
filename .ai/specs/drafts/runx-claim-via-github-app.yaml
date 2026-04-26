@@ -1,0 +1,405 @@
+spec_version: "1.1"
+task_id: "runx-claim-via-github-app"
+created: "2026-04-26T11:17:33Z"
+updated: "2026-04-26T11:24:14Z"
+status: "draft"
+harden_status: "ready_for_implementation"
+
+task:
+  title: "Claim via GitHub App: paste URL first, verify and sync second"
+  summary: >
+    The Nango claim flow proves repo permission and upgrades an existing
+    URL-published listing, but it does not install repository webhooks. The
+    follow-on GitHub App flow should make the clean path one input: paste a
+    GitHub URL, ensure the listing exists at community tier, install or select
+    the exact repo through the GitHub App, verify the installation has access
+    to that repo, promote snapshot-matched listings to verified, and use
+    GitHub App webhooks for future push/tag/delete sync. The browser must not
+    long-poll and the backend must not persist installation access tokens.
+  size: "large"
+  risk_level: "high"
+  context:
+    packages:
+      - "../cloud/packages/api"
+      - "../cloud/packages/ui"
+      - "../cloud/apps/web"
+      - "packages/contracts"
+    files_impacted:
+      - path: "../cloud/packages/api/src/github-app-claim-model.ts"
+        lines: "all"
+        reason: "Durable state for GitHub App claim/install sessions."
+      - path: "../cloud/packages/api/src/github-app-client.ts"
+        lines: "all"
+        reason: "GitHub App JWT, installation token exchange, repo access verification, and webhook signature helpers."
+      - path: "../cloud/packages/api/src/github-app-claim-service.ts"
+        lines: "all"
+        reason: "Orchestrates URL-first start, installation finalize, promotion, repo binding, and sync handoff."
+      - path: "../cloud/packages/api/src/claim-routes.ts"
+        lines: "all"
+        reason: "Adds GitHub App claim session routes next to the existing Nango session routes."
+      - path: "../cloud/packages/api/src/self-publish-routes.ts"
+        lines: "webhook routes"
+        reason: "Adds a GitHub App webhook route that verifies GitHub signatures and event types."
+      - path: "../cloud/packages/api/src/self-publish-model.ts"
+        lines: "SelfPublishEnrollmentRecord"
+        reason: "Persists successful installation binding metadata, not pending install state."
+      - path: "../cloud/packages/api/src/server-config.ts"
+        lines: "GitHub App config"
+        reason: "Reads app id, app slug, private key, webhook secret, and public callback URL settings."
+      - path: "../cloud/packages/api/src/server.ts"
+        lines: "service construction"
+        reason: "Wires GitHub App client, claim service, stores, routes, and webhook handling."
+      - path: "../cloud/packages/ui/src/ClaimAction"
+        lines: "all"
+        reason: "Replaces OAuth-first claim UI with URL/listing-first GitHub App claim flow."
+      - path: "../cloud/apps/web/src/pages/x/claim/index.astro"
+        lines: "all"
+        reason: "Allows claim start from either a GitHub URL or existing owner/name query params."
+      - path: "../cloud/apps/web/src/pages/api/claim"
+        lines: "all"
+        reason: "Adds web proxies for GitHub App start/finalize/status routes if the web app continues proxying API calls."
+      - path: "packages/contracts/src/openapi-public.ts"
+        lines: "claim schemas"
+        reason: "Documents the public GitHub App claim route request/response envelopes."
+    invariants:
+      - "URL-publish stays anonymous and immediate; claim remains an optional trust upgrade."
+      - "A GitHub App installation id is not proof by itself. The backend must verify the installation includes the exact source repo."
+      - "Successful repo bindings live in SelfPublishEnrollmentStore. Pending, rejected, and expired install sessions do not."
+      - "No raw GitHub OAuth token or GitHub App installation access token is persisted."
+      - "Future sync is keyed by repo_full_name plus installation_id and never downgrades verified or first_party listings."
+      - "Nango claim remains valid during migration; this spec adds a cleaner GitHub App path instead of breaking existing sessions."
+    related_docs:
+      - ".ai/specs/approved/runx-claim-via-nango.yaml"
+      - ".ai/specs/active/runx-url-as-publish.yaml"
+      - "../cloud/packages/api/src/claim-service.ts"
+      - "../cloud/packages/api/src/self-publish-service.ts"
+      - "../cloud/apps/web/src/pages/x/claim/index.astro"
+    cwd: "."
+  objectives:
+    - "Make claim start from a GitHub URL or existing listing target, with no OAuth prerequisite."
+    - "Use GitHub App installation as the durable repo sync authority."
+    - "Verify exact repo access before promotion or webhook binding."
+    - "Promote only snapshot-matched community versions and preserve first_party/verified tiers."
+    - "Replace manual/shared-secret GitHub webhook assumptions with GitHub App signed webhooks for claimed repos."
+    - "Keep Nango claim routes and data compatible until the UI switch is explicitly complete."
+  scope:
+    in_scope:
+      - "GitHub App claim session model, store, routes, service, and tests."
+      - "GitHub App client for JWT signing, installation token exchange, installation repo verification, and webhook signature verification."
+      - "URL-first /x/claim UX and one-shot finalize after GitHub redirects back with installation_id/setup_action/state."
+      - "SelfPublishEnrollment metadata for successful GitHub App bindings."
+      - "GitHub App webhook ingestion for push, create/tag, repository deleted, installation suspended/deleted, and installation_repositories changes."
+      - "OpenAPI public schemas for the GitHub App claim route family."
+    out_of_scope:
+      - "Private repository indexing."
+      - "Claim dispute/revocation UI beyond automatic installation removal/suspension handling."
+      - "Replacing Nango principal-bound connect flows."
+      - "Multi-repo bulk install onboarding."
+      - "Hosted operator moderation dashboards."
+  decisions:
+    - "Use a separate GitHubAppClaimSessionStore instead of forcing GitHub App sessions into Nango-specific ClaimSessionRecord fields."
+    - "Build the install URL with a server-generated `state`/request_id and configured app slug; never trust a browser-supplied installation_id without matching a pending session."
+    - "The start route accepts `repo_url` and optional owner/name. If the listing is missing, it runs the existing URL-publish/index path first and returns the resulting listing target plus install URL."
+    - "Finalize is one-shot. The browser calls finalize once after GitHub redirects back. Pending responses show a manual retry button, not polling."
+    - "Installation access tokens are short-lived runtime credentials. They may be used to verify repo access and sync immediately, but are never written to session or enrollment records."
+    - "The successful enrollment stores installation_id, app_account_login, app_account_type, repo_full_name, active listing id/version, and claim session id."
+    - "GitHub App webhooks use GitHub's X-Hub-Signature-256 with a distinct app webhook secret. Do not reuse the Nango webhook secret or legacy self-publish shared secret."
+  acceptance:
+    validation_profile: "standard"
+    definition_of_done:
+      - id: "dod1"
+        description: "POST /v1/claim/github-app/sessions accepts a GitHub repo URL, ensures a community listing exists when possible, persists a pending app claim session, and returns install_url plus request_id."
+        status: "pending"
+      - id: "dod2"
+        description: "Finalize rejects missing, mismatched, expired, or wrong-repo installation callbacks without promoting registry records."
+        status: "pending"
+      - id: "dod3"
+        description: "Finalize verifies the installation includes the exact listing source repo, promotes snapshot-matched versions to verified, and writes a successful SelfPublishEnrollment binding with installation metadata."
+        status: "pending"
+      - id: "dod4"
+        description: "GitHub App webhooks reindex push/tag events for bound repos and tombstone repository.deleted or installation removal events."
+        status: "pending"
+      - id: "dod5"
+        description: "/x/claim supports a single GitHub URL input and existing owner/name links, then performs exactly one finalize request after the GitHub install callback."
+        status: "pending"
+      - id: "dod6"
+        description: "No code path stores raw GitHub OAuth tokens or GitHub App installation access tokens."
+        status: "pending"
+    validation:
+      - id: "v1"
+        type: "test"
+        description: "GitHub App claim service tests cover URL-first start, finalize success, wrong installation, wrong repo, expiry, idempotency, and no-downgrade behavior."
+        command: "cd ../cloud && pnpm exec vitest run packages/api/src/github-app-claim-service.test.ts"
+        expected: "exit code 0"
+      - id: "v2"
+        type: "test"
+        description: "GitHub App client tests cover JWT signing seam, installation token exchange, repo selection verification, and webhook signature verification."
+        command: "cd ../cloud && pnpm exec vitest run packages/api/src/github-app-client.test.ts"
+        expected: "exit code 0"
+      - id: "v3"
+        type: "test"
+        description: "Route tests cover start/status/finalize envelopes and GitHub App webhook event handling."
+        command: "cd ../cloud && pnpm exec vitest run packages/api/src/claim-routes.test.ts packages/api/src/self-publish-routes.test.ts"
+        expected: "exit code 0"
+      - id: "v4"
+        type: "test"
+        description: "Claim UI tests cover URL input, install redirect, callback finalize, terminal states, and no polling loops."
+        command: "cd ../cloud && pnpm exec vitest run packages/ui/src/ClaimAction/ClaimAction.test.tsx"
+        expected: "exit code 0"
+      - id: "v5"
+        type: "boundary"
+        description: "No persisted token fields are introduced in claim or enrollment models."
+        command: "cd ../cloud && rg -n 'access_token|installation_token|github_token|Authorization.*github' packages/api/src/*claim* packages/api/src/self-publish-model.ts packages/api/src/github-app-client.ts"
+        expected: "Only runtime HTTP client/header code in github-app-client.ts may match."
+      - id: "v6"
+        type: "compile"
+        description: "Cloud and OSS builds stay green after public schema changes."
+        command: "cd ../cloud && pnpm build && cd ../oss && pnpm build"
+        expected: "exit code 0"
+
+planning_log:
+  - timestamp: "2026-04-26T11:17:33Z"
+    actor: "user"
+    summary: "Created a placeholder spec via scafld plan for GitHub App claim."
+  - timestamp: "2026-04-26T11:24:14Z"
+    actor: "agent"
+    summary: "Replaced the placeholder with a concrete GitHub App follow-on design aligned to the completed Nango claim architecture."
+    notes: >
+      The key correction is to keep pending app installation state separate
+      from successful repo bindings, verify exact repo access after GitHub
+      redirects back, and use app webhooks for ongoing sync rather than
+      treating OAuth permission as webhook installation.
+
+phases:
+  - id: "phase1"
+    name: "Durable GitHub App claim sessions"
+    objective: "Capture URL-first app-install attempts without mixing pending state into successful repo bindings."
+    changes:
+      - file: "../cloud/packages/api/src/github-app-claim-model.ts"
+        action: "create"
+        content_spec: |
+          Define GitHubAppClaimSessionRecord:
+            request_id, state, owner?, name?, repo_url, repo_full_name,
+            skill_id?, status pending_install|installed|verified|rejected|expired|error,
+            installation_id?, app_account_login?, app_account_type?,
+            version_snapshot, created_at, updated_at, expires_at, completed_at?,
+            rejection_reason?.
+          request_id/state are generated server-side with cryptographic entropy.
+      - file: "../cloud/packages/api/src/github-app-claim-stores.ts"
+        action: "create"
+        content_spec: |
+          Add file and in-memory stores with get, put, list,
+          findByState, findByInstallationId, findActiveByRepo, and pruneExpired.
+          File writes are atomic one-record-per-session JSON writes.
+      - file: "../cloud/packages/api/src/self-publish-model.ts"
+        action: "update"
+        content_spec: |
+          Add successful binding metadata only:
+            github_app_claim_session_id?, github_app_installation_id?,
+            github_app_account_login?, github_app_account_type?.
+          Do not add pending/rejected GitHub App statuses to SelfPublishEnrollmentRecord.
+    acceptance_criteria:
+      - id: "ac1_1"
+        type: "test"
+        description: "GitHubAppClaimSessionStore round-trips pending, verified, rejected, expired, and error records."
+      - id: "ac1_2"
+        type: "boundary"
+        description: "SelfPublishEnrollmentRecord has only successful GitHub App binding metadata, not pending app session fields."
+    status: "pending"
+
+  - id: "phase2"
+    name: "GitHub App client and config"
+    objective: "Use app installation authority without persisting short-lived installation tokens."
+    dependencies:
+      - "phase1"
+    changes:
+      - file: "../cloud/packages/api/src/server-config.ts"
+        action: "update"
+        content_spec: |
+          Read RUNX_GITHUB_APP_ID, RUNX_GITHUB_APP_SLUG,
+          RUNX_GITHUB_APP_PRIVATE_KEY or *_FILE, RUNX_GITHUB_APP_WEBHOOK_SECRET,
+          RUNX_GITHUB_APP_CALLBACK_URL?, and RUNX_GITHUB_API_BASE_URL?.
+          Require app id, slug, private key, and webhook secret when the app
+          claim route is enabled.
+      - file: "../cloud/packages/api/src/github-app-client.ts"
+        action: "create"
+        content_spec: |
+          Export GitHubAppClient:
+            buildInstallUrl({ state, repoFullName? })
+            createAppJwt()
+            createInstallationAccessToken(installationId)
+            getInstallation(installationId)
+            listInstallationRepos(installationId)
+            installationHasRepo(installationId, repoFullName)
+            verifyWebhookSignature(secret, rawBody, signature)
+          Do not expose or persist installation access tokens outside runtime calls.
+    acceptance_criteria:
+      - id: "ac2_1"
+        type: "test"
+        description: "Install URL includes configured app slug and server state."
+      - id: "ac2_2"
+        type: "test"
+        description: "Repo verification rejects installations that do not include the exact source repo."
+      - id: "ac2_3"
+        type: "test"
+        description: "Webhook signature verification accepts valid X-Hub-Signature-256 and rejects invalid signatures."
+    status: "pending"
+
+  - id: "phase3"
+    name: "GitHub App claim service"
+    objective: "Start from URL/listing, finalize installation, promote verified listings, and write repo bindings."
+    dependencies:
+      - "phase1"
+      - "phase2"
+    changes:
+      - file: "../cloud/packages/api/src/github-app-claim-service.ts"
+        action: "create"
+        content_spec: |
+          start({ repo_url, owner?, name? }):
+            - Normalize GitHub URL to repo_full_name and optional ref.
+            - If owner/name is absent or listing is missing, call existing
+              URL-publish indexing for the repo URL and choose the matching
+              listing target when exactly one listing is produced.
+            - Snapshot current versions for the target listing.
+            - Persist pending session before returning install_url.
+
+          finalize({ request_id, state, installation_id, setup_action }):
+            - Resolve by state/request_id and reject mismatch.
+            - Expire stale sessions.
+            - Verify setup_action is usable and installation includes repo_full_name.
+            - Promote snapshot-matched community versions to verified while
+              preserving verified and first_party.
+            - Write/update SelfPublishEnrollment with GitHub App installation metadata.
+            - Optionally run immediate self-publish reindex through installation authority.
+            - Mark verified/rejected/error idempotently.
+    acceptance_criteria:
+      - id: "ac3_1"
+        type: "test"
+        description: "Start indexes a missing URL-published listing before returning an install URL."
+      - id: "ac3_2"
+        type: "test"
+        description: "Finalize promotes only snapshot-matched versions and writes installation metadata."
+      - id: "ac3_3"
+        type: "test"
+        description: "Wrong repo, wrong state, expired session, and deleted/suspended installation paths reject without registry mutation."
+      - id: "ac3_4"
+        type: "test"
+        description: "Finalize is idempotent if GitHub redirects or the browser retries."
+    status: "pending"
+
+  - id: "phase4"
+    name: "Routes, OpenAPI, and web proxies"
+    objective: "Expose the app claim lifecycle without breaking existing Nango claim sessions."
+    dependencies:
+      - "phase3"
+    changes:
+      - file: "../cloud/packages/api/src/claim-routes.ts"
+        action: "update"
+        content_spec: |
+          Add:
+            POST /v1/claim/github-app/sessions
+            GET /v1/claim/github-app/sessions/:request_id
+            POST /v1/claim/github-app/sessions/:request_id/finalize
+          Keep /v1/claim/sessions Nango routes intact during migration.
+      - file: "../cloud/packages/api/src/openapi-route-catalog.ts"
+        action: "update"
+        content_spec: "Add GitHub App claim route entries and examples."
+      - file: "packages/contracts/src/openapi-public.ts"
+        action: "update"
+        content_spec: "Add public GitHub App claim request/status envelope schemas."
+      - file: "../cloud/apps/web/src/pages/api/claim/github-app"
+        action: "create"
+        content_spec: "Proxy start/status/finalize requests if web continues to isolate browser clients from the API origin."
+    acceptance_criteria:
+      - id: "ac4_1"
+        type: "test"
+        description: "Route tests return 201 for start, terminal status for verified/rejected, and clear 409/404/503 envelopes."
+      - id: "ac4_2"
+        type: "test"
+        description: "Existing Nango claim route tests still pass."
+    status: "pending"
+
+  - id: "phase5"
+    name: "GitHub App webhooks for repo sync"
+    objective: "Let successful app bindings drive future push/tag/delete updates."
+    dependencies:
+      - "phase3"
+    changes:
+      - file: "../cloud/packages/api/src/self-publish-routes.ts"
+        action: "update"
+        content_spec: |
+          Add a GitHub App webhook route that reads X-GitHub-Event, verifies
+          X-Hub-Signature-256 with RUNX_GITHUB_APP_WEBHOOK_SECRET, extracts
+          installation.id and repository.full_name, and forwards normalized
+          push/tag/delete/install-repository events to SelfPublishService.
+      - file: "../cloud/packages/api/src/self-publish-service.ts"
+        action: "update"
+        content_spec: |
+          Add handling for GitHub App installation metadata. Reindex only
+          enrollments whose repo_full_name and installation_id match. Treat
+          installation removed/suspended or repository removed as tombstone or
+          sync-disabled according to event semantics.
+    acceptance_criteria:
+      - id: "ac5_1"
+        type: "test"
+        description: "Push/tag webhooks reindex bound repos and preserve verified trust tier."
+      - id: "ac5_2"
+        type: "test"
+        description: "Repository deleted or installation repository removal tombstones or disables the matching binding only."
+      - id: "ac5_3"
+        type: "boundary"
+        description: "Legacy shared-secret webhook route remains isolated from GitHub App webhook handling."
+    status: "pending"
+
+  - id: "phase6"
+    name: "URL-first /x/claim UX"
+    objective: "Make the primary user path paste URL -> install app -> verified/synced."
+    dependencies:
+      - "phase4"
+    changes:
+      - file: "../cloud/packages/ui/src/ClaimAction/ClaimAction.tsx"
+        action: "update"
+        content_spec: |
+          Support repo_url input and owner/name prefill. On start, render the
+          install_url returned by the API and navigate or open it. On callback,
+          make exactly one finalize request. Pending state shows a manual retry
+          button. No setInterval, recursive timeout, or long-poll request.
+      - file: "../cloud/apps/web/src/pages/x/claim/index.astro"
+        action: "update"
+        content_spec: |
+          Render a URL-first claim panel even without owner/name query params.
+          Preserve existing owner/name links from /x/add by pre-populating the
+          listing target and source repo if available.
+    acceptance_criteria:
+      - id: "ac6_1"
+        type: "test"
+        description: "/x/claim renders a single URL input when no target query params exist."
+      - id: "ac6_2"
+        type: "test"
+        description: "Callback finalize runs once and then renders verified/rejected/pending_manual_retry."
+      - id: "ac6_3"
+        type: "boundary"
+        description: "ClaimAction contains no polling loop."
+        command: "cd ../cloud && rg -n 'setInterval|setTimeout|while \\(|/await' packages/ui/src/ClaimAction apps/web/src/pages/api/claim"
+        expected: "No polling matches."
+    status: "pending"
+
+rollback:
+  strategy: "per_phase"
+  commands:
+    phase1: "git -C /home/kam/dev/runx/cloud rm packages/api/src/github-app-claim-{model,stores}.ts && git -C /home/kam/dev/runx/cloud checkout HEAD -- packages/api/src/self-publish-model.ts"
+    phase2: "git -C /home/kam/dev/runx/cloud rm packages/api/src/github-app-client.ts && git -C /home/kam/dev/runx/cloud checkout HEAD -- packages/api/src/server-config.ts"
+    phase3: "git -C /home/kam/dev/runx/cloud rm packages/api/src/github-app-claim-service.ts"
+    phase4: "git -C /home/kam/dev/runx/cloud checkout HEAD -- packages/api/src/claim-routes.ts packages/api/src/openapi-route-catalog.ts apps/web/src/pages/api/claim && git -C /home/kam/dev/runx/oss checkout HEAD -- packages/contracts/src/openapi-public.ts"
+    phase5: "git -C /home/kam/dev/runx/cloud checkout HEAD -- packages/api/src/self-publish-routes.ts packages/api/src/self-publish-service.ts"
+    phase6: "git -C /home/kam/dev/runx/cloud checkout HEAD -- packages/ui/src/ClaimAction apps/web/src/pages/x/claim/index.astro"
+
+metadata:
+  estimated_effort_hours: 10
+  ai_model: "gpt-5"
+  tags:
+    - "claim"
+    - "github-app"
+    - "url-publish"
+    - "self-publish"
+    - "webhooks"

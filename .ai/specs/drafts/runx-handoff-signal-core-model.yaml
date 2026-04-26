@@ -1,8 +1,8 @@
 spec_version: "1.1"
 task_id: "runx-handoff-signal-core-model"
 created: "2026-04-24T02:15:00Z"
-updated: "2026-04-24T02:15:00Z"
-status: "draft"
+updated: "2026-04-26T11:38:00Z"
+status: "completed"
 
 task:
   title: "Harden the generic handoff signal model for post-boundary state"
@@ -40,6 +40,12 @@ task:
       - path: "packages/core/src/knowledge/*handoff*.test.ts"
         lines: "all"
         reason: "Focused knowledge-layer coverage for handoff state reduction."
+      - path: "tools/thread/handoff_state"
+        lines: "all"
+        reason: "Neutral tool surface for reducing generic handoff signals and suppression state."
+      - path: "tests/thread-handoff-state-tool.test.ts"
+        lines: "all"
+        reason: "Tool-level coverage for generic handoff state reduction."
       - path: "skills/draft-content/SKILL.md"
         lines: "all"
         reason: "Existing boundary terminology should stay aligned with the new handoff model."
@@ -127,7 +133,7 @@ task:
       - id: "v1"
         type: "test"
         description: "Focused handoff contract and reducer tests stay green."
-        command: "pnpm exec vitest run packages/contracts/src/handoff-contracts.test.ts packages/core/src/knowledge/handoff-state.test.ts packages/core/src/knowledge/index.test.ts"
+        command: "pnpm exec vitest run packages/contracts/src/handoff-contracts.test.ts packages/core/src/knowledge/handoff-state.test.ts packages/core/src/knowledge/index.test.ts tests/thread-handoff-state-tool.test.ts"
         cwd: "."
         expected: "exit code 0"
       - id: "v2"
@@ -177,6 +183,22 @@ planning_log:
     notes: >
       The remaining work should harden and expose the existing generic model
       instead of adding a second docs-specific signal vocabulary.
+  - timestamp: "2026-04-26T11:24:14Z"
+    actor: "agent"
+    summary: "Hardened generic knowledge helpers and added the neutral thread.handoff_state tool surface."
+    notes: >
+      Outbox control queries now avoid stateful regex behavior, outbox file
+      materialization normalizes relative paths before reading, and the
+      issue-to-pr skill text keeps post-handoff signal capture in the generic
+      handoff model rather than in PR packaging.
+  - timestamp: "2026-04-26T11:38:00Z"
+    actor: "agent"
+    summary: "Completed the Sourcey crossover by keeping generic execution surfaces in runx."
+    notes: >
+      Control outbox lookup now treats entry id patterns as legacy fallback
+      selectors when structured control metadata exists, and the CLI package
+      test locks the neutral thread.handoff_state tool into the shipped tool
+      surface.
 
 phases:
   - id: "phase1"
@@ -222,7 +244,7 @@ phases:
         command: "pnpm schemas:generate && git diff --exit-code packages/contracts/src schemas/handoff-signal.schema.json schemas/handoff-state.schema.json schemas/suppression-record.schema.json"
         cwd: "."
         expected: "exit code 0"
-    status: "pending"
+    status: "completed"
 
   - id: "phase2"
     name: "Harden knowledge reduction and persistence boundary"
@@ -254,7 +276,7 @@ phases:
       - id: "ac2_2"
         type: "documentation"
         description: "The design keeps decisions, signals, and suppression as distinct concepts."
-    status: "pending"
+    status: "completed"
 
   - id: "phase3"
     name: "Expose generic tools and keep domain wrappers thin"
@@ -270,6 +292,14 @@ phases:
           surface such as handoff or boundary, for example record signal, reduce
           state, and check suppression. Do not make docs or maintainer part of
           the generic tool namespace.
+      - file: "tools/thread/handoff_state"
+        action: "create"
+        lines: "all"
+        content_spec: >
+          Provide a neutral thread.handoff_state tool that reduces generic
+          handoff_signal records and suppression_record policy into a
+          handoff_state, reports the active suppression record, and exposes the
+          generic outbox-push and candidate-signal gates.
       - file: "../plans/sourcey-adoption-engine.md"
         action: "update"
         lines: "all"
@@ -291,7 +321,7 @@ phases:
       - id: "ac3_2"
         type: "documentation"
         description: "The design allows future skill-upstream and outreach lanes to consume the same generic contracts."
-    status: "pending"
+    status: "completed"
 
 rollback:
   strategy: "per_phase"

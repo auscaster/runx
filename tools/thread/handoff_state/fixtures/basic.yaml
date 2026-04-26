@@ -1,0 +1,32 @@
+name: thread-handoff-state-basic
+lane: deterministic
+target:
+  kind: tool
+  ref: thread.handoff_state
+inputs:
+  handoff_id: handoff:fixture
+  target_repo: example/repo
+  signals:
+    - schema: runx.handoff_signal.v1
+      signal_id: sig_accept
+      handoff_id: handoff:fixture
+      target_repo: example/repo
+      source: manual_note
+      disposition: accepted
+      recorded_at: "2026-04-25T00:00:00Z"
+    - schema: runx.handoff_signal.v1
+      signal_id: sig_send
+      handoff_id: handoff:fixture
+      target_repo: example/repo
+      source: manual_note
+      disposition: approved_to_send
+      recorded_at: "2026-04-25T00:05:00Z"
+expect:
+  status: success
+  output:
+    subset:
+      handoff_state:
+        status: approved_to_send
+        last_signal_id: sig_send
+      allowed:
+        outbox_push: true
