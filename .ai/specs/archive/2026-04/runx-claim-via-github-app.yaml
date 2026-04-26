@@ -1,8 +1,8 @@
 spec_version: "1.1"
 task_id: "runx-claim-via-github-app"
 created: "2026-04-26T11:17:33Z"
-updated: "2026-04-26T11:57:31Z"
-status: "in_progress"
+updated: "2026-04-26T14:58:57Z"
+status: "completed"
 harden_status: "ready_for_implementation"
 
 task:
@@ -113,25 +113,25 @@ task:
     definition_of_done:
       - id: "dod1"
         description: "POST /v1/claim/github-app/sessions accepts a GitHub repo URL, ensures a community listing exists when possible, persists a pending app claim session, and returns install_url plus request_id."
-        status: "pending"
+        status: "done"
       - id: "dod2"
         description: "Finalize rejects missing, mismatched, expired, or wrong-repo installation callbacks without promoting registry records."
-        status: "pending"
+        status: "done"
       - id: "dod3"
         description: "Finalize verifies the installation includes the exact listing source repo, promotes snapshot-matched versions to verified, and writes a successful SelfPublishEnrollment binding with installation metadata."
-        status: "pending"
+        status: "done"
       - id: "dod4"
         description: "GitHub App webhooks reindex push/tag events for bound repos and tombstone repository.deleted or installation removal events."
-        status: "pending"
+        status: "done"
       - id: "dod5"
         description: "/x/claim supports a single GitHub URL input and existing owner/name links, then performs exactly one finalize request after the GitHub install callback."
-        status: "pending"
+        status: "done"
       - id: "dod6"
         description: "No code path stores raw GitHub OAuth tokens or GitHub App installation access tokens."
-        status: "pending"
+        status: "done"
       - id: "dod7"
         description: "Frontend packages and web routes contain no Nango references; public integration logos resolve through runx-owned URLs, and vendor docs links are not exposed."
-        status: "pending"
+        status: "done"
     validation:
       - id: "v1"
         type: "test"
@@ -188,6 +188,9 @@ planning_log:
   - timestamp: "2026-04-26T11:57:31Z"
     actor: "cli"
     summary: "Execution started"
+  - timestamp: "2026-04-26T14:58:57Z"
+    actor: "cli"
+    summary: "Spec completed"
 phases:
   - id: "phase1"
     name: "Durable GitHub App claim sessions"
@@ -225,7 +228,7 @@ phases:
       - id: "ac1_2"
         type: "boundary"
         description: "SelfPublishEnrollmentRecord has only successful GitHub App binding metadata, not pending app session fields."
-    status: "pending"
+    status: "completed"
 
   - id: "phase2"
     name: "GitHub App client and config"
@@ -263,7 +266,7 @@ phases:
       - id: "ac2_3"
         type: "test"
         description: "Webhook signature verification accepts valid X-Hub-Signature-256 and rejects invalid signatures."
-    status: "pending"
+    status: "completed"
 
   - id: "phase3"
     name: "GitHub App claim service"
@@ -311,7 +314,7 @@ phases:
       - id: "ac3_4"
         type: "test"
         description: "Finalize is idempotent if GitHub redirects or the browser retries."
-    status: "pending"
+    status: "completed"
 
   - id: "phase4"
     name: "Routes, OpenAPI, and web proxies"
@@ -343,7 +346,7 @@ phases:
       - id: "ac4_2"
         type: "test"
         description: "Existing Nango claim route tests still pass."
-    status: "pending"
+    status: "completed"
 
   - id: "phase5"
     name: "GitHub App webhooks for repo sync"
@@ -376,7 +379,7 @@ phases:
       - id: "ac5_3"
         type: "boundary"
         description: "Legacy shared-secret webhook route remains isolated from GitHub App webhook handling."
-    status: "pending"
+    status: "completed"
 
   - id: "phase6"
     name: "URL-first /x/claim UX"
@@ -410,7 +413,7 @@ phases:
         description: "ClaimAction contains no polling loop."
         command: "cd ../cloud && ! rg -n 'setInterval|setTimeout|while \\(|/await' packages/ui/src/ClaimAction apps/web/src/pages/api/claim"
         expected: "exit code 0"
-    status: "pending"
+    status: "completed"
 
 rollback:
   strategy: "per_phase"
@@ -422,6 +425,32 @@ rollback:
     phase5: "git -C /home/kam/dev/runx/cloud checkout HEAD -- packages/api/src/self-publish-routes.ts packages/api/src/self-publish-service.ts"
     phase6: "git -C /home/kam/dev/runx/cloud checkout HEAD -- packages/ui/src/ClaimAction apps/web/src/pages/x/claim/index.astro"
 
+review:
+  timestamp: "2026-04-26T14:58:28Z"
+  verdict: "pass"
+  review_rounds: 3
+  reviewer_mode: "executor"
+  reviewer_session: ""
+  round_status: "completed"
+  override_applied: false
+  override_reason: null
+  override_confirmed_at: null
+  reviewed_head: "56090c44573848cc4ca1a70b13fbc8decde5e6ff"
+  reviewed_dirty: false
+  reviewed_diff: "bd3e625c9ea6d5e075b10911e42031bcb0c64e28fa9bda9c040f81b5b2a5ebf1"
+  passes:
+    - id: spec_compliance
+      result: "pass"
+    - id: scope_drift
+      result: "pass"
+    - id: regression_hunt
+      result: "pass"
+    - id: convention_check
+      result: "pass"
+    - id: dark_patterns
+      result: "pass"
+  blocking_count: 0
+  non_blocking_count: 0
 metadata:
   estimated_effort_hours: 10
   ai_model: "gpt-5"
