@@ -431,7 +431,7 @@ export function handoffStateAllowsOutboxPush(
 export async function materializeOutboxEntryFiles(
   options: MaterializeOutboxEntryFilesOptions,
 ): Promise<readonly MaterializedOutboxFile[]> {
-  const outboxEntry = validateOutboxEntry(options.outboxEntry, "outbox_entry");
+  const outboxEntry = requireRecord(options.outboxEntry, "outbox_entry");
   const paths = normalizeStringArray(
     options.paths ?? optionalPlainRecord(outboxEntry.metadata, "outbox_entry.metadata")?.[options.metadataKey ?? "changed_files"],
   )

@@ -263,8 +263,6 @@ describe("thread contract", () => {
   it("materializes reviewed outbox files through a generic reader", async () => {
     const files = await materializeOutboxEntryFiles({
       outboxEntry: {
-        entry_id: "pull_request:task",
-        kind: "pull_request",
         metadata: {
           changed_files: ["README.md", " ./docs/index.md ", "README.md"],
         },
