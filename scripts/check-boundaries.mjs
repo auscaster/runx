@@ -86,7 +86,7 @@ const relativeRuntimeDomainPattern = /(^|\/)(runner-local|harness|sdk|mcp)(\/|$)
 const staticSpecifierPattern =
   /\b(?:import|export)\s+(?:type\s+)?(?:[^'";]*?\s+from\s+)?["']([^"']+)["']|import\s*\(\s*["']([^"']+)["']\s*\)/g;
 const receiptStorageImportPattern =
-  /\bimport\s+(?:type\s+)?(?:\{([^}]+)\}|\*\s+as\s+([A-Za-z_$][\w$]*)|[A-Za-z_$][\w$]*)\s+from\s+["']([^"']*receipts[^"']*)["']/g;
+  /\bimport\s+(?:type\s+)?(?:\{([^}]+)\}|\*\s+as\s+([A-Za-z_$][\w$]*)|([A-Za-z_$][\w$]*))\s+from\s+["']([^"']*receipts[^"']*)["']/g;
 const forbiddenExecutorReceiptImports = new Set([
   "writeLocalReceipt",
   "writeLocalGraphReceipt",
@@ -201,12 +201,12 @@ function checkCoreImport(rel, domain, specifier) {
 function checkExecutorReceiptOwnership(rel, source) {
   let match;
   while ((match = receiptStorageImportPattern.exec(source)) !== null) {
-    const specifier = match[3];
+    const specifier = match[4];
     if (!specifierTargetsDomain(rel, specifier, "receipts")) {
       continue;
     }
-    if (match[2]) {
-      findings.push(`${rel} imports ${specifier}; executor must not namespace-import receipt storage helpers.`);
+    if (match[2] || match[3]) {
+      findings.push(`${rel} imports ${specifier}; executor must not default- or namespace-import receipt storage helpers.`);
       continue;
     }
     const importedNames = (match[1] ?? "")
