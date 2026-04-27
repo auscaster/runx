@@ -70,13 +70,13 @@ The global link points at `oss/packages/cli` in this checkout. Rebuild with
 
 `@runxhq/core` is the trusted kernel package. Its public subpaths are parser,
 state-machine, policy, executor, receipts, registry, config, knowledge,
-artifacts, marketplaces, and pure tool-catalog contracts. Policy and
-state-machine are the pure decision domains.
+artifacts, and marketplaces. Policy and state-machine are the pure decision
+domains.
 
 `@runxhq/runtime-local` is the local runtime package. It owns local
 orchestration, caller interaction, sandbox preparation, receipt-write
 orchestration, harness execution, runtime SDK entrypoints, MCP process-client
-behavior, and concrete local catalog adapters.
+behavior, tool-catalog utility functions, and concrete local catalog adapters.
 
 Runtime imports are a hard cut. Use `@runxhq/runtime-local`,
 `@runxhq/runtime-local/harness`, `@runxhq/runtime-local/sdk`,

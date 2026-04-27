@@ -1,6 +1,6 @@
 import { parseRegistrySkillRef } from "./resolve.js";
 import { normalizeRegistrySearchResult, type RegistrySearchResult } from "./search.js";
-import type { ToolCatalogSearchResult, ToolInspectResult } from "../tool-catalogs/index.js";
+import type { ToolCatalogSearchResult, ToolInspectResult } from "../executor/index.js";
 import {
   validateRegistryAttestations,
   validateRegistryPublisher,

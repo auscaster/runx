@@ -31,8 +31,7 @@ import {
   type ResolutionRequestContract,
   type ResolutionResponseContract,
 } from "@runxhq/contracts";
-import type { ValidatedSkill } from "../parser/index.js";
-import type { ToolCatalogAdapter } from "../tool-catalogs/index.js";
+import type { SkillInput, ValidatedSkill, ValidatedTool } from "../parser/index.js";
 
 export const CONTROL_SCHEMA_REFS = {
   output_contract: RUNX_CONTROL_SCHEMA_REFS.output_contract,
@@ -62,6 +61,101 @@ export type ApprovalResolutionRequest = ApprovalResolutionRequestContract;
 export type CognitiveResolutionRequest = CognitiveResolutionRequestContract;
 export type ResolutionRequest = ResolutionRequestContract;
 export type ResolutionResponse = ResolutionResponseContract;
+
+export interface ToolCatalogSearchResult {
+  readonly tool_id: string;
+  readonly name: string;
+  readonly summary?: string;
+  readonly source: string;
+  readonly source_label: string;
+  readonly source_type: string;
+  readonly namespace: string;
+  readonly external_name: string;
+  readonly required_scopes: readonly string[];
+  readonly tags: readonly string[];
+  readonly catalog_ref: string;
+}
+
+export interface ToolCatalogSearchOptions {
+  readonly limit?: number;
+}
+
+export interface ToolInspectProvenance {
+  readonly origin: "local" | "imported";
+  readonly source?: string;
+  readonly source_label?: string;
+  readonly source_type?: string;
+  readonly namespace?: string;
+  readonly external_name?: string;
+  readonly catalog_ref?: string;
+  readonly tool_id?: string;
+  readonly tags?: readonly string[];
+}
+
+export interface ToolInspectResult {
+  readonly ref: string;
+  readonly name: string;
+  readonly description?: string;
+  readonly execution_source_type: string;
+  readonly inputs: Readonly<Record<string, SkillInput>>;
+  readonly scopes: readonly string[];
+  readonly mutating?: boolean;
+  readonly runtime?: unknown;
+  readonly risk?: unknown;
+  readonly runx?: Record<string, unknown>;
+  readonly reference_path: string;
+  readonly skill_directory: string;
+  readonly provenance: ToolInspectProvenance;
+}
+
+export interface ToolCatalogInvokeRequest {
+  readonly inputs: Readonly<Record<string, unknown>>;
+  readonly resolvedInputs?: Readonly<Record<string, string>>;
+  readonly env?: NodeJS.ProcessEnv;
+  readonly signal?: AbortSignal;
+  readonly skillDirectory: string;
+  readonly runId?: string;
+  readonly stepId?: string;
+}
+
+export type ToolCatalogInvokeResult =
+  | {
+      readonly status: "success";
+      readonly stdout: string;
+      readonly stderr?: string;
+      readonly metadata?: Readonly<Record<string, unknown>>;
+    }
+  | {
+      readonly status: "failure";
+      readonly stdout?: string;
+      readonly stderr: string;
+      readonly errorMessage?: string;
+      readonly metadata?: Readonly<Record<string, unknown>>;
+    };
+
+export interface ToolCatalogResolvedTool {
+  readonly tool: ValidatedTool;
+  readonly result: ToolCatalogSearchResult;
+  readonly skillDirectory: string;
+  readonly referencePath: string;
+  readonly invoke: (request: ToolCatalogInvokeRequest) => Promise<ToolCatalogInvokeResult>;
+}
+
+export interface ToolCatalogAdapter {
+  readonly source: string;
+  readonly label: string;
+  readonly search: (
+    query: string,
+    options?: ToolCatalogSearchOptions,
+  ) => Promise<readonly ToolCatalogSearchResult[]>;
+  readonly resolve?: (
+    ref: string,
+    options?: {
+      readonly env?: NodeJS.ProcessEnv;
+      readonly searchFromDirectory?: string;
+    },
+  ) => Promise<ToolCatalogResolvedTool | undefined>;
+}
 
 export interface AdapterInvokeRequest {
   readonly skillName?: string;

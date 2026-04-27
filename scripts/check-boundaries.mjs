@@ -11,8 +11,9 @@ const legacyCoreRuntimeSubpaths = [
   "@runxhq/core/harness",
   "@runxhq/core/sdk",
   "@runxhq/core/mcp",
+  "@runxhq/core/tool-catalogs",
 ];
-const forbiddenCoreRuntimeDirs = ["runner-local", "harness", "sdk", "mcp"];
+const forbiddenCoreRuntimeDirs = ["runner-local", "harness", "sdk", "mcp", "tool-catalogs"];
 const forbiddenPureNodeImports = new Set([
   "fs",
   "fs/promises",
@@ -84,6 +85,14 @@ const pureCoreDomains = ["policy", "state-machine"];
 const relativeRuntimeDomainPattern = /(^|\/)(runner-local|harness|sdk|mcp)(\/|$)/;
 const staticSpecifierPattern =
   /\b(?:import|export)\s+(?:type\s+)?(?:[^'";]*?\s+from\s+)?["']([^"']+)["']|import\s*\(\s*["']([^"']+)["']\s*\)/g;
+const receiptStorageImportPattern =
+  /\bimport\s+(?:type\s+)?(?:\{([^}]+)\}|\*\s+as\s+([A-Za-z_$][\w$]*)|[A-Za-z_$][\w$]*)\s+from\s+["']([^"']*receipts[^"']*)["']/g;
+const forbiddenExecutorReceiptImports = new Set([
+  "writeLocalReceipt",
+  "writeLocalGraphReceipt",
+  "buildLocalReceipt",
+  "buildLocalGraphReceipt",
+]);
 
 const findings = [];
 const packageManifestCache = new Map();
@@ -111,7 +120,7 @@ async function checkPackageExports() {
   const coreManifest = JSON.parse(await readFile(coreManifestPath, "utf8"));
   const runtimeLocalManifest = JSON.parse(await readFile(runtimeLocalManifestPath, "utf8"));
 
-  for (const legacySubpath of ["./runner-local", "./harness", "./sdk", "./mcp"]) {
+  for (const legacySubpath of ["./runner-local", "./harness", "./sdk", "./mcp", "./tool-catalogs"]) {
     if (Object.hasOwn(coreManifest.exports ?? {}, legacySubpath)) {
       findings.push(`packages/core/package.json still exports ${legacySubpath}; use @runxhq/runtime-local instead.`);
     }
@@ -158,6 +167,10 @@ async function checkSourceFile(filePath) {
       findings.push(`${rel} imports cloud code; oss must not depend on cloud.`);
     }
   }
+
+  if (packageSource?.packageName === "core" && packageSource.domain === "executor") {
+    checkExecutorReceiptOwnership(rel, source);
+  }
 }
 
 function checkCoreImport(rel, domain, specifier) {
@@ -175,9 +188,6 @@ function checkCoreImport(rel, domain, specifier) {
   }
 
   if (domain === "executor") {
-    if (specifierTargetsDomain(rel, specifier, "receipts")) {
-      findings.push(`${rel} imports ${specifier}; executor returns observations but must not write or own receipts.`);
-    }
     if (specifierTargetsDomain(rel, specifier, "adapters")) {
       findings.push(`${rel} imports ${specifier}; executor must stay protocol-agnostic and avoid concrete adapters.`);
     }
@@ -185,6 +195,29 @@ function checkCoreImport(rel, domain, specifier) {
 
   if (domain === "parser" && specifierTargetsDomain(rel, specifier, "adapters")) {
     findings.push(`${rel} imports ${specifier}; parser cannot depend on concrete adapters.`);
+  }
+}
+
+function checkExecutorReceiptOwnership(rel, source) {
+  let match;
+  while ((match = receiptStorageImportPattern.exec(source)) !== null) {
+    const specifier = match[3];
+    if (!specifierTargetsDomain(rel, specifier, "receipts")) {
+      continue;
+    }
+    if (match[2]) {
+      findings.push(`${rel} imports ${specifier}; executor must not namespace-import receipt storage helpers.`);
+      continue;
+    }
+    const importedNames = (match[1] ?? "")
+      .split(",")
+      .map((entry) => entry.trim().split(/\s+as\s+/u)[0]?.trim())
+      .filter(Boolean);
+    for (const importedName of importedNames) {
+      if (forbiddenExecutorReceiptImports.has(importedName)) {
+        findings.push(`${rel} imports ${importedName} from ${specifier}; executor returns observations but must not write or own receipts.`);
+      }
+    }
   }
 }
 
@@ -304,11 +337,15 @@ async function walk(directory, files) {
       }
       continue;
     }
-    if (!entry.isFile() || !sourceExtensions.has(path.extname(entry.name))) {
+    if (!entry.isFile() || !sourceExtensions.has(path.extname(entry.name)) || isTestFile(entry.name)) {
       continue;
     }
     files.push(path.join(directory, entry.name));
   }
+}
+
+function isTestFile(fileName) {
+  return /\.(test|spec)\.(ts|tsx|mts|cts)$/.test(fileName);
 }
 
 function toPosix(input) {
