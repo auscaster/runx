@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { createDefaultSkillAdapters } from "@runxhq/adapters";
 import { runLocalSkill, type Caller } from "@runxhq/runtime-local";
 
 const caller: Caller = {
@@ -58,6 +59,7 @@ process.exit(1);
           scafld_bin: fakeScafld,
         },
         caller,
+        adapters: createDefaultSkillAdapters(),
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
         env: {
@@ -166,6 +168,7 @@ process.exit(1);
           scafld_bin: fakeScafld,
         },
         caller,
+        adapters: createDefaultSkillAdapters(),
         receiptDir: path.join(tempDir, "receipts-review"),
         runxHome: path.join(tempDir, "home-review"),
         env: {
@@ -208,6 +211,7 @@ process.exit(1);
           scafld_bin: fakeScafld,
         },
         caller,
+        adapters: createDefaultSkillAdapters(),
         receiptDir: path.join(tempDir, "receipts-complete"),
         runxHome: path.join(tempDir, "home-complete"),
         env: {
@@ -287,6 +291,7 @@ process.exit(1);
           scafld_bin: relativeFakeScafld,
         },
         caller,
+        adapters: createDefaultSkillAdapters(),
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
         env: process.env,
@@ -355,6 +360,7 @@ process.exit(1);
           scafld_bin: fakeScafld,
         },
         caller,
+        adapters: createDefaultSkillAdapters(),
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
         env: process.env,

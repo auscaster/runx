@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { createDefaultSkillAdapters } from "@runxhq/adapters";
 import { createFileKnowledgeStore } from "@runxhq/core/knowledge";
 import { runLocalGraph, runLocalSkill, type Caller, type ExecutionEvent } from "@runxhq/runtime-local";
 
@@ -24,6 +25,7 @@ describe("local knowledge index integration", () => {
         skillPath: path.resolve("fixtures/skills/echo"),
         inputs: { message: "hi" },
         caller: nonInteractiveCaller,
+        adapters: createDefaultSkillAdapters(),
         receiptDir,
         runxHome: path.join(tempDir, "home"),
         env: {
@@ -74,6 +76,7 @@ describe("local knowledge index integration", () => {
         skillPath: path.resolve("fixtures/skills/echo"),
         inputs: { message: "hi" },
         caller: reportingCaller,
+        adapters: createDefaultSkillAdapters(),
         receiptDir,
         runxHome: path.join(tempDir, "home"),
         env: {
@@ -112,6 +115,7 @@ describe("local knowledge index integration", () => {
       const result = await runLocalGraph({
         graphPath: path.resolve("fixtures/graphs/sequential/graph.yaml"),
         caller: nonInteractiveCaller,
+        adapters: createDefaultSkillAdapters(),
         receiptDir,
         runxHome: path.join(tempDir, "home"),
         env: {

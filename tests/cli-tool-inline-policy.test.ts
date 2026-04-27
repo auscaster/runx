@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { createDefaultSkillAdapters } from "@runxhq/adapters";
 import { parseGraphYaml, validateGraph } from "@runxhq/core/parser";
 import { runLocalGraph, runLocalSkill, type Caller } from "@runxhq/runtime-local";
 
@@ -39,6 +40,7 @@ Inline cli-tool fixture.
       const result = await runLocalSkill({
         skillPath: skillDir,
         caller: passiveCaller,
+        adapters: createDefaultSkillAdapters(),
         env: workspaceEnv(workspaceDir),
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
@@ -82,6 +84,7 @@ steps:
         graph,
         graphDirectory: workspaceDir,
         caller: passiveCaller,
+        adapters: createDefaultSkillAdapters(),
         env: workspaceEnv(workspaceDir),
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
@@ -127,6 +130,7 @@ steps:
         graph,
         graphDirectory: workspaceDir,
         caller: passiveCaller,
+        adapters: createDefaultSkillAdapters(),
         env: workspaceEnv(workspaceDir),
         receiptDir,
         runxHome,

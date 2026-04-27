@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { createDefaultSkillAdapters } from "@runxhq/adapters";
 import { parseGraphYaml, validateGraph } from "@runxhq/core/parser";
 import { runLocalGraph, type Caller } from "@runxhq/runtime-local";
 
@@ -74,6 +75,7 @@ steps:
         graph: graph,
         graphDirectory: tempDir,
         caller,
+        adapters: createDefaultSkillAdapters(),
         env: { ...process.env, RUNX_CWD: tempDir },
         receiptDir,
         runxHome: path.join(tempDir, "home"),
@@ -146,6 +148,7 @@ steps:
         graph: graph,
         graphDirectory: tempDir,
         caller,
+        adapters: createDefaultSkillAdapters(),
         env: { ...process.env, RUNX_CWD: tempDir },
         receiptDir,
         runxHome: path.join(tempDir, "home"),
@@ -196,6 +199,7 @@ steps:
         graph: graph,
         graphDirectory: tempDir,
         caller,
+        adapters: createDefaultSkillAdapters(),
         env: { ...process.env, RUNX_CWD: tempDir },
         receiptDir,
         runxHome: path.join(tempDir, "home"),
@@ -238,6 +242,7 @@ steps:
         graph: graph,
         graphDirectory: tempDir,
         caller,
+        adapters: createDefaultSkillAdapters(),
         env: { ...process.env, RUNX_CWD: tempDir },
         receiptDir,
         runxHome: path.join(tempDir, "home"),
@@ -251,10 +256,13 @@ steps:
       expect(result.steps[0]?.skill).toBe("fs.delete");
       expect(await readFile(path.join(tempDir, "stale.txt"), "utf8").catch(() => null)).toBeNull();
       expect(JSON.parse(result.steps[0]?.stdout ?? "")).toMatchObject({
-        path: "stale.txt",
-        existed: true,
-        deleted: true,
-        kind: "file",
+        schema: "runx.fs.delete.v1",
+        data: {
+          path: "stale.txt",
+          existed: true,
+          deleted: true,
+          kind: "file",
+        },
       });
     } finally {
       await rm(tempDir, { recursive: true, force: true });
@@ -304,6 +312,7 @@ steps:
         graph: graph,
         graphDirectory: tempDir,
         caller,
+        adapters: createDefaultSkillAdapters(),
         env: { ...process.env, RUNX_CWD: tempDir },
         receiptDir,
         runxHome: path.join(tempDir, "home"),
@@ -344,6 +353,7 @@ steps:
         graph: graph,
         graphDirectory: tempDir,
         caller,
+        adapters: createDefaultSkillAdapters(),
         env: { ...process.env, RUNX_CWD: tempDir },
         receiptDir,
         runxHome: path.join(tempDir, "home"),
@@ -419,6 +429,7 @@ steps:
         graph: graph,
         graphDirectory: tempDir,
         caller,
+        adapters: createDefaultSkillAdapters(),
         env: { ...process.env, RUNX_CWD: tempDir },
         receiptDir,
         runxHome: path.join(tempDir, "home"),
@@ -429,16 +440,20 @@ steps:
         return;
       }
 
-      const declaredContext = JSON.parse(result.steps[1]?.stdout ?? "") as {
-        declared_count: number;
-        files: Array<{
-          path: string;
-          exists: boolean;
-          kind: string;
-          declared_in: string[];
-          contents: string | null;
-        }>;
+      const declaredEnvelope = JSON.parse(result.steps[1]?.stdout ?? "") as {
+        schema: string;
+        data: {
+          declared_count: number;
+          files: Array<{
+            path: string;
+            exists: boolean;
+            kind: string;
+            declared_in: string[];
+            contents: string | null;
+          }>;
+        };
       };
+      const declaredContext = declaredEnvelope.data;
       expect(declaredContext).toMatchObject({
         declared_count: 2,
       });

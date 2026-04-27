@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { createDefaultSkillAdapters } from "@runxhq/adapters";
 import { latestVerifiedReceiptOutcomeResolution, writeReceiptOutcomeResolution } from "@runxhq/core/receipts";
 import { runLocalSkill, type Caller } from "@runxhq/runtime-local";
 
@@ -24,6 +25,7 @@ describe("manifest-agnostic runtime semantics", () => {
           message: "x".repeat(512),
         },
         caller,
+        adapters: createDefaultSkillAdapters(),
         receiptDir,
         runxHome: path.join(tempDir, "home"),
         env: process.env,
@@ -97,6 +99,7 @@ describe("manifest-agnostic runtime semantics", () => {
           message: "manifest-driven",
         },
         caller,
+        adapters: createDefaultSkillAdapters(),
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
         env: process.env,
@@ -136,6 +139,7 @@ describe("manifest-agnostic runtime semantics", () => {
           skillPath: skillDir,
           inputs: { message: "same-shape" },
           caller,
+          adapters: createDefaultSkillAdapters(),
           receiptDir: path.join(tempDir, "manifest-receipts"),
           runxHome: path.join(tempDir, "manifest-home"),
           env: process.env,
@@ -144,6 +148,7 @@ describe("manifest-agnostic runtime semantics", () => {
           skillPath: path.resolve("fixtures/skills/echo"),
           inputs: { message: "same-shape" },
           caller,
+          adapters: createDefaultSkillAdapters(),
           receiptDir: path.join(tempDir, "direct-receipts"),
           runxHome: path.join(tempDir, "direct-home"),
           env: process.env,

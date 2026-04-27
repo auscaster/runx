@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { createDefaultSkillAdapters } from "@runxhq/adapters";
 import { parseGraphYaml, validateGraph } from "@runxhq/core/parser";
 import { runLocalGraph, runLocalSkill, type Caller } from "@runxhq/runtime-local";
 
@@ -30,6 +31,7 @@ describe("project rules", () => {
         skillPath: path.resolve("fixtures/skills/agent-step"),
         inputs: { prompt: "review this" },
         caller: passiveCaller,
+        adapters: createDefaultSkillAdapters(),
         env: {
           ...process.env,
           RUNX_CWD: workspaceDir,
@@ -149,6 +151,7 @@ steps:
         graph: graph,
         graphDirectory: workspaceDir,
         caller,
+        adapters: createDefaultSkillAdapters(),
         env: {
           ...process.env,
           RUNX_CWD: workspaceDir,

@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { createDefaultSkillAdapters } from "@runxhq/adapters";
 import { runLocalSkill, type Caller } from "@runxhq/runtime-local";
 
 const caller: Caller = {
@@ -76,6 +77,7 @@ runners:
         skillPath: skillDir,
         inputs: { message: "from colocated" },
         caller,
+        adapters: createDefaultSkillAdapters(),
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
         env: process.env,
