@@ -1,3 +1,6 @@
+import { readdir } from "node:fs/promises";
+import path from "node:path";
+
 import {
   type ArtifactEnvelope,
   SYSTEM_ARTIFACT_TYPES,
@@ -64,6 +67,7 @@ export interface ListLocalHistoryOptions {
 
 export interface ListLocalHistoryResult {
   readonly receipts: readonly LocalReceiptSummary[];
+  readonly pendingRuns: readonly PausedRunSummary[];
 }
 
 export interface RunLineageSummary {
@@ -102,6 +106,35 @@ export interface LocalReceiptSummary extends ComparableRunSummary {
   readonly status: LocalReceipt["status"];
   readonly verification: ReceiptVerification;
 }
+
+export interface PausedRunSummary extends ComparableRunSummary {
+  readonly kind: LocalReceipt["kind"];
+  readonly status: "paused";
+  readonly selectedRunner?: string;
+  readonly stepIds: readonly string[];
+  readonly stepLabels: readonly string[];
+}
+
+export interface InspectLocalRunOptions {
+  readonly referenceId: string;
+  readonly receiptDir?: string;
+  readonly runxHome?: string;
+  readonly env?: NodeJS.ProcessEnv;
+}
+
+export type InspectLocalRunResult =
+  | {
+      readonly kind: "terminal";
+      readonly receipt: LocalReceipt;
+      readonly verification: ReceiptVerification;
+      readonly summary: LocalReceiptSummary;
+    }
+  | {
+      readonly kind: "paused";
+      readonly runId: string;
+      readonly pending: PendingRunState;
+      readonly summary: PausedRunSummary;
+    };
 
 export interface RunSummaryFieldDelta {
   readonly left?: unknown;
@@ -264,53 +297,123 @@ export async function listLocalHistory(options: ListLocalHistoryOptions = {}): P
   const summaries = await Promise.all(
     receipts.map(async ({ receipt, verification }) => await summarizeLocalReceipt(receipt, verification, receiptDir)),
   );
-  return {
-    receipts: summaries
-      .filter((summary) => {
-        if (normalizedQuery) {
-          const normalizedActors = (summary.actors ?? []).map((entry) => entry.toLowerCase());
-          const normalizedArtifactTypes = (summary.artifactTypes ?? []).map((entry) => entry.toLowerCase());
-          const matchesQuery =
-            summary.name.toLowerCase().includes(normalizedQuery) ||
-            summary.id.toLowerCase().includes(normalizedQuery) ||
-            (summary.sourceType?.toLowerCase().includes(normalizedQuery) ?? false) ||
-            normalizedActors.some((entry) => entry.includes(normalizedQuery)) ||
-            normalizedArtifactTypes.some((entry) => entry.includes(normalizedQuery));
-          if (!matchesQuery) return false;
-        }
-        if (skillFilter && !summary.name.toLowerCase().includes(skillFilter)) {
-          return false;
-        }
-        if (statusFilter && String(summary.status ?? "").toLowerCase() !== statusFilter) {
-          return false;
-        }
-        if (sourceFilter && (summary.sourceType ?? "").toLowerCase() !== sourceFilter) {
-          return false;
-        }
-        if (actorFilter) {
-          const normalizedActors = (summary.actors ?? []).map((entry) => entry.toLowerCase());
-          if (!normalizedActors.includes(actorFilter)) {
-            return false;
-          }
-        }
-        if (artifactTypeFilter) {
-          const normalizedArtifactTypes = (summary.artifactTypes ?? []).map((entry) => entry.toLowerCase());
-          if (!normalizedArtifactTypes.includes(artifactTypeFilter)) {
-            return false;
-          }
-        }
-        if (sinceMs !== undefined) {
-          const startedMs = summary.startedAt ? Date.parse(summary.startedAt) : NaN;
-          if (!Number.isFinite(startedMs) || startedMs < sinceMs) return false;
-        }
-        if (untilMs !== undefined) {
-          const startedMs = summary.startedAt ? Date.parse(summary.startedAt) : NaN;
-          if (!Number.isFinite(startedMs) || startedMs > untilMs) return false;
-        }
-        return true;
-      })
-      .slice(0, options.limit ?? receipts.length),
+  const terminalIds = new Set(summaries.map((summary) => summary.id));
+  const pendingSummaries = await listPendingRunSummaries(receiptDir, terminalIds);
+
+  const matchesFilters = (summary: ComparableRunSummary): boolean => {
+    if (normalizedQuery) {
+      const normalizedActors = (summary.actors ?? []).map((entry) => entry.toLowerCase());
+      const normalizedArtifactTypes = (summary.artifactTypes ?? []).map((entry) => entry.toLowerCase());
+      const matchesQuery =
+        summary.name.toLowerCase().includes(normalizedQuery) ||
+        summary.id.toLowerCase().includes(normalizedQuery) ||
+        (summary.sourceType?.toLowerCase().includes(normalizedQuery) ?? false) ||
+        normalizedActors.some((entry) => entry.includes(normalizedQuery)) ||
+        normalizedArtifactTypes.some((entry) => entry.includes(normalizedQuery));
+      if (!matchesQuery) return false;
+    }
+    if (skillFilter && !summary.name.toLowerCase().includes(skillFilter)) {
+      return false;
+    }
+    if (statusFilter && String(summary.status ?? "").toLowerCase() !== statusFilter) {
+      return false;
+    }
+    if (sourceFilter && (summary.sourceType ?? "").toLowerCase() !== sourceFilter) {
+      return false;
+    }
+    if (actorFilter) {
+      const normalizedActors = (summary.actors ?? []).map((entry) => entry.toLowerCase());
+      if (!normalizedActors.includes(actorFilter)) {
+        return false;
+      }
+    }
+    if (artifactTypeFilter) {
+      const normalizedArtifactTypes = (summary.artifactTypes ?? []).map((entry) => entry.toLowerCase());
+      if (!normalizedArtifactTypes.includes(artifactTypeFilter)) {
+        return false;
+      }
+    }
+    if (sinceMs !== undefined) {
+      const startedMs = summary.startedAt ? Date.parse(summary.startedAt) : NaN;
+      if (!Number.isFinite(startedMs) || startedMs < sinceMs) return false;
+    }
+    if (untilMs !== undefined) {
+      const startedMs = summary.startedAt ? Date.parse(summary.startedAt) : NaN;
+      if (!Number.isFinite(startedMs) || startedMs > untilMs) return false;
+    }
+    return true;
   };
+
+  return {
+    receipts: summaries.filter(matchesFilters).slice(0, options.limit ?? receipts.length),
+    pendingRuns: pendingSummaries.filter(matchesFilters),
+  };
+}
+
+async function listPendingRunSummaries(
+  receiptDir: string,
+  terminalIds: ReadonlySet<string>,
+): Promise<readonly PausedRunSummary[]> {
+  const ledgersDir = path.join(receiptDir, "ledgers");
+  let entries: readonly string[];
+  try {
+    entries = await readdir(ledgersDir);
+  } catch (error) {
+    if (isNotFoundError(error)) return [];
+    throw error;
+  }
+  const candidates = entries
+    .filter((entry) => /^(rx|gx)_[A-Za-z0-9_-]+\.jsonl$/.test(entry))
+    .map((entry) => entry.slice(0, -".jsonl".length))
+    .filter((id) => !terminalIds.has(id));
+
+  const summaries: PausedRunSummary[] = [];
+  for (const id of candidates) {
+    const pending = await readPendingRunState(receiptDir, id);
+    if (!pending) continue;
+    summaries.push(buildPausedRunSummary(id, pending));
+  }
+  return summaries;
+}
+
+function buildPausedRunSummary(runId: string, pending: PendingRunState): PausedRunSummary {
+  return {
+    id: runId,
+    name: pending.skillName && pending.skillName.trim().length > 0 ? pending.skillName : runId,
+    kind: runId.startsWith("gx_") ? "graph_execution" : "skill_execution",
+    status: "paused",
+    selectedRunner: pending.selectedRunner,
+    stepIds: pending.stepIds,
+    stepLabels: pending.stepLabels,
+  };
+}
+
+function isNotFoundError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && (error as NodeJS.ErrnoException).code === "ENOENT";
+}
+
+export async function inspectLocalRun(options: InspectLocalRunOptions): Promise<InspectLocalRunResult> {
+  const receiptDir = options.receiptDir ?? defaultReceiptDir(options.env);
+  const runxHome = options.runxHome ?? options.env?.RUNX_HOME;
+  try {
+    const { receipt, verification } = await readVerifiedLocalReceipt(receiptDir, options.referenceId, runxHome);
+    return {
+      kind: "terminal",
+      receipt,
+      verification,
+      summary: await summarizeLocalReceipt(receipt, verification, receiptDir),
+    };
+  } catch (error) {
+    if (!isNotFoundError(error)) throw error;
+    const pending = await readPendingRunState(receiptDir, options.referenceId);
+    if (!pending) throw error;
+    return {
+      kind: "paused",
+      runId: options.referenceId,
+      pending,
+      summary: buildPausedRunSummary(options.referenceId, pending),
+    };
+  }
 }
 
 export async function readLocalReplaySeed(options: ReadLocalReplaySeedOptions): Promise<LocalReplaySeed> {

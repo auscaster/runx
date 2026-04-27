@@ -76,8 +76,10 @@ import {
   handleDiffCommand,
   handleHistoryCommand,
   handleInspectCommand,
+  handleInspectRunCommand,
   handleReplaySeedCommand,
   renderHistory,
+  renderPausedRunInspection,
   renderReceiptInspection,
   renderRunDiff,
 } from "./commands/history.js";
@@ -399,12 +401,14 @@ export async function dispatchCli(
   }
 
   if ((parsed.command === "skill" || parsed.command === "inspect") && parsed.skillAction === "inspect" && parsed.receiptId) {
-    const inspection = await handleInspectCommand({
+    const inspection = await handleInspectRunCommand({
       receiptId: parsed.receiptId,
       receiptDir: parsed.receiptDir,
     }, env);
     if (parsed.json) {
       io.stdout.write(`${JSON.stringify(inspection, null, 2)}\n`);
+    } else if (inspection.kind === "paused") {
+      io.stdout.write(renderPausedRunInspection(inspection.summary, env));
     } else {
       io.stdout.write(renderReceiptInspection(inspection.summary, env));
     }
@@ -462,7 +466,7 @@ export async function dispatchCli(
         ...history,
       }, null, 2)}\n`);
     } else {
-      io.stdout.write(renderHistory(history.receipts, env, parsed.historyQuery));
+      io.stdout.write(renderHistory(history.receipts, env, parsed.historyQuery, history.pendingRuns));
     }
     return 0;
   }

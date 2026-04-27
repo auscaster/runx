@@ -2,9 +2,12 @@ import { resolvePathFromUserInput } from "@runxhq/core/config";
 import {
   diffLocalRuns,
   inspectLocalReceipt,
+  inspectLocalRun,
   listLocalHistory,
   readLocalReplaySeed,
+  type InspectLocalRunResult,
   type LocalReceiptSummary,
+  type PausedRunSummary,
   type RunSummaryDiff,
 } from "@runxhq/runtime-local";
 
@@ -44,6 +47,17 @@ export async function handleInspectCommand(
 ): Promise<Awaited<ReturnType<typeof inspectLocalReceipt>>> {
   return await inspectLocalReceipt({
     receiptId: parsed.receiptId,
+    receiptDir: parsed.receiptDir ? resolvePathFromUserInput(parsed.receiptDir, env) : undefined,
+    env,
+  });
+}
+
+export async function handleInspectRunCommand(
+  parsed: InspectCommandArgs,
+  env: NodeJS.ProcessEnv,
+): Promise<InspectLocalRunResult> {
+  return await inspectLocalRun({
+    referenceId: parsed.receiptId,
     receiptDir: parsed.receiptDir ? resolvePathFromUserInput(parsed.receiptDir, env) : undefined,
     env,
   });
@@ -118,33 +132,69 @@ export function renderHistory(
   receipts: readonly LocalReceiptSummary[],
   env: NodeJS.ProcessEnv = process.env,
   query?: string,
+  pendingRuns: readonly PausedRunSummary[] = [],
 ): string {
   const t = theme(undefined, env);
-  if (receipts.length === 0) {
+  const totalCount = receipts.length + pendingRuns.length;
+  if (totalCount === 0) {
     return query
       ? `\n  ${t.dim}No receipts matched ${t.cyan}${query}${t.reset}${t.dim}.${t.reset}\n  ${t.dim}Try ${t.cyan}runx history${t.reset}${t.dim} to see every local run.${t.reset}\n\n`
       : `\n  ${t.dim}No receipts yet. Try a run first:${t.reset}\n  ${t.cyan}runx evolve${t.reset}\n  ${t.cyan}runx search docs${t.reset}\n\n`;
   }
   const now = Date.now();
-  const nameWidth = Math.min(32, Math.max(...receipts.map((receipt) => receipt.name.length)));
+  const allNames = [...receipts.map((r) => r.name), ...pendingRuns.map((r) => r.name)];
+  const nameWidth = Math.min(32, Math.max(...allNames.map((name) => name.length)));
   const lines: string[] = [""];
-  lines.push(`  ${t.bold}history${t.reset}${query ? `  ${t.dim}· ${query}${t.reset}` : ""}  ${t.dim}${receipts.length} receipt(s)${t.reset}`);
+  const summary = pendingRuns.length > 0
+    ? `${receipts.length} receipt(s), ${pendingRuns.length} paused`
+    : `${totalCount} receipt(s)`;
+  lines.push(`  ${t.bold}history${t.reset}${query ? `  ${t.dim}· ${query}${t.reset}` : ""}  ${t.dim}${summary}${t.reset}`);
   lines.push("");
-  for (const summary of receipts) {
-    const icon = statusIcon(summary.status, t);
-    const name = summary.name.padEnd(nameWidth);
-    const when = summary.startedAt ? relativeTime(summary.startedAt, now) : "";
-    const source = summary.sourceType ?? summary.kind;
-    const id = shortId(summary.id);
-    const verification = summary.verification?.status ?? "unknown";
+  for (const paused of pendingRuns) {
+    const name = paused.name.padEnd(nameWidth);
+    const id = shortId(paused.id);
+    const stepLabel = paused.stepLabels[0] ?? paused.stepIds[0] ?? "—";
+    lines.push(
+      `  ${t.cyan}◇${t.reset}  ${t.bold}${name}${t.reset}  ${t.dim}${"paused".padEnd(16)}${t.reset}  ${t.dim}${stepLabel.padEnd(10)}${t.reset}  ${t.dim}${"".padEnd(10)}${t.reset}  ${t.dim}${id}${t.reset}`,
+    );
+  }
+  for (const receipt of receipts) {
+    const icon = statusIcon(receipt.status, t);
+    const name = receipt.name.padEnd(nameWidth);
+    const when = receipt.startedAt ? relativeTime(receipt.startedAt, now) : "";
+    const source = receipt.sourceType ?? receipt.kind;
+    const id = shortId(receipt.id);
+    const verification = receipt.verification?.status ?? "unknown";
     lines.push(
       `  ${icon}  ${t.bold}${name}${t.reset}  ${t.dim}${source.padEnd(16)}${t.reset}  ${t.dim}${verification.padEnd(10)}${t.reset}  ${t.dim}${when.padEnd(10)}${t.reset}  ${t.dim}${id}${t.reset}`,
     );
   }
   lines.push("");
-  lines.push(`  ${t.dim}next${t.reset}  runx inspect <receipt-id>`);
+  if (pendingRuns.length > 0) {
+    lines.push(`  ${t.dim}next${t.reset}  runx resume <run-id>  ${t.dim}or${t.reset}  runx inspect <receipt-id>`);
+  } else {
+    lines.push(`  ${t.dim}next${t.reset}  runx inspect <receipt-id>`);
+  }
   lines.push("");
   return lines.join("\n");
+}
+
+export function renderPausedRunInspection(
+  summary: PausedRunSummary,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const t = theme(undefined, env);
+  const rows: Array<[string, string]> = [
+    ["id", summary.id],
+    ["kind", summary.kind],
+    ["status", "paused"],
+  ];
+  if (summary.selectedRunner) rows.push(["runner", summary.selectedRunner]);
+  if (summary.stepIds.length > 0) rows.push(["step", summary.stepIds.join(", ")]);
+  if (summary.stepLabels.length > 0) rows.push(["label", summary.stepLabels.join(", ")]);
+  rows.push(["resume", `runx resume ${summary.id}`]);
+  rows.push(["json", `runx inspect ${summary.id} --json`]);
+  return renderKeyValue(summary.name, "paused", rows, t);
 }
 
 export function renderRunDiff(diff: RunSummaryDiff, env: NodeJS.ProcessEnv = process.env): string {
