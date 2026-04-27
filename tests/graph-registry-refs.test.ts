@@ -359,7 +359,7 @@ steps:
         `name: graph-registry-http
 steps:
   - id: echo
-    skill: testorg/echo
+    skill: testorg/echo@0.1.0
     inputs:
       message: hello from http
 `,
