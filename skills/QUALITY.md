@@ -25,7 +25,7 @@ Each serious skill should make these parts explicit in its own terms:
   voice grammar; runx injects it into every agent context as
   `voice_profile` and pins its hash in the receipt under
   `metadata.voice_profile`.
-- `strategic_bar`: why the artifact matters for the chain's purpose.
+- `strategic_bar`: why the artifact matters for the graph's purpose.
 - `stop_conditions`: when the skill should return `needs_more_evidence`,
   `needs_review`, `needs_resolution`, or a comparable stop state instead of
   polishing weak work.
@@ -57,14 +57,14 @@ Each serious skill should make these parts explicit in its own terms:
 
 ## Strategic Bar
 
-Strategic quality is chain-specific. A skill proposal, Sourcey docs pass,
+Strategic quality is graph-specific. A skill proposal, Sourcey docs pass,
 ecosystem brief, issue reply, and outreach packet should not share one action
 taxonomy. They should share one discipline:
 
-- the chain purpose decides the action
+- the graph purpose decides the action
 - prior art and research provide context
 - the artifact must make a concrete human decision easier
-- weak opportunity, weak evidence, or weak fit should stop the chain cleanly
+- weak opportunity, weak evidence, or weak fit should stop the graph cleanly
 
 ## Forbidden Reader-Facing Framing
 
@@ -83,7 +83,7 @@ or named skill.
 
 ## Stop Conditions
 
-Stopping is a high-quality outcome when the chain lacks enough evidence or
+Stopping is a high-quality outcome when the graph lacks enough evidence or
 strategic fit. Prefer a precise stop state over polished filler:
 
 - `needs_more_evidence`: the artifact would require claims not supported by the
@@ -92,7 +92,7 @@ strategic fit. Prefer a precise stop state over polished filler:
 - `needs_review`: the artifact exists but does not meet the declared quality
   profile.
 - `not_worth_publishing`: the work is true but not useful enough for the
-  declared audience or chain purpose.
+  declared audience or graph purpose.
 - `voice_mismatch`: the artifact would require generic AI framing, filler
   structure, or register drop to satisfy the declared voice contract. See
   VOICE.md for the voice grammar that every reader-facing artifact must meet.

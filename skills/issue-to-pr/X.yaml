@@ -2,7 +2,7 @@ skill: issue-to-pr
 version: "0.1.6"
 
 catalog:
-  kind: chain
+  kind: graph
   audience: public
   visibility: public
 
@@ -21,7 +21,7 @@ harness:
       # to the tempdir (runner.ts RUNX_CWD/INIT_CWD). This case uses
       # the native fake scafld fixture so the lane can stay inside the
       # sandbox and still exercise the governed boundary contract.
-      # The chain reaches author-spec and yields `needs_resolution`
+      # The graph reaches author-spec and yields `needs_resolution`
       # because this fixture does not supply caller.answers.
       expect:
         status: needs_resolution
@@ -30,7 +30,7 @@ harness:
       inputs:
         task_id: issue-to-pr-reach-author
         thread_title: Author-spec harness reach
-        thread_body: Deeper harness case with canned author-spec answers so the chain can progress past the first agent hand-off.
+        thread_body: Deeper harness case with canned author-spec answers so the graph can progress past the first agent hand-off.
         thread_locator: local://fixtures/issue-to-pr-reach-author
         size: micro
         scafld_bin: ./fixtures/issue-to-pr-harness-scafld.mjs
@@ -101,9 +101,9 @@ harness:
                 strategy: "per_phase"
                 commands:
                   phase1: "git checkout HEAD -- README.md"
-      # This fully formed fixture spec lets the chain progress past author-spec.
+      # This fully formed fixture spec lets the graph progress past author-spec.
       # author-fix (the next agent-step hand-off) has no canned
-      # answer here, so the chain yields `needs_resolution` at
+      # answer here, so the graph yields `needs_resolution` at
       # that point.
       expect:
         status: needs_resolution
@@ -112,7 +112,7 @@ harness:
       inputs:
         task_id: issue-to-pr-review-boundary
         thread_title: Reviewer-boundary harness
-        thread_body: Canned answers for authored spec and fix so the chain reaches the explicit reviewer hand-off.
+        thread_body: Canned answers for authored spec and fix so the graph reaches the explicit reviewer hand-off.
         thread_locator: local://fixtures/issue-to-pr-review-boundary
         size: micro
         scafld_bin: ./fixtures/issue-to-pr-harness-scafld.mjs
@@ -197,7 +197,7 @@ harness:
 runners:
   issue-to-pr:
     default: true
-    type: chain
+    type: graph
     inputs:
       task_id:
         type: string
@@ -281,7 +281,7 @@ runners:
         type: string
         required: false
         description: "Explicit scafld executable path."
-    chain:
+    graph:
       name: issue-to-pr
       owner: runx
       notes:

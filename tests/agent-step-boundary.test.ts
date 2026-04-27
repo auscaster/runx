@@ -137,16 +137,16 @@ describe("agent-step and harness-hook boundary", () => {
     );
     const runner = manifest.runners["issue-to-pr"];
 
-    expect(runner?.source.type).toBe("chain");
-    if (!runner || runner.source.type !== "chain" || !runner.source.chain) {
-      throw new Error("issue-to-pr runner must declare an inline chain.");
+    expect(runner?.source.type).toBe("graph");
+    if (!runner || runner.source.type !== "graph" || !runner.source.graph) {
+      throw new Error("issue-to-pr runner must declare an inline graph.");
     }
-    const chain = runner.source.chain;
+    const graph = runner.source.graph;
 
-    expect(chain.steps.filter((step) => step.skill).every((step) => step.skill === "../scafld")).toBe(true);
-    expect(chain.steps.some((step) => step.tool === "fs.write")).toBe(true);
-    expect(chain.steps.some((step) => step.run?.type === "agent-step")).toBe(true);
-    expect(chain.steps.some((step) => /fixture-agent|helper-script|\.mjs$/.test(step.skill ?? ""))).toBe(false);
+    expect(graph.steps.filter((step) => step.skill).every((step) => step.skill === "../scafld")).toBe(true);
+    expect(graph.steps.some((step) => step.tool === "fs.write")).toBe(true);
+    expect(graph.steps.some((step) => step.run?.type === "agent-step")).toBe(true);
+    expect(graph.steps.some((step) => /fixture-agent|helper-script|\.mjs$/.test(step.skill ?? ""))).toBe(false);
   });
 
 });

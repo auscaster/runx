@@ -15,7 +15,7 @@ const builderSkillPaths = [
   "skills/review-receipt",
 ];
 
-describe("builder-chain skills", () => {
+describe("builder-graph skills", () => {
   it("uses portable agent-step contracts instead of repo-local helper scripts", async () => {
     for (const skillPath of builderSkillPaths) {
       const skill = validateSkill(parseSkillMarkdown(await readFile(path.resolve(skillPath, "SKILL.md"), "utf8")));
@@ -26,9 +26,9 @@ describe("builder-chain skills", () => {
     }
   });
 
-  it("ships builder flows as skill packages instead of standalone chain assets", () => {
-    expect(existsSync(path.resolve("chains/design-skill.yaml"))).toBe(false);
-    expect(existsSync(path.resolve("chains/improve-skill.yaml"))).toBe(false);
+  it("ships builder flows as skill packages instead of standalone graph assets", () => {
+    expect(existsSync(path.resolve("graphs/design-skill.yaml"))).toBe(false);
+    expect(existsSync(path.resolve("graphs/improve-skill.yaml"))).toBe(false);
     expect(existsSync(path.resolve("skills/design-skill/X.yaml"))).toBe(true);
     expect(existsSync(path.resolve("skills/improve-skill/X.yaml"))).toBe(true);
   });
@@ -207,7 +207,7 @@ function answerForAgentStep(questionId: string): unknown {
         },
       ],
       execution_plan: {
-        runner: "chain",
+        runner: "graph",
       },
       harness_fixture: [
         {

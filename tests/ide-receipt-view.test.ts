@@ -4,7 +4,7 @@ import { buildReceiptViewModel } from "../plugins/ide-core/src/index.js";
 import { receiptTreeItems } from "../plugins/antigravity/src/views.js";
 
 describe("ide receipt view", () => {
-  it("renders chain receipt graph metadata without raw output bodies", () => {
+  it("renders graph receipt graph metadata without raw output bodies", () => {
     const receipt = {
       id: "gx_1",
       kind: "graph_execution",

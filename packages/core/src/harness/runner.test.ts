@@ -43,8 +43,8 @@ expect:
     expect(result.trace.events.map((event) => event.type)).toContain("completed");
   });
 
-  it("runs a sequential chain fixture and asserts linked receipts", async () => {
-    const result = await runHarness("fixtures/harness/sequential-chain.yaml", { adapters: createDefaultSkillAdapters() });
+  it("runs a sequential graph fixture and asserts linked receipts", async () => {
+    const result = await runHarness("fixtures/harness/sequential-graph.yaml", { adapters: createDefaultSkillAdapters() });
 
     expect(result.status).toBe("success");
     expect(result.assertionErrors).toEqual([]);

@@ -24,13 +24,13 @@ describe("issue-to-PR composite skill", () => {
     );
     const runner = manifest.runners["issue-to-pr"];
 
-    expect(runner?.source.type).toBe("chain");
-    if (!runner || runner.source.type !== "chain" || !runner.source.chain) {
-      throw new Error("issue-to-pr runner must declare an inline chain.");
+    expect(runner?.source.type).toBe("graph");
+    if (!runner || runner.source.type !== "graph" || !runner.source.graph) {
+      throw new Error("issue-to-pr runner must declare an inline graph.");
     }
-    const chain = runner.source.chain;
+    const graph = runner.source.graph;
 
-    expect(chain.steps.map((step) => step.id)).toEqual([
+    expect(graph.steps.map((step) => step.id)).toEqual([
       "scafld-new",
       "author-spec",
       "write-spec",
@@ -57,20 +57,20 @@ describe("issue-to-PR composite skill", () => {
       "package-pull-request",
       "push-pull-request",
     ]);
-    expect(chain.steps.find((step) => step.id === "write-spec")).toMatchObject({
+    expect(graph.steps.find((step) => step.id === "write-spec")).toMatchObject({
       tool: "fs.write",
       context: {
         path: "scafld-new.state.file",
         contents: "author-spec.spec_contents",
       },
     });
-    expect(chain.steps.find((step) => step.id === "read-draft-spec")).toMatchObject({
+    expect(graph.steps.find((step) => step.id === "read-draft-spec")).toMatchObject({
       tool: "fs.read",
       context: {
         path: "scafld-new.state.file",
       },
     });
-    expect(chain.steps.find((step) => step.id === "author-spec")).toMatchObject({
+    expect(graph.steps.find((step) => step.id === "author-spec")).toMatchObject({
       context: {
         draft_spec_path: "scafld-new.state.file",
         scafld_new_stdout: "scafld-new.stdout",
@@ -112,41 +112,41 @@ describe("issue-to-PR composite skill", () => {
       type: "boolean",
       required: false,
     });
-    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("repo_snapshot_path");
-    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("thread_title");
-    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("thread_locator");
-    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("Never author acceptance criteria that depend on git history");
-    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("HEAD~1");
-    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("Never write an exhaustive whole-tree assertion");
-    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain(".ai/reviews/<task_id>.md");
-    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("anchor on the exact expected text");
-    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("Do not declare any `.ai/specs/drafts/<task_id>.yaml`");
-    expect(chain.steps.find((step) => step.id === "author-spec")?.instructions).toContain("do not declare scafld-managed control-plane artifacts");
-    expect(chain.steps.find((step) => step.id === "scafld-branch")).toMatchObject({
+    expect(graph.steps.find((step) => step.id === "author-spec")?.instructions).toContain("repo_snapshot_path");
+    expect(graph.steps.find((step) => step.id === "author-spec")?.instructions).toContain("thread_title");
+    expect(graph.steps.find((step) => step.id === "author-spec")?.instructions).toContain("thread_locator");
+    expect(graph.steps.find((step) => step.id === "author-spec")?.instructions).toContain("Never author acceptance criteria that depend on git history");
+    expect(graph.steps.find((step) => step.id === "author-spec")?.instructions).toContain("HEAD~1");
+    expect(graph.steps.find((step) => step.id === "author-spec")?.instructions).toContain("Never write an exhaustive whole-tree assertion");
+    expect(graph.steps.find((step) => step.id === "author-spec")?.instructions).toContain(".ai/reviews/<task_id>.md");
+    expect(graph.steps.find((step) => step.id === "author-spec")?.instructions).toContain("anchor on the exact expected text");
+    expect(graph.steps.find((step) => step.id === "author-spec")?.instructions).toContain("Do not declare any `.ai/specs/drafts/<task_id>.yaml`");
+    expect(graph.steps.find((step) => step.id === "author-spec")?.instructions).toContain("do not declare scafld-managed control-plane artifacts");
+    expect(graph.steps.find((step) => step.id === "scafld-branch")).toMatchObject({
       skill: "../scafld",
       inputs: {
         command: "branch",
       },
     });
-    expect(chain.steps.find((step) => step.id === "read-active-spec")).toMatchObject({
+    expect(graph.steps.find((step) => step.id === "read-active-spec")).toMatchObject({
       tool: "fs.read",
       context: {
         path: "scafld-start.result.transition.to",
       },
     });
-    expect(chain.steps.find((step) => step.id === "read-declared-files")).toMatchObject({
+    expect(graph.steps.find((step) => step.id === "read-declared-files")).toMatchObject({
       tool: "spec.read_declared_files",
       context: {
         spec_contents: "read-active-spec.file_read.data.contents",
       },
     });
-    expect(chain.steps.find((step) => step.id === "write-fix")).toMatchObject({
+    expect(graph.steps.find((step) => step.id === "write-fix")).toMatchObject({
       tool: "fs.write_bundle",
       context: {
         files: "author-fix.fix_bundle.data.files",
       },
     });
-    expect(chain.steps.find((step) => step.id === "author-fix")).toMatchObject({
+    expect(graph.steps.find((step) => step.id === "author-fix")).toMatchObject({
       context: {
         spec_path: "scafld-start.result.transition.to",
         spec_file: "read-active-spec.file_read.data",
@@ -156,25 +156,25 @@ describe("issue-to-PR composite skill", () => {
         declared_file_context: "read-declared-files.declared_file_context.data",
       },
     });
-    expect(chain.steps.find((step) => step.id === "author-fix")?.instructions).toContain("fix_bundle.files");
-    expect(chain.steps.find((step) => step.id === "author-fix")?.instructions).toContain("repo_snapshot_path");
-    expect(chain.steps.find((step) => step.id === "author-fix")?.instructions).toContain("declared_file_context");
-    expect(chain.steps.find((step) => step.id === "author-fix")?.instructions).toContain("branch_binding and sync_state");
-    expect(chain.steps.find((step) => step.id === "author-fix")?.instructions).toContain("fix_bundle.status: blocked");
-    expect(chain.steps.find((step) => step.id === "author-fix")?.instructions).toContain("do not recreate or hand-edit the");
-    expect(chain.steps.find((step) => step.id === "scafld-status")).toMatchObject({
+    expect(graph.steps.find((step) => step.id === "author-fix")?.instructions).toContain("fix_bundle.files");
+    expect(graph.steps.find((step) => step.id === "author-fix")?.instructions).toContain("repo_snapshot_path");
+    expect(graph.steps.find((step) => step.id === "author-fix")?.instructions).toContain("declared_file_context");
+    expect(graph.steps.find((step) => step.id === "author-fix")?.instructions).toContain("branch_binding and sync_state");
+    expect(graph.steps.find((step) => step.id === "author-fix")?.instructions).toContain("fix_bundle.status: blocked");
+    expect(graph.steps.find((step) => step.id === "author-fix")?.instructions).toContain("do not recreate or hand-edit the");
+    expect(graph.steps.find((step) => step.id === "scafld-status")).toMatchObject({
       skill: "../scafld",
       inputs: {
         command: "status",
       },
     });
-    expect(chain.steps.find((step) => step.id === "read-review-template")).toMatchObject({
+    expect(graph.steps.find((step) => step.id === "read-review-template")).toMatchObject({
       tool: "fs.read",
       context: {
         path: "scafld-review-open.result.review_file",
       },
     });
-    expect(chain.steps.find((step) => step.id === "reviewer-boundary")).toMatchObject({
+    expect(graph.steps.find((step) => step.id === "reviewer-boundary")).toMatchObject({
       run: {
         type: "agent-step",
         task: "issue-to-pr-review",
@@ -190,40 +190,40 @@ describe("issue-to-PR composite skill", () => {
         status_snapshot: "scafld-status.result",
       },
     });
-    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("fix_bundle.files");
-    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("schema_version: 3");
-    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("reviewed_at");
-    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("reviewed_head");
-    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("pass_with_issues");
-    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("review_file_contents");
-    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("status snapshot");
-    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("## Review N — <timestamp>");
-    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("Do not rename");
-    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("write the literal `None.`");
-    expect(chain.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("Do not write placeholder bullets");
-    expect(chain.steps.find((step) => step.id === "write-review")).toMatchObject({
+    expect(graph.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("fix_bundle.files");
+    expect(graph.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("schema_version: 3");
+    expect(graph.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("reviewed_at");
+    expect(graph.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("reviewed_head");
+    expect(graph.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("pass_with_issues");
+    expect(graph.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("review_file_contents");
+    expect(graph.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("status snapshot");
+    expect(graph.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("## Review N — <timestamp>");
+    expect(graph.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("Do not rename");
+    expect(graph.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("write the literal `None.`");
+    expect(graph.steps.find((step) => step.id === "reviewer-boundary")?.instructions).toContain("Do not write placeholder bullets");
+    expect(graph.steps.find((step) => step.id === "write-review")).toMatchObject({
       tool: "fs.write",
       context: {
         path: "scafld-review-open.result.review_file",
         contents: "reviewer-boundary.review_contents",
       },
     });
-    expect(chain.steps.find((step) => step.id === "scafld-summary")).toMatchObject({
+    expect(graph.steps.find((step) => step.id === "scafld-summary")).toMatchObject({
       skill: "../scafld",
       inputs: {
         command: "summary",
       },
     });
-    expect(chain.steps.find((step) => step.id === "scafld-checks")).toMatchObject({
+    expect(graph.steps.find((step) => step.id === "scafld-checks")).toMatchObject({
       tool: "scafld.capture_checks",
     });
-    expect(chain.steps.find((step) => step.id === "scafld-pr-body")).toMatchObject({
+    expect(graph.steps.find((step) => step.id === "scafld-pr-body")).toMatchObject({
       skill: "../scafld",
       inputs: {
         command: "pr-body",
       },
     });
-    expect(chain.steps.find((step) => step.id === "package-pull-request")).toMatchObject({
+    expect(graph.steps.find((step) => step.id === "package-pull-request")).toMatchObject({
       tool: "outbox.build_pull_request",
       context: {
         summary_projection: "scafld-summary.result",
@@ -234,7 +234,7 @@ describe("issue-to-PR composite skill", () => {
         status_snapshot: "scafld-status.result",
       },
     });
-    expect(chain.steps.find((step) => step.id === "push-pull-request")).toMatchObject({
+    expect(graph.steps.find((step) => step.id === "push-pull-request")).toMatchObject({
       tool: "thread.push_outbox",
       context: {
         outbox_entry: "package-pull-request.outbox_entry.data",
@@ -244,7 +244,7 @@ describe("issue-to-PR composite skill", () => {
         next_status: "draft",
       },
     });
-    expect(chain.policy?.transitions).toEqual([
+    expect(graph.policy?.transitions).toEqual([
       {
         to: "write-fix",
         field: "author-fix.fix_bundle.data.files",

@@ -34,9 +34,9 @@
     "body": ["inputs:", "  ${1:project}:", "    type: ${2:string}", "    required: true", "    description: ${3:Input description}"],
     "description": "Required input declaration"
   },
-  "Chain policy": {
-    "prefix": "runx-chain-policy",
+  "Graph policy": {
+    "prefix": "runx-graph-policy",
     "body": ["policy:", "  on_branch_failure:", "    strategy: ${1:halt}", "  on_conflict:", "    strategy: ${2:escalate}"],
-    "description": "Chain control policy"
+    "description": "Graph control policy"
   }
 }

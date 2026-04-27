@@ -170,8 +170,8 @@ const fixtureAssertionKinds = [
   "type_mismatch",
 ] as const;
 const fixtureLanes = ["deterministic", "agent", "repo-integration"] as const;
-const runxListRequestedKinds = ["all", "tools", "skills", "chains", "packets", "overlays"] as const;
-const runxListItemKinds = ["tool", "skill", "chain", "packet", "overlay"] as const;
+const runxListRequestedKinds = ["all", "tools", "skills", "graphs", "packets", "overlays"] as const;
+const runxListItemKinds = ["tool", "skill", "graph", "packet", "overlay"] as const;
 const runxListSources = ["local", "workspace", "dependencies", "built-in"] as const;
 const runxListStatuses = ["ok", "invalid"] as const;
 const capabilityExecutionTransportKinds = ["cli", "api", "github_issue_comment", "system"] as const;

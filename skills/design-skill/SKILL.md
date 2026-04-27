@@ -8,7 +8,7 @@ description: Turn a product or automation objective into a bounded runx skill pa
 Convert an automation or product objective into a practical, testable runx
 skill package.
 
-This is a composite chain that composes three reusable builder capabilities:
+This is a composite graph that composes three reusable builder capabilities:
 `work-plan` → `prior-art` → `write-harness`. It takes a
 high-level goal and produces everything needed to implement and test a
 new skill.
@@ -18,10 +18,10 @@ like a crisp first-party runx skill proposal that a maintainer could plausibly
 review for the catalog:
 
 - treat "no new skill" as a valid high-quality outcome when the job belongs in
-  Sourcey, `draft-content`, an existing skill, or an existing chain
+  Sourcey, `draft-content`, an existing skill, or an existing graph
 - name the concrete operator, maintainer, or workflow pain being solved
 - explain why the current runx catalog does not already cover the job through
-  an existing skill or chain
+  an existing skill or graph
 - show the bounded artifact a real user would receive, not just the automation
   steps that would run
 - translate ambiguity into explicit maintainer decisions, not loose planning
@@ -55,7 +55,7 @@ review handles.
 
 ## Quality Profile
 
-- Purpose: turn a real opportunity into a bounded, testable runx skill or chain
+- Purpose: turn a real opportunity into a bounded, testable runx skill or graph
   package proposal.
 - Audience: runx maintainers deciding whether to implement, reject, or reshape
   the proposed catalog surface.
@@ -87,20 +87,20 @@ review handles.
 
 3. **Author the skill and fixtures** (via `write-harness`). Using the
    decomposition and research, drafts the skill contract (SKILL.md),
-   composite execution plan (execution profile chain definition if needed), replayable
+   composite execution plan (execution profile graph definition if needed), replayable
    harness fixtures, and acceptance checks.
 
 ## What this skill produces
 
 - **Skill contract**: a complete SKILL.md with frontmatter, instructions,
   inputs, outputs, and boundary rules. Ready to implement.
-- **Execution plan**: a execution profile chain definition when the skill needs
+- **Execution plan**: a execution profile graph definition when the skill needs
   multiple governed steps. Includes step ids, skill references, scopes,
   context edges, and policy transitions.
 - **Pain-point summary**: one to three concrete problems this skill resolves
   for a real operator or maintainer, grounded in the request rather than
   generic automation language.
-- **Catalog fit**: adjacent runx skills or chains considered, why reuse alone
+- **Catalog fit**: adjacent runx skills or graphs considered, why reuse alone
   is insufficient, and why the proposed skill earns its place without
   duplicating the current catalog.
 - **Maintainer decisions**: explicit review questions or accept/reject/change
@@ -125,7 +125,7 @@ review handles.
 - For just the decomposition step — use `work-plan` directly.
 - For just research — use `prior-art` directly.
 - When the skill is trivial enough that writing SKILL.md directly is
-  faster than running a three-step chain.
+  faster than running a three-step graph.
 
 ## Inputs
 

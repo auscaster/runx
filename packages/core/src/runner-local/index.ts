@@ -605,7 +605,7 @@ export async function runValidatedSkill(options: RunValidatedSkillOptions): Prom
     message: "Local policy admitted skill execution.",
   });
 
-  if (skill.source.type === "chain" && skill.source.chain) {
+  if (skill.source.type === "graph" && skill.source.graph) {
     await options.caller.report({
       type: "executing",
       message: "Executing graph skill source.",

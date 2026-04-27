@@ -14,7 +14,7 @@ const nonInteractiveCaller: Caller = {
 };
 const adapters = createDefaultSkillAdapters();
 
-describe("local fanout chain runner", () => {
+describe("local fanout graph runner", () => {
   it("runs a fanout group with all-success sync policy", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-fanout-all-"));
     const receiptDir = path.join(tempDir, "receipts");
@@ -22,7 +22,7 @@ describe("local fanout chain runner", () => {
 
     try {
       const result = await runLocalGraph({
-        graphPath: path.resolve("fixtures/chains/fanout/all.yaml"),
+        graphPath: path.resolve("fixtures/graphs/fanout/all.yaml"),
         caller: nonInteractiveCaller,
         receiptDir,
         runxHome,
@@ -125,7 +125,7 @@ steps:
 
     try {
       const result = await runLocalGraph({
-        graphPath: path.resolve("fixtures/chains/fanout/chain.yaml"),
+        graphPath: path.resolve("fixtures/graphs/fanout/graph.yaml"),
         caller: nonInteractiveCaller,
         receiptDir,
         runxHome,
@@ -173,7 +173,7 @@ steps:
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-fanout-threshold-"));
     const receiptDir = path.join(tempDir, "receipts");
     const runxHome = path.join(tempDir, "home");
-    const graphPath = path.resolve("fixtures/chains/fanout/threshold.yaml");
+    const graphPath = path.resolve("fixtures/graphs/fanout/threshold.yaml");
     const approvingCaller: Caller = {
       resolve: async (request) => request.kind === "approval" ? { actor: "human", payload: true } : undefined,
       report: () => undefined,
@@ -393,7 +393,7 @@ steps:
 
     try {
       const result = await runLocalGraph({
-        graphPath: path.resolve("fixtures/chains/fanout/chain.yaml"),
+        graphPath: path.resolve("fixtures/graphs/fanout/graph.yaml"),
         caller: nonInteractiveCaller,
         receiptDir,
         runxHome: path.join(tempDir, "home"),

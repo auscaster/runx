@@ -7,7 +7,7 @@ description: Turn a failed receipt or harness outcome into a bounded skill impro
 
 Review a failed or suspicious run and draft the next bounded improvement.
 
-This is a composite skill that chains `review-receipt` into `write-harness`.
+This is a composite skill that graphs `review-receipt` into `write-harness`.
 It takes failure evidence — a receipt, harness output, or manual summary —
 diagnoses the root cause, and produces an updated skill proposal with
 replayable fixtures that cover the failure.

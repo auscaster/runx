@@ -5,7 +5,7 @@ description: Review receipts and harness failures to propose bounded skill impro
 
 # Receipt Review
 
-Diagnose what went wrong in a skill or chain execution and propose the
+Diagnose what went wrong in a skill or graph execution and propose the
 smallest change that fixes it.
 
 Read the receipt or failure summary. Identify what was attempted, what
@@ -14,7 +14,7 @@ succeeded, and where it broke. The receipt contains step statuses
 exit codes, stderr, scope admission decisions,
 and timing.
 
-Distinguish root cause from symptoms. A chain may report failure at step 4,
+Distinguish root cause from symptoms. A graph may report failure at step 4,
 but the root cause may be bad output from step 2 that propagated through
 context passing. Trace data flow backward through context edges to find
 where the problem originated.
@@ -23,7 +23,7 @@ Classify the failure:
 
 - **Input error** — required input missing or malformed. Fix: input
   validation or input resolution.
-- **Scope denial** — step requested scopes outside the chain grant.
+- **Scope denial** — step requested scopes outside the graph grant.
   Fix: scope declarations or grant configuration.
 - **Tool failure** — CLI tool or adapter returned an error. Fix: tool
   invocation (args, env, cwd) or the tool itself.
@@ -42,12 +42,12 @@ Classify the failure:
 
 A receipt with status `needs_resolution` denotes a healthy
 agent-mediated suspension, not a defect. The runtime yielded to the
-caller for cognitive work and the chain is waiting to be resumed.
-This is a normal part of chain execution, not one of the failure
+caller for cognitive work and the graph is waiting to be resumed.
+This is a normal part of graph execution, not one of the failure
 classes above. When the only evidence is `needs_resolution` without
 any exit code, scope denial, schema mismatch, or other concrete
 failure signal, return `verdict: pass` with an empty
-`improvement_proposals` array and note that the chain is paused as
+`improvement_proposals` array and note that the graph is paused as
 designed.
 
 One failure, one fix. Propose the smallest change that addresses the root

@@ -552,7 +552,7 @@ runners:
     const manifest = validateRunnerManifest(
       parseRunnerManifestYaml(`skill: evolve
 catalog:
-  kind: chain
+  kind: graph
   audience: operator
   visibility: private
 runners:
@@ -607,7 +607,7 @@ runners:
     type: agent
 `),
       ),
-    ).toThrow("catalog.kind must be skill or chain.");
+    ).toThrow("catalog.kind must be skill or graph.");
   });
 
   it("projects optional execution semantics from runner manifests", () => {

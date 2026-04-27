@@ -9,7 +9,7 @@ Drive a bounded thread-driven change lane through the full scafld lifecycle unde
 runx governance, from spec creation through authored fix, explicit review, and
 projection-ready PR surfaces.
 
-The chain separates cognition from mutation. Agent phases author the scafld
+The graph separates cognition from mutation. Agent phases author the scafld
 spec, the bounded repo change bundle, and the review contents. Deterministic
 `fs.write` and `fs.write_bundle` phases are the only places files are written
 to disk. The `scafld` skill remains the workflow kernel: it creates the spec,
@@ -26,7 +26,7 @@ peer agent) fills the three adversarial sections, `regression_hunt`,
 markdown back through a deterministic file-write step before `scafld complete`
 validates and archives the spec.
 
-The chain does not control who authors the spec, the fix, or the review. It
+The graph does not control who authors the spec, the fix, or the review. It
 provides the governed handoff boundaries. The caller decides. That is the point
 of the lane: it should feel like the engineering system, not an extra system.
 The branch, spec, review, receipt, and PR surfaces stay visible as first-class
@@ -34,7 +34,7 @@ artifacts instead of being collapsed into a shadow runx-only object model.
 
 ## Lifecycle
 
-The chain runs: `scafld new` -> author spec -> write spec -> validate ->
+The graph runs: `scafld new` -> author spec -> write spec -> validate ->
 approve -> start -> `scafld branch` -> author fix bundle -> write fix bundle ->
 exec -> `scafld status` -> audit -> review-open -> reviewer boundary -> write
 review -> complete -> `scafld summary` -> `scafld checks` ->
@@ -146,7 +146,7 @@ updates those lifecycle files, but scafld excludes them from scope auditing, so
 declaring them in `phases[].changes[].file` produces false `missing` results.
 
 The safest reference shape is the one already used by the passing
-`tests/issue-to-pr-chain.test.ts` fixture: `task.summary`, `task.size`,
+`tests/issue-to-pr-graph.test.ts` fixture: `task.summary`, `task.size`,
 `task.risk_level`, `task.acceptance.validation`, and phase-level
 `acceptance_criteria` should be present explicitly, while the declared change
 set stays limited to the real repo files under test.

@@ -122,7 +122,7 @@ export async function readPendingRunState(receiptDir: string, runId: string): Pr
 }
 
 function isTerminalRunEventKind(kind: string): boolean {
-  return kind === "run_completed" || kind === "run_failed" || kind === "chain_completed";
+  return kind === "run_completed" || kind === "run_failed" || kind === "graph_completed";
 }
 
 export async function readPendingSkillPath(receiptDir: string, runId: string): Promise<string | undefined> {

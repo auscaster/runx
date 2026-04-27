@@ -25,15 +25,15 @@ async function createTestRuntime(root: string) {
 }
 
 describe("local governed graph runner", () => {
-  it("runs a sequential chain and writes linked receipts", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-"));
+  it("runs a sequential graph and writes linked receipts", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-graph-"));
     const receiptDir = path.join(tempDir, "receipts");
     const runxHome = path.join(tempDir, "home");
 
     try {
       const runtime = await createTestRuntime(tempDir);
       const result = await runLocalGraph({
-        graphPath: path.resolve("fixtures/chains/sequential/chain.yaml"),
+        graphPath: path.resolve("fixtures/graphs/sequential/graph.yaml"),
         caller: nonInteractiveCaller,
         adapters: runtime.adapters,
         receiptDir: runtime.paths.receiptDir,
@@ -47,8 +47,8 @@ describe("local governed graph runner", () => {
       }
 
       expect(result.steps.map((step) => step.stepId)).toEqual(["first", "second"]);
-      expect(result.steps[0].stdout).toBe("hello from chain");
-      expect(result.steps[1].stdout).toBe("hello from chain");
+      expect(result.steps[0].stdout).toBe("hello from graph");
+      expect(result.steps[1].stdout).toBe("hello from graph");
       expect(result.steps[1].contextFrom).toEqual([
         {
           input: "message",
@@ -65,24 +65,24 @@ describe("local governed graph runner", () => {
       expect(files.filter((file) => file.endsWith(".json"))).toHaveLength(3);
       expect(files).toContain(`${result.receipt.id}.json`);
 
-      const chainReceiptContents = await readFile(path.join(receiptDir, `${result.receipt.id}.json`), "utf8");
-      expect(chainReceiptContents).not.toContain("hello from chain");
-      expect(chainReceiptContents).not.toContain(process.cwd());
+      const graphReceiptContents = await readFile(path.join(receiptDir, `${result.receipt.id}.json`), "utf8");
+      expect(graphReceiptContents).not.toContain("hello from graph");
+      expect(graphReceiptContents).not.toContain(process.cwd());
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
   });
 
-  it("passes explicit chain inputs into steps without storing raw inputs in the chain receipt", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-input-"));
+  it("passes explicit graph inputs into steps without storing raw inputs in the graph receipt", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-graph-input-"));
     const receiptDir = path.join(tempDir, "receipts");
     const runxHome = path.join(tempDir, "home");
 
     try {
       const runtime = await createTestRuntime(tempDir);
       const result = await runLocalGraph({
-        graphPath: path.resolve("fixtures/chains/sequential/input.yaml"),
-        inputs: { message: "explicit chain input" },
+        graphPath: path.resolve("fixtures/graphs/sequential/input.yaml"),
+        inputs: { message: "explicit graph input" },
         caller: nonInteractiveCaller,
         adapters: runtime.adapters,
         receiptDir: runtime.paths.receiptDir,
@@ -94,16 +94,16 @@ describe("local governed graph runner", () => {
       if (result.status !== "success") {
         return;
       }
-      expect(result.steps[0].stdout).toBe("explicit chain input");
+      expect(result.steps[0].stdout).toBe("explicit graph input");
 
-      const chainReceiptContents = await readFile(path.join(receiptDir, `${result.receipt.id}.json`), "utf8");
-      expect(chainReceiptContents).not.toContain("explicit chain input");
+      const graphReceiptContents = await readFile(path.join(receiptDir, `${result.receipt.id}.json`), "utf8");
+      expect(graphReceiptContents).not.toContain("explicit graph input");
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
   });
 
-  it("inspects a sequential chain receipt", async () => {
+  it("inspects a sequential graph receipt", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-composite-inspect-"));
     const receiptDir = path.join(tempDir, "receipts");
     const runxHome = path.join(tempDir, "home");
@@ -111,7 +111,7 @@ describe("local governed graph runner", () => {
     try {
       const runtime = await createTestRuntime(tempDir);
       const result = await runLocalGraph({
-        graphPath: path.resolve("fixtures/chains/sequential/chain.yaml"),
+        graphPath: path.resolve("fixtures/graphs/sequential/graph.yaml"),
         caller: nonInteractiveCaller,
         adapters: runtime.adapters,
         receiptDir: runtime.paths.receiptDir,
@@ -142,7 +142,7 @@ describe("local governed graph runner", () => {
   });
 
   it("inspects a composite receipt through the CLI shell", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-cli-inspect-"));
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-graph-cli-inspect-"));
     const receiptDir = path.join(tempDir, "receipts");
     const stdout = createMemoryStream();
     const stderr = createMemoryStream();
@@ -150,7 +150,7 @@ describe("local governed graph runner", () => {
     try {
       const runtime = await createTestRuntime(tempDir);
       const result = await runLocalGraph({
-        graphPath: path.resolve("fixtures/chains/sequential/chain.yaml"),
+        graphPath: path.resolve("fixtures/graphs/sequential/graph.yaml"),
         caller: nonInteractiveCaller,
         adapters: runtime.adapters,
         receiptDir: runtime.paths.receiptDir,
@@ -179,16 +179,16 @@ describe("local governed graph runner", () => {
   });
 
   it("writes step_started before step_waiting_resolution for agent-mediated graph steps", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-started-before-waiting-"));
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-graph-started-before-waiting-"));
     const receiptDir = path.join(tempDir, "receipts");
     const runxHome = path.join(tempDir, "home");
-    const graphPath = path.join(tempDir, "waiting-chain.yaml");
+    const graphPath = path.join(tempDir, "waiting-graph.yaml");
 
     try {
       const runtime = await createTestRuntime(tempDir);
       await writeFile(
         graphPath,
-        `name: waiting-chain
+        `name: waiting-graph
 owner: runx
 steps:
   - id: review

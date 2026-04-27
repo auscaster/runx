@@ -12,7 +12,7 @@ Bump the version in the same commit as the change.
 - **Minor (`0.X.0`):** new runner, new input field, new output field,
   new harness-case shape, backward-compatible output-contract
   extension.
-- **Major (`X.0.0`):** chain redefinition, runner renaming, input or
+- **Major (`X.0.0`):** graph redefinition, runner renaming, input or
   output removal, any change that would break an existing caller's
   invocation shape.
 

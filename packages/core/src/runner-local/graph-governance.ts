@@ -44,7 +44,7 @@ export function governanceReceiptMetadata(
   governance: GraphStepGovernance,
 ): Readonly<Record<string, unknown>> {
   return {
-    chain_governance: {
+    graph_governance: {
       step_id: step.id,
       selected_runner: graphStepRunner(step) ?? "default",
       scope_admission: {

@@ -263,7 +263,7 @@ describe("admitGraphStepScopes", () => {
     });
   });
 
-  it("denies scopes outside the chain grant", () => {
+  it("denies scopes outside the graph grant", () => {
     expect(
       admitGraphStepScopes({
         stepId: "deploy",

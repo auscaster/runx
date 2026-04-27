@@ -108,7 +108,7 @@ export async function dispatchCli(
   if (parsed.command === "harness" && parsed.harnessPath) {
     const result = await runHarnessTarget(resolvePathFromUserInput(parsed.harnessPath, env), {
       env,
-      registryStore: await resolveRegistryStoreForChains(env),
+      registryStore: await resolveRegistryStoreForGraphs(env),
       toolCatalogAdapters: resolveEnvToolCatalogAdapters(env),
       adapters: createDefaultSkillAdapters(),
       voiceProfilePath: await resolveBundledCliVoiceProfilePath(),
@@ -171,7 +171,7 @@ export async function dispatchCli(
 
   if (parsed.command === "dev") {
     const result = await handleDevCommand(parsed, env, {
-      resolveRegistryStoreForChains,
+      resolveRegistryStoreForGraphs,
       resolveDefaultReceiptDir,
       createNonInteractiveCaller,
       createAgentRuntimeLoader,
@@ -186,7 +186,7 @@ export async function dispatchCli(
 
   if (parsed.command === "mcp" && parsed.mcpAction === "serve") {
     await handleMcpServeCommand(parsed, io, env, {
-      resolveRegistryStoreForChains,
+      resolveRegistryStoreForGraphs,
       resolveDefaultReceiptDir,
     });
     return 0;
@@ -371,7 +371,7 @@ export async function dispatchCli(
     const resolvedPublishPath = resolvePathFromUserInput(parsed.publishPath, env);
     const harness = await validatePublishHarness(resolvedPublishPath, {
       env,
-      registryStore: await resolveRegistryStoreForChains(env),
+      registryStore: await resolveRegistryStoreForGraphs(env),
       toolCatalogAdapters: resolveEnvToolCatalogAdapters(env),
       adapters: createDefaultSkillAdapters(),
       voiceProfilePath: await resolveBundledCliVoiceProfilePath(),
@@ -544,7 +544,7 @@ export function writeCliError(io: CliIo, message: string): number {
   return 1;
 }
 
-async function resolveRegistryStoreForChains(env: NodeJS.ProcessEnv): Promise<RegistryStore | undefined> {
+async function resolveRegistryStoreForGraphs(env: NodeJS.ProcessEnv): Promise<RegistryStore | undefined> {
   const target = resolveRunxRegistryTarget(env);
   if (target.mode === "local") {
     return createFileRegistryStore(target.registryPath);
@@ -558,7 +558,7 @@ async function resolveRegistryStoreForChains(env: NodeJS.ProcessEnv): Promise<Re
     remoteBaseUrl: target.registryUrl,
     cacheRoot: resolveRunxRegistryPath(env),
     installationId: install.state.installation_id,
-    channel: "cli-chain",
+    channel: "cli-graph",
   });
 }
 
@@ -591,7 +591,7 @@ async function executeLocalSkillCommand(options: {
     receiptDir: resolvedReceiptDir,
     runner: options.parsed.runner,
     resumeFromRunId: options.parsed.resumeReceiptId,
-    registryStore: await resolveRegistryStoreForChains(options.env),
+    registryStore: await resolveRegistryStoreForGraphs(options.env),
     adapters,
     toolCatalogAdapters: resolveEnvToolCatalogAdapters(options.env),
     voiceProfilePath: await resolveBundledCliVoiceProfilePath(),

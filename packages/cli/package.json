@@ -1,7 +1,7 @@
 {
   "name": "@runxhq/cli",
   "version": "0.5.20",
-  "description": "Runx CLI — governed runtime for agent skills, tools, chains, and packets.",
+  "description": "Runx CLI — governed runtime for agent skills, tools, graphs, and packets.",
   "private": false,
   "license": "Apache-2.0",
   "type": "module",

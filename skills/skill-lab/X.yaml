@@ -2,7 +2,7 @@ skill: skill-lab
 version: "0.1.1"
 
 catalog:
-  kind: chain
+  kind: graph
   audience: public
   visibility: public
 
@@ -129,15 +129,15 @@ harness:
               adjacent_skills:
                 - release
                 - draft-content
-              why_new: The release chain owns governed publishing, while this proposal adds a narrower first-party release-notes capability focused on reviewable notes generation.
+              why_new: The release graph owns governed publishing, while this proposal adds a narrower first-party release-notes capability focused on reviewable notes generation.
             maintainer_decisions:
               - question: Should the first version stop at notes generation and review?
                 options:
                   - yes
                   - no, include publish
-                why: Keeps the proposal aligned with the existing release chain boundary.
+                why: Keeps the proposal aligned with the existing release graph boundary.
             execution_plan:
-              runner: chain
+              runner: graph
               phases:
                 - prepare
                 - draft
@@ -204,7 +204,7 @@ harness:
 runners:
   skill-lab:
     default: true
-    type: chain
+    type: graph
     inputs:
       objective:
         type: string
@@ -239,7 +239,7 @@ runners:
         type: string
         required: false
         description: "Maintainer posture, constraints, or teaching notes."
-    chain:
+    graph:
       name: skill-lab
       owner: runx
       steps:

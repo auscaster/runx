@@ -5,7 +5,7 @@ description: Produce an approved ecosystem briefing from bounded research and a 
 
 # Ecosystem Brief
 
-This chain is the specialized daily-brief variant of `content-pipeline`.
+This graph is the specialized daily-brief variant of `content-pipeline`.
 
 It is for one decision-ready ecosystem update: what changed, why it matters,
 and what the operator should do with that information. The output should feel

@@ -20,7 +20,7 @@ describe("governed graph runner governance", () => {
     try {
       const skillDir = path.join(tempDir, "skills", "package-echo");
       await writePackageEchoSkill(skillDir);
-      const graphPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "graph.yaml");
       const runtime = await createDefaultLocalSkillRuntime({
         root: tempDir,
         receiptDir: path.join(tempDir, "receipts"),
@@ -29,7 +29,7 @@ describe("governed graph runner governance", () => {
       });
       await writeFile(
         graphPath,
-        `name: chain-runner-cli
+        `name: graph-runner-cli
 steps:
   - id: echo
     skill: ./skills/package-echo
@@ -74,7 +74,7 @@ steps:
 
   it("selects an A2A binding runner from a graph step", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-composite-runner-a2a-"));
-    const graphPath = path.join(tempDir, "chain.yaml");
+    const graphPath = path.join(tempDir, "graph.yaml");
 
     try {
       const runtime = await createDefaultLocalSkillRuntime({
@@ -85,13 +85,13 @@ steps:
       });
       await writeFile(
         graphPath,
-        `name: chain-runner-a2a
+        `name: graph-runner-a2a
 steps:
   - id: echo
     skill: ${path.resolve("fixtures/skills/a2a-echo")}
     runner: fixture-a2a
     inputs:
-      message: hi from chain
+      message: hi from graph
 `,
       );
 
@@ -110,7 +110,7 @@ steps:
       }
       expect(result.steps[0]).toMatchObject({
         runner: "fixture-a2a",
-        stdout: "hi from chain",
+        stdout: "hi from graph",
       });
       expect(result.receipt.steps[0]?.runner).toBe("fixture-a2a");
     } finally {
@@ -119,16 +119,16 @@ steps:
   });
 
   it("denies step scopes that exceed the parent graph grant before execution", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-scope-deny-"));
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-graph-scope-deny-"));
     const adapter = createCountingAdapter();
 
     try {
       const skillDir = path.join(tempDir, "skills", "package-echo");
       await writePackageEchoSkill(skillDir);
-      const graphPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "graph.yaml");
       await writeFile(
         graphPath,
-        `name: chain-scope-deny
+        `name: graph-scope-deny
 steps:
   - id: deploy
     skill: ./skills/package-echo

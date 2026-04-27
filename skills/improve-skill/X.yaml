@@ -2,7 +2,7 @@ skill: improve-skill
 version: "0.1.1"
 
 catalog:
-  kind: chain
+  kind: graph
   audience: builder
   visibility: private
 
@@ -15,7 +15,7 @@ harness:
         receipt_summary: harness failed because required context was flattened
         harness_output: needs_resolution
         skill_path: skills/design-skill
-        objective: Preserve structured review data in builder chains
+        objective: Preserve structured review data in builder graphs
       caller:
         answers:
           agent_step.review-receipt.output:
@@ -32,7 +32,7 @@ harness:
             skill_spec:
               name: improve-skill
             execution_plan:
-              runner: chain
+              runner: graph
             harness_fixture:
               - name: improve-skill-structured-review
                 kind: skill
@@ -49,18 +49,18 @@ harness:
           kind: graph_execution
           status: success
 
-    - name: improve-skill-passes-on-paused-chain
+    - name: improve-skill-passes-on-paused-graph
       inputs:
         receipt_id: rx_paused
-        receipt_summary: chain paused at step 1 awaiting caller cognitive work; status needs_resolution with one outstanding agent-step request
+        receipt_summary: graph paused at step 1 awaiting caller cognitive work; status needs_resolution with one outstanding agent-step request
         harness_output: needs_resolution
         skill_path: skills/content-pipeline
-        objective: Distinguish paused-but-healthy chains from broken skills in diagnosis
+        objective: Distinguish paused-but-healthy graphs from broken skills in diagnosis
       caller:
         answers:
           agent_step.review-receipt.output:
             verdict: pass
-            failure_summary: No failure. The chain paused as designed awaiting caller cognitive work; needs_resolution is a healthy agent-mediated suspension, not a defect.
+            failure_summary: No failure. The graph paused as designed awaiting caller cognitive work; needs_resolution is a healthy agent-mediated suspension, not a defect.
             improvement_proposals: []
             next_harness_checks:
               - target skill harness still passes on the happy path where the agent step receives valid outputs
@@ -69,8 +69,8 @@ harness:
               name: content-pipeline
               note: No SKILL.md change proposed; receipt review verdict was pass.
             execution_plan:
-              runner: chain
-              note: No change to chain definition.
+              runner: graph
+              note: No change to graph definition.
             harness_fixture:
               - name: content-pipeline-paused-run-is-healthy-suspension
                 kind: skill
@@ -88,7 +88,7 @@ harness:
 runners:
   improve-skill:
     default: true
-    type: chain
+    type: graph
     inputs:
       receipt_id:
         type: string
@@ -110,7 +110,7 @@ runners:
         type: string
         required: false
         description: "Operator intent for the next improvement pass."
-    chain:
+    graph:
       name: improve-skill
       owner: runx
       steps:

@@ -13,17 +13,17 @@ operator needs to make a better decision.
 
 `prior-art` is not only for skill design. It should support Sourcey docs
 outreach, skill research, ecosystem briefs, content drafts, issue responses,
-release narratives, and any chain that needs to know what already exists before
+release narratives, and any graph that needs to know what already exists before
 it produces an artifact.
 
 ## Quality Profile
 
 - Purpose: prevent low-value duplication and weak strategic choices before a
-  chain writes, publishes, proposes, or mutates anything.
+  graph writes, publishes, proposes, or mutates anything.
 - Audience: the downstream skill or human reviewer deciding whether the next
   artifact is worth producing.
 - Artifact contract: concise findings, sources, catalog/comparison fit, risks,
-  and a recommended posture for the current chain purpose.
+  and a recommended posture for the current graph purpose.
 - Evidence bar: cite exact docs, source files, receipts, issue threads,
   external references, or catalog entries; mark uncertainty explicitly.
 - Voice bar: write as a maintainer briefing another maintainer. Do not narrate
@@ -33,7 +33,7 @@ it produces an artifact.
   or a tighter content claim.
 - Stop conditions: return `needs_more_evidence` when the comparison would rest
   on guesses, and return `not_worth_pursuing` when the objective is true but
-  not strategically useful for the chain purpose.
+  not strategically useful for the graph purpose.
 
 Priority order:
 
@@ -47,7 +47,7 @@ Priority order:
    version. Read the spec.
 
 3. **Prior art in runx.** Check `skills/` and the registry. Could an existing
-   skill, chain, Sourcey docs path, content path, or issue workflow be reused
+   skill, graph, Sourcey docs path, content path, or issue workflow be reused
    or amended instead of creating a new first-party surface?
 
    When `decomposition.required_skills` contains entries where `exists: true`,
@@ -56,7 +56,7 @@ Priority order:
    path in `recommended_flow` and `findings`, and scope any new design work
    to the composition glue around it rather than duplicating its internals.
 
-   Be concrete about catalog fit. Name the adjacent current skill, chain, or
+   Be concrete about catalog fit. Name the adjacent current skill, graph, or
    content surface, explain the boundary it already owns, and say exactly what
    remains unsolved. "Not quite right" is not enough. The downstream artifact
    should either clearly reuse the current catalog or clearly explain the gap.
@@ -67,7 +67,7 @@ Priority order:
    inspect what would change the operator's decision. For skills, inspect
    adjacent skill contracts and examples.
 
-5. **Governance patterns.** What scopes does the chain need? Where are the
+5. **Governance patterns.** What scopes does the graph need? Where are the
    mutation, publication, or handoff boundaries? What approval or review
    checkpoints does the domain imply?
 
@@ -84,7 +84,7 @@ something, say so.
 
 - `findings`: array of claims with `claim`, `source`, `relevance`, `confidence`.
 - `recommended_flow`: suggested skill/execution flow based on findings.
-- `catalog_fit`: concise explanation of which current runx skills or chains
+- `catalog_fit`: concise explanation of which current runx skills or graphs
   were considered, where they stop, and why the next artifact is new work,
   reuse, amendment, or a clean stop rather than duplication.
 - `quality_bar`: audience, artifact, evidence, voice, and stop conditions that
@@ -98,7 +98,7 @@ something, say so.
 - `objective` (required): the bounded objective being researched.
 - `decomposition` (optional): output from `work-plan`. When
   provided, focus on validating the proposed steps rather than surveying.
-- `chain_purpose` (optional): why the caller is researching this objective,
+- `graph_purpose` (optional): why the caller is researching this objective,
   such as `skill_proposal`, `sourcey_docs`, `content_draft`,
   `ecosystem_brief`, `issue_response`, or `release`.
 - `audience` (optional): who will read or act on the downstream artifact.

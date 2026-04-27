@@ -12,14 +12,14 @@ const nonInteractiveCaller: Caller = {
   report: () => undefined,
 };
 
-describe("chain retry and idempotency", () => {
+describe("graph retry and idempotency", () => {
   it("retries a read-only step and records attempt receipts", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-retry-read-"));
     const adapter = createFlakyAdapter();
 
     try {
       const result = await runLocalGraph({
-        graphPath: path.resolve("fixtures/chains/retry/read-only.yaml"),
+        graphPath: path.resolve("fixtures/graphs/retry/read-only.yaml"),
         caller: nonInteractiveCaller,
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
@@ -58,7 +58,7 @@ describe("chain retry and idempotency", () => {
 
     try {
       const result = await runLocalGraph({
-        graphPath: path.resolve("fixtures/chains/retry/mutating-denied.yaml"),
+        graphPath: path.resolve("fixtures/graphs/retry/mutating-denied.yaml"),
         caller: nonInteractiveCaller,
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
@@ -83,7 +83,7 @@ describe("chain retry and idempotency", () => {
 
     try {
       const result = await runLocalGraph({
-        graphPath: path.resolve("fixtures/chains/retry/skill-level.yaml"),
+        graphPath: path.resolve("fixtures/graphs/retry/skill-level.yaml"),
         caller: nonInteractiveCaller,
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
@@ -104,13 +104,13 @@ describe("chain retry and idempotency", () => {
     }
   });
 
-  it("denies skill-level mutating retry without requiring duplicate chain-step metadata", async () => {
+  it("denies skill-level mutating retry without requiring duplicate graph-step metadata", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-retry-skill-denied-"));
     const adapter = createFlakyAdapter();
 
     try {
       const result = await runLocalGraph({
-        graphPath: path.resolve("fixtures/chains/retry/skill-mutating-denied.yaml"),
+        graphPath: path.resolve("fixtures/graphs/retry/skill-mutating-denied.yaml"),
         caller: nonInteractiveCaller,
         receiptDir: path.join(tempDir, "receipts"),
         runxHome: path.join(tempDir, "home"),
@@ -136,7 +136,7 @@ describe("chain retry and idempotency", () => {
 
     try {
       const result = await runLocalGraph({
-        graphPath: path.resolve("fixtures/chains/retry/mutating-idempotent.yaml"),
+        graphPath: path.resolve("fixtures/graphs/retry/mutating-idempotent.yaml"),
         caller: nonInteractiveCaller,
         receiptDir,
         runxHome: path.join(tempDir, "home"),
@@ -153,9 +153,9 @@ describe("chain retry and idempotency", () => {
       expect(hashes[0]).toBeTruthy();
       expect(hashes[0]).toBe(hashes[1]);
 
-      const chainReceipt = await readFile(path.join(receiptDir, `${result.receipt.id}.json`), "utf8");
+      const graphReceipt = await readFile(path.join(receiptDir, `${result.receipt.id}.json`), "utf8");
       const firstAttemptReceipt = await readFile(path.join(receiptDir, `${result.steps[0].receiptId}.json`), "utf8");
-      expect(chainReceipt).not.toContain("deploy-123");
+      expect(graphReceipt).not.toContain("deploy-123");
       expect(firstAttemptReceipt).not.toContain("deploy-123");
       expect(firstAttemptReceipt).toContain("idempotency_key_hash");
     } finally {

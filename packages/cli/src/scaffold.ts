@@ -155,13 +155,13 @@ Use this skill to demonstrate a governed runx authoring package.
 runners:
   default:
     default: true
-    type: chain
+    type: graph
     inputs:
       message:
         type: string
         required: false
         default: hello
-    chain:
+    graph:
       name: ${name}
       steps:
         - id: echo

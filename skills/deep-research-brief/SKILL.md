@@ -5,7 +5,7 @@ description: Produce an approved deep-research brief from bounded research, synt
 
 # Deep Research Brief
 
-This chain turns one important question into a decision-ready brief.
+This graph turns one important question into a decision-ready brief.
 
 It is for research that needs more than a quick answer but less than an open-
 ended report. The output should feel like an operator memo: what the answer is,

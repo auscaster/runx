@@ -1,7 +1,7 @@
 {
   "name": "@runx/antigravity",
   "displayName": "runx",
-  "description": "Governed skill and chain execution for VS Code-compatible IDE hosts, Antigravity first.",
+  "description": "Governed skill and graph execution for VS Code-compatible IDE hosts, Antigravity first.",
   "version": "0.0.0",
   "private": true,
   "type": "module",

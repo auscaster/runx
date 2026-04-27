@@ -10,14 +10,14 @@ projection command.
 
 The skill does not replace scafld. It calls the scafld CLI with explicit argv,
 requires native `--json` output for supported commands, records the runx
-receipt for the hop, and lets the chain define which command is allowed at each
+receipt for the hop, and lets the graph define which command is allowed at each
 step.
 
 ## Quality Profile
 
 - Purpose: expose native scafld lifecycle commands through governed runx steps
   without hiding scafld state.
-- Audience: maintainers and chains that need spec, review, branch, status,
+- Audience: maintainers and graphs that need spec, review, branch, status,
   checks, and PR-body surfaces to stay native and inspectable.
 - Artifact contract: native scafld JSON payload, receipt metadata, and any
   projected markdown or check surface requested by the command.
@@ -119,7 +119,7 @@ The lifecycle commands, in typical order:
 
 The `review` command opens the review round and returns the review file
 path and adversarial prompt. The actual review is **reviewer-mediated**: the
-chain routes it through the caller boundary so the reviewer may be a human,
+graph routes it through the caller boundary so the reviewer may be a human,
 the controlling agent, or a peer agent. The `agent` runner on this skill
 receives `task_id`, `review_file`, and `review_prompt` and must fill the
 three adversarial sections in the review artifact before `complete` runs.

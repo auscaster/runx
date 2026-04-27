@@ -21,7 +21,7 @@ plan should preserve the generic `thread_locator` and any supplied
 The central insight: split at governance boundaries, not cognitive boundaries.
 A skill keeps its full context window. If two actions need the same context
 but different scopes, they are two invocations of the same skill with
-different scopes — not two separate skills. The chain defines where authority
+different scopes — not two separate skills. The graph defines where authority
 changes, where mutation happens, and where a gate needs to approve. That is
 where steps break.
 
@@ -29,7 +29,7 @@ Work backward from the deliverable. Name the concrete artifact the objective
 produces (spec, patch, PR, docs site, report). Then identify where authority
 narrows: read-only analysis, write-access mutation, approval gates, review
 boundaries. Each narrowing is a step boundary. Each step gets only the scopes
-it needs — no step inherits from a prior step, each derives from the chain
+it needs — no step inherits from a prior step, each derives from the graph
 grant independently.
 
 Determine data dependencies between steps. A step that consumes output from

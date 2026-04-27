@@ -427,7 +427,7 @@ function resolveHarnessRequest(
 type SkillReceipt = Extract<RunLocalSkillResult, { readonly status: "success" | "failure" }>["receipt"];
 
 function skillReceipt(result: RunLocalSkillResult | RunLocalGraphResult): SkillReceipt | undefined {
-  if ("receipt" in result && "skill" in result && !("chain" in result)) {
+  if ("receipt" in result && "skill" in result && !("graph" in result)) {
     return result.receipt as SkillReceipt | undefined;
   }
   return undefined;

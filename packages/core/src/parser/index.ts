@@ -48,7 +48,7 @@ export interface SkillSource {
   readonly task?: string;
   readonly hook?: string;
   readonly outputs?: Readonly<Record<string, unknown>>;
-  readonly chain?: ExecutionGraph;
+  readonly graph?: ExecutionGraph;
   readonly raw: Record<string, unknown>;
 }
 
@@ -125,7 +125,7 @@ export interface SkillRunnerDefinition {
 
 export type PostRunReflectPolicy = "auto" | "always" | "never";
 
-export type CatalogKind = "skill" | "chain";
+export type CatalogKind = "skill" | "graph";
 export type CatalogAudience = "public" | "builder" | "operator";
 export type CatalogVisibility = "public" | "private";
 
@@ -395,8 +395,8 @@ function validateCatalogMetadata(value: Record<string, unknown> | undefined, lab
   const audience = requiredString(value.audience, `${label}.audience`);
   const visibility = optionalString(value.visibility, `${label}.visibility`) ?? "public";
 
-  if (kind !== "skill" && kind !== "chain") {
-    throw new SkillValidationError(`${label}.kind must be skill or chain.`);
+  if (kind !== "skill" && kind !== "graph") {
+    throw new SkillValidationError(`${label}.kind must be skill or graph.`);
   }
   if (audience !== "public" && audience !== "builder" && audience !== "operator") {
     throw new SkillValidationError(`${label}.audience must be public, builder, or operator.`);
@@ -532,7 +532,7 @@ function validateSource(source: Record<string, unknown>, runx: Record<string, un
   const hook =
     type === "harness-hook" ? requiredString(source.hook, "source.hook") : optionalString(source.hook, "source.hook");
   const outputs = optionalRecord(source.outputs, "source.outputs");
-  const chain = type === "chain" ? validateChainSource(source.chain) : undefined;
+  const graph = type === "graph" ? validateGraphSource(source.graph) : undefined;
   const sandbox = validateSandbox(source.sandbox ?? runx?.sandbox);
 
   if ((type === "agent-step" || type === "harness-hook") && (source.command !== undefined || source.args !== undefined)) {
@@ -557,14 +557,14 @@ function validateSource(source: Record<string, unknown>, runx: Record<string, un
     task,
     hook,
     outputs,
-    chain,
+    graph,
     raw: source,
   };
 }
 
-function validateChainSource(value: unknown): ExecutionGraph {
-  const chain = requiredRecord(value, "source.chain");
-  return validateGraphDocument(chain);
+function validateGraphSource(value: unknown): ExecutionGraph {
+  const graph = requiredRecord(value, "source.graph");
+  return validateGraphDocument(graph);
 }
 
 function validateToolSource(source: SkillSource, field: string): SkillSource {

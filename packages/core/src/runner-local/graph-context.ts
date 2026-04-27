@@ -23,7 +23,7 @@ export interface MaterializedContextEdge {
 export function findGraphStep(graph: ExecutionGraph, stepId: string): GraphStep {
   const step = graph.steps.find((candidate) => candidate.id === stepId);
   if (!step) {
-    throw new Error(`Chain step '${stepId}' is missing.`);
+    throw new Error(`Graph step '${stepId}' is missing.`);
   }
   return step;
 }

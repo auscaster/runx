@@ -16,7 +16,7 @@ const steps: readonly SequentialGraphStepDefinition[] = [
   { id: "third", contextFrom: ["second"] },
 ];
 
-describe("sequential chain state machine", () => {
+describe("sequential graph state machine", () => {
   it("plans sequential ordering from explicit context dependencies", () => {
     let state = createSequentialGraphState("gx_test", steps);
 
@@ -95,7 +95,7 @@ describe("sequential chain state machine", () => {
     });
   });
 
-  it("is deterministic for the same chain state", () => {
+  it("is deterministic for the same graph state", () => {
     const state = createSequentialGraphState("gx_test", steps);
 
     expect(planSequentialGraphTransition(state, steps)).toEqual(planSequentialGraphTransition(state, steps));

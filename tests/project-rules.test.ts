@@ -68,8 +68,8 @@ describe("project rules", () => {
     }
   });
 
-  it("pins one MEMORY.md and CONVENTIONS.md snapshot across the chain and its step receipts", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-project-rules-chain-"));
+  it("pins one MEMORY.md and CONVENTIONS.md snapshot across the graph and its step receipts", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-project-rules-graph-"));
     const workspaceDir = path.join(tempDir, "workspace");
     const receiptDir = path.join(tempDir, "receipts");
     const runxHome = path.join(tempDir, "home");
@@ -103,7 +103,7 @@ describe("project rules", () => {
       await writeFile(memoryPath, originalMemory);
       await writeFile(conventionsPath, originalConventions);
 
-      const chain = validateGraph(
+      const graph = validateGraph(
         parseGraphYaml(`
 name: project-rules-snapshot
 steps:
@@ -146,7 +146,7 @@ steps:
       };
 
       const result = await runLocalGraph({
-        graph: chain,
+        graph: graph,
         graphDirectory: workspaceDir,
         caller,
         env: {
@@ -196,7 +196,7 @@ steps:
       const secondStepReceipt = JSON.parse(
         await readFile(path.join(receiptDir, `${result.steps[1]?.receiptId}.json`), "utf8"),
       ) as { metadata?: Record<string, unknown> };
-      const chainReceiptContents = await readFile(path.join(receiptDir, `${result.receipt.id}.json`), "utf8");
+      const graphReceiptContents = await readFile(path.join(receiptDir, `${result.receipt.id}.json`), "utf8");
 
       expect(firstStepReceipt.metadata).toMatchObject({
         context: {
@@ -210,8 +210,8 @@ steps:
           conventions: { sha256: seenEnvelope?.context?.conventions?.sha256 },
         },
       });
-      expect(chainReceiptContents).not.toContain(originalMemory);
-      expect(chainReceiptContents).not.toContain(originalConventions);
+      expect(graphReceiptContents).not.toContain(originalMemory);
+      expect(graphReceiptContents).not.toContain(originalConventions);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }

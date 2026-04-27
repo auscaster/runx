@@ -18,7 +18,7 @@ const REGISTRY_AVAILABLE = existsSync(path.join(REAL_REGISTRY_ROOT, "runx", "sca
 // (CI nodes, fresh clones without the cloud .data layout, etc.).
 const runIfSeeded = REGISTRY_AVAILABLE ? describe : describe.skip;
 
-runIfSeeded("chain registry refs — real seeded registry", () => {
+runIfSeeded("graph registry refs — real seeded registry", () => {
   it("lists seeded runx skills that the homepage catalog expects", async () => {
     const store = createFileRegistryStore(REAL_REGISTRY_ROOT);
     const skills = await store.listSkills();
@@ -55,7 +55,7 @@ runIfSeeded("chain registry refs — real seeded registry", () => {
       expect(markdown).toBe(materialized.resolution.markdown);
 
       // The materialized SKILL.md has to round-trip through the real parser/validator
-      // or the whole pipeline (chain → loadValidatedSkill → executeSkill) would fail.
+      // or the whole pipeline (graph → loadValidatedSkill → executeSkill) would fail.
       const raw = parseSkillMarkdown(markdown);
       const validated = validateSkill(raw, { mode: "strict" });
       expect(validated.name).toBe("scafld");

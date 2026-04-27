@@ -110,7 +110,7 @@ describe("local knowledge index integration", () => {
 
     try {
       const result = await runLocalGraph({
-        graphPath: path.resolve("fixtures/chains/sequential/chain.yaml"),
+        graphPath: path.resolve("fixtures/graphs/sequential/graph.yaml"),
         caller: nonInteractiveCaller,
         receiptDir,
         runxHome: path.join(tempDir, "home"),

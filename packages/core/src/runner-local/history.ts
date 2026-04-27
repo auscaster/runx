@@ -563,7 +563,7 @@ async function findReceiptIdForRunId(receiptDir: string, runId: string): Promise
 }
 
 function isTerminalRunEventKind(kind: string): boolean {
-  return kind === "run_completed" || kind === "run_failed" || kind === "chain_completed";
+  return kind === "run_completed" || kind === "run_failed" || kind === "graph_completed";
 }
 
 function extractReplaySeed(entries: readonly ArtifactEnvelope[]): {

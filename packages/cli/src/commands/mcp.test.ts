@@ -226,7 +226,7 @@ function startServer(
       RUNX_CWD: process.cwd(),
     },
     {
-      resolveRegistryStoreForChains: async () => undefined,
+      resolveRegistryStoreForGraphs: async () => undefined,
       resolveDefaultReceiptDir: () => path.join(tempDir, "receipts"),
     },
   );

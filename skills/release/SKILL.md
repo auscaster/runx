@@ -16,9 +16,9 @@ Two runners:
   classify commits, stage a changelog, run the declared checks, and emit a
   `release_brief` describing what would ship, what is blocked, and what
   remains unresolved. Safe to run unattended and in CI.
-- **`release`** (default, chain) — wires `prepare` → approval gate →
+- **`release`** (default, graph) — wires `prepare` → approval gate →
   `publish`. `publish` is not exposed as a standalone runner; it is only
-  reachable inside the chain after the approval transition clears.
+  reachable inside the graph after the approval transition clears.
 
 Invoke `runx skill release prepare` for a CI dry-run. Invoke
 `runx skill release` to run the governed end-to-end flow.
@@ -33,7 +33,7 @@ stages a changelog, and runs the declared release checks. Emits a
 `release_brief` with the findings.
 
 The brief is the only artifact that flows forward. If it is not
-`publishable`, the chain stops at the approval gate with the reasons
+`publishable`, the graph stops at the approval gate with the reasons
 attached.
 
 ### approve-publish
@@ -48,7 +48,7 @@ channel, no implicit approval on timeout.
 
 ### publish-release
 
-The destructive phase. Takes the approved `release_brief` from chain
+The destructive phase. Takes the approved `release_brief` from graph
 context and carries out the declared publication — tag and push, upload
 to the registry, open the release artifact, emit the announcement packet.
 Every side effect is recorded in `publish_report.side_effects[]` with a
@@ -89,24 +89,24 @@ through the approval gate.
 - `prepare` emits `release_brief_packet` carrying `release_brief`:
   changelog, check results, proposed version, unresolved flags,
   publishable verdict.
-- The chain emits a chain receipt that links the prepare brief, the
+- The graph emits a graph receipt that links the prepare brief, the
   approval decision, and the publish report into one auditable trail.
-- `publish-release` (inside the chain) emits `publish_report`: registry
+- `publish-release` (inside the graph) emits `publish_report`: registry
   URL, release tag, announcement packet, and a `side_effects[]` list with
   a receipt per write action.
 
 ## Trust boundary
 
 `prepare` is safe to run unattended and in CI. The destructive work is
-only reachable through the chain, and the chain refuses to transition to
+only reachable through the graph, and the graph refuses to transition to
 `publish-release` without an approved decision from
-`release.publish.approval`. The chain enforces the gate; the skill does
+`release.publish.approval`. The graph enforces the gate; the skill does
 not bypass it.
 
 ## Scopes
 
 - `runx:release:read` — required by the prepare phase.
-- `runx:release:publish` — required by the publish phase; the chain grant
+- `runx:release:publish` — required by the publish phase; the graph grant
   must include this only when the approval transition has cleared.
 
 ## Tasks
@@ -114,7 +114,7 @@ not bypass it.
 - `release-prepare` — the read-only phase task. Provides the
   `release_brief` output shape.
 - `release-publish` — the destructive phase task. Only reachable inside
-  the chain; requires the approved brief in context.
+  the graph; requires the approved brief in context.
 
 These are agent-step task contracts carried by the skill package and its
-`X.yaml` chain definition. They are not a separate registered task catalog.
+`X.yaml` graph definition. They are not a separate registered task catalog.

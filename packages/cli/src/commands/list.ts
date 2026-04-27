@@ -62,7 +62,7 @@ export function normalizeListKind(value: string | undefined): RunxListRequestedK
   if (value === undefined || value === "") {
     return "all";
   }
-  if (["tools", "skills", "chains", "packets", "overlays"].includes(value)) {
+  if (["tools", "skills", "graphs", "packets", "overlays"].includes(value)) {
     return value as RunxListRequestedKind;
   }
   return undefined;
@@ -73,8 +73,8 @@ async function discoverListItems(root: string, requestedKind: RunxListRequestedK
   if (requestedKind === "all" || requestedKind === "tools") {
     items.push(...await discoverToolListItems(root));
   }
-  if (requestedKind === "all" || requestedKind === "skills" || requestedKind === "chains") {
-    items.push(...(await discoverSkillAndChainListItems(root)).filter((item) => requestedKind === "all" || `${item.kind}s` === requestedKind));
+  if (requestedKind === "all" || requestedKind === "skills" || requestedKind === "graphs") {
+    items.push(...(await discoverSkillAndGraphListItems(root)).filter((item) => requestedKind === "all" || `${item.kind}s` === requestedKind));
   }
   if (requestedKind === "all" || requestedKind === "packets") {
     items.push(...await discoverPacketListItems(root));
@@ -134,7 +134,7 @@ async function discoverToolListItems(root: string): Promise<readonly RunxListIte
   return items;
 }
 
-async function discoverSkillAndChainListItems(root: string): Promise<readonly RunxListItem[]> {
+async function discoverSkillAndGraphListItems(root: string): Promise<readonly RunxListItem[]> {
   const items: RunxListItem[] = [];
   for (const profilePath of await discoverSkillProfilePaths(root)) {
     const skillDir = path.dirname(profilePath);
@@ -143,19 +143,19 @@ async function discoverSkillAndChainListItems(root: string): Promise<readonly Ru
     try {
       const manifest = validateRunnerManifest(parseRunnerManifestYaml(await readFile(profilePath, "utf8")));
       const runners = Object.values(manifest.runners);
-      const chainSteps = runners
-        .map((runner) => runner.source.chain?.steps.length)
+      const graphSteps = runners
+        .map((runner) => runner.source.graph?.steps.length)
         .filter((value): value is number => typeof value === "number");
-      const isChain = chainSteps.length > 0;
+      const isGraph = graphSteps.length > 0;
       items.push({
-        kind: isChain ? "chain" : "skill",
+        kind: isGraph ? "graph" : "skill",
         name: manifest.skill ?? fallbackName,
         source: "local",
         path: relativePath,
         status: "ok",
         fixtures: await countYamlFiles(path.join(skillDir, "fixtures")),
         harness_cases: manifest.harness?.cases.length ?? 0,
-        steps: isChain ? chainSteps.reduce((sum, value) => sum + value, 0) : undefined,
+        steps: isGraph ? graphSteps.reduce((sum, value) => sum + value, 0) : undefined,
       });
     } catch {
       items.push({
@@ -233,7 +233,7 @@ function sortListItems(items: readonly RunxListItem[]): readonly RunxListItem[] 
   const kindOrder: Record<RunxListItemKind, number> = {
     tool: 0,
     skill: 1,
-    chain: 2,
+    graph: 2,
     packet: 3,
     overlay: 4,
   };

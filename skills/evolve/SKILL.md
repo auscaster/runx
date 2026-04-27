@@ -91,7 +91,7 @@ artifacts in one pass:
 
 Directed `evolve` runs opt into runner-owned post-run reflect. That projection
 is derived from the completed receipt and run ledger after the bounded plan
-lane finishes; it does not add another visible chain step or mutation path.
+lane finishes; it does not add another visible graph step or mutation path.
 
 ### Termination guard
 

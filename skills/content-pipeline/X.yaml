@@ -2,7 +2,7 @@ skill: content-pipeline
 version: "0.1.1"
 
 catalog:
-  kind: chain
+  kind: graph
   audience: public
   visibility: public
 
@@ -69,7 +69,7 @@ harness:
 runners:
   content-pipeline:
     default: true
-    type: chain
+    type: graph
     inputs:
       objective:
         type: string
@@ -97,7 +97,7 @@ runners:
         type: json
         required: false
         description: "Structured list of products, projects, or actors to keep in view during research."
-    chain:
+    graph:
       name: content-pipeline
       owner: runx
       steps:

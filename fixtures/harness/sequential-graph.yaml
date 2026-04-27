@@ -1,6 +1,6 @@
-name: sequential-chain
+name: sequential-graph
 kind: graph
-target: ../chains/sequential/chain.yaml
+target: ../graphs/sequential/graph.yaml
 expect:
   status: success
   receipt:

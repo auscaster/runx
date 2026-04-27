@@ -33,15 +33,15 @@ harness:
               adjacent_skills:
                 - research
                 - draft-content
-              why_new: The current catalog has primitives for research and drafting, but not one governed content pipeline that binds them into a first-party skill chain.
+              why_new: The current catalog has primitives for research and drafting, but not one governed content pipeline that binds them into a first-party skill graph.
             maintainer_decisions:
               - question: Should the first release stop at a packaged draft rather than publish?
                 options:
                   - yes
                   - no
-                why: Keeps the first-party chain bounded around review before any outward publish path.
+                why: Keeps the first-party graph bounded around review before any outward publish path.
             execution_plan:
-              runner: chain
+              runner: graph
               phases:
                 - research
                 - draft
@@ -95,7 +95,7 @@ harness:
                   - yes
                   - no, add negative cases now
             execution_plan:
-              runner: chain
+              runner: graph
             harness_fixture:
               - name: design-skill-structured-context
                 kind: skill
@@ -119,7 +119,7 @@ harness:
         objective: Confirm write-harness emits minimal regression output when review verdict is pass
         review:
           verdict: pass
-          failure_summary: No failure. Chain paused as designed; needs_resolution is a healthy agent-mediated suspension.
+          failure_summary: No failure. Graph paused as designed; needs_resolution is a healthy agent-mediated suspension.
           improvement_proposals: []
       caller:
         answers:

@@ -2,7 +2,7 @@ skill: evolve
 version: "0.1.2"
 
 catalog:
-  kind: chain
+  kind: graph
   audience: operator
   visibility: private
 
@@ -87,7 +87,7 @@ harness:
 
 runners:
   introspect:
-    type: chain
+    type: graph
     runx:
       post_run:
         reflect: never
@@ -97,7 +97,7 @@ runners:
         required: false
         default: "."
         description: "Repository root to inspect."
-    chain:
+    graph:
       name: evolve-introspect
       steps:
         - id: preflight
@@ -148,7 +148,7 @@ runners:
               spec_document: spec_document
   evolve:
     default: true
-    type: chain
+    type: graph
     runx:
       post_run:
         reflect: auto
@@ -167,7 +167,7 @@ runners:
         required: false
         default: "spec"
         description: "Bounded termination target. Current shipped runner only supports spec."
-    chain:
+    graph:
       name: evolve
       steps:
         - id: validate-mode

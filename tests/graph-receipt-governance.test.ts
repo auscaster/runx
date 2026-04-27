@@ -11,17 +11,17 @@ const caller: Caller = {
   report: () => undefined,
 };
 
-describe("chain receipt governance metadata", () => {
-  it("records runner and allowed scope admission in chain and step receipts", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-receipt-governance-"));
+describe("graph receipt governance metadata", () => {
+  it("records runner and allowed scope admission in graph and step receipts", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-graph-receipt-governance-"));
     const receiptDir = path.join(tempDir, "receipts");
 
     try {
       await writeGovernedSkill(path.join(tempDir, "skills", "governed-echo"));
-      const graphPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "graph.yaml");
       await writeFile(
         graphPath,
-        `name: chain-receipt-governance
+        `name: graph-receipt-governance
 steps:
   - id: echo
     skill: ./skills/governed-echo
@@ -66,7 +66,7 @@ steps:
         metadata?: Record<string, unknown>;
       };
       expect(stepReceipt.metadata).toMatchObject({
-        chain_governance: {
+        graph_governance: {
           step_id: "echo",
           selected_runner: "governed-echo-cli",
           scope_admission: {
@@ -82,16 +82,16 @@ steps:
     }
   });
 
-  it("records denied scope admission in the chain receipt without a step receipt", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-receipt-denied-"));
+  it("records denied scope admission in the graph receipt without a step receipt", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-graph-receipt-denied-"));
     const receiptDir = path.join(tempDir, "receipts");
 
     try {
       await writeGovernedSkill(path.join(tempDir, "skills", "governed-echo"));
-      const graphPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "graph.yaml");
       await writeFile(
         graphPath,
-        `name: chain-receipt-denied
+        `name: graph-receipt-denied
 steps:
   - id: deploy
     skill: ./skills/governed-echo

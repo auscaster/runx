@@ -9,7 +9,7 @@ Draft replayable harness fixtures and acceptance checks that define what
 correct behavior looks like for a skill, before or after implementation.
 
 A runx harness fixture is a self-contained test case in YAML. It specifies
-exact inputs, the target skill or chain, and assertions against the receipt
+exact inputs, the target skill or graph, and assertions against the receipt
 and step outputs. Fixtures are run by the harness runner in
 `packages/core/src/harness/`.
 
@@ -17,8 +17,8 @@ and step outputs. Fixtures are run by the harness runner in
 
 ```yaml
 name: descriptive-name
-kind: skill                    # or "chain"
-target: ../path/to/SKILL.md   # relative path to skill or chain YAML
+kind: skill                    # or "graph"
+target: ../path/to/SKILL.md   # relative path to skill or graph YAML
 inputs:
   input_name: value
 expect:
@@ -27,21 +27,21 @@ expect:
     kind: skill_execution      # or graph_execution
     status: success
     skill_name: expected-name
-    source_type: cli-tool    # or agent, agent-step, chain, etc.
+    source_type: cli-tool    # or agent, agent-step, graph, etc.
 ```
 
-For chain fixtures, assert step completion:
+For graph fixtures, assert step completion:
 
 ```yaml
-name: chain-completes
+name: graph-completes
 kind: graph
-target: ../chains/my-chain.yaml
+target: ../graphs/my-graph.yaml
 expect:
   status: success
   receipt:
     kind: graph_execution
     status: success
-    graph_name: my-chain
+    graph_name: my-graph
   steps:
     - step-one
     - step-two
@@ -76,9 +76,9 @@ The resulting packet should read like a first-party runx proposal, not an
 internal builder transcript. That means:
 
 - treat "do not create a new skill" as a valid result when an existing skill,
-  chain, or Sourcey/content path already solves the job
+  graph, or Sourcey/content path already solves the job
 - name the real operator or maintainer pain the skill resolves
-- explain catalog fit against adjacent current runx skills or chains
+- explain catalog fit against adjacent current runx skills or graphs
 - describe the concrete user-visible artifact, not only the internal execution
   sequence
 - convert unresolved ambiguity into explicit maintainer decisions
@@ -110,16 +110,16 @@ that in `maintainer_decisions` rather than leaking it into the fixture target.
   boundary, or failure mode that matters for the skill's purpose.
 - Stop conditions: return `needs_resolution` when the contract is too vague to
   harness, and return `not_first_party` when the proposed skill should be reuse,
-  Sourcey/content work, or a chain amendment instead.
+  Sourcey/content work, or a graph amendment instead.
 
 ## Output
 
 - `skill_spec`: proposed SKILL.md content or update.
-- `execution_plan`: proposed execution profile chain definition when the skill is
+- `execution_plan`: proposed execution profile graph definition when the skill is
   composite. Step ids, skill references, scopes, context edges, policy.
 - `pain_points`: one to three concrete operator or maintainer pain points the
   proposal addresses.
-- `catalog_fit`: adjacent current runx skills or chains considered, plus why
+- `catalog_fit`: adjacent current runx skills or graphs considered, plus why
   the proposal is a new first-party capability rather than a duplicate.
 - `maintainer_decisions`: explicit review choices the maintainer still needs
   to make, if any.

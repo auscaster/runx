@@ -1199,7 +1199,7 @@ function readPendingFanoutGate(entries: readonly ArtifactEnvelope[]): PendingFan
       continue;
     }
     const kind = typeof entry.data.kind === "string" ? entry.data.kind : "";
-    if (kind === "chain_completed" || kind === "run_completed" || kind === "run_failed") {
+    if (kind === "graph_completed" || kind === "run_completed" || kind === "run_failed") {
       return undefined;
     }
     if (kind !== "step_waiting_resolution" || !isRecord(entry.data.detail)) {

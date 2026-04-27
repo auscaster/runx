@@ -2,7 +2,7 @@ skill: reflect-digest
 version: "0.1.2"
 
 catalog:
-  kind: chain
+  kind: graph
   audience: builder
   visibility: private
 
@@ -208,7 +208,7 @@ harness:
 runners:
   reflect-digest:
     default: true
-    type: chain
+    type: graph
     runx:
       post_run:
         reflect: never
@@ -235,7 +235,7 @@ runners:
         required: false
         default: 0.5
         description: "Minimum per-projection confidence required before grouping."
-    chain:
+    graph:
       name: reflect-digest
       owner: runx
       steps:

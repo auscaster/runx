@@ -89,9 +89,9 @@ export function skillSnippets(): readonly SkillSnippet[] {
       body: ["inputs:", "  ${1:project}:", "    type: ${2:string}", "    required: true", "    description: ${3:Input description}"],
     },
     {
-      name: "Chain Policy",
-      prefix: "runx-chain-policy",
-      description: "Chain control policy for fanout sync and escalation.",
+      name: "Graph Policy",
+      prefix: "runx-graph-policy",
+      description: "Graph control policy for fanout sync and escalation.",
       body: ["policy:", "  on_branch_failure:", "    strategy: ${1:halt}", "  on_conflict:", "    strategy: ${2:escalate}"],
     },
   ];

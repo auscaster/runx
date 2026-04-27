@@ -28,7 +28,7 @@ describe("sourcey parser", () => {
     expect(skill.source.type).toBe("agent");
     expect(skill.inputs).toEqual({});
     expect(runner?.default).toBe(true);
-    expect(runner?.source.type).toBe("chain");
+    expect(runner?.source.type).toBe("graph");
     expect(Object.keys(manifest.runners)).toEqual(["agent", "sourcey"]);
   });
 });
@@ -74,7 +74,7 @@ describe("sourcey preflight", () => {
     ]);
   });
 
-  it("writes an inspectable chain receipt without storing raw discovered branding inputs", async () => {
+  it("writes an inspectable graph receipt without storing raw discovered branding inputs", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-sourcey-preflight-"));
     const receiptDir = path.join(tempDir, "receipts");
     const sourceyStub = path.join(tempDir, "sourcey-stub.mjs");

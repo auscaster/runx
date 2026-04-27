@@ -22,7 +22,7 @@ into a publish packet.
 - Evidence bar: every public claim must be grounded in the research packet or
   explicit operator context. Thin evidence narrows or stops the draft.
 - Voice bar: useful public writing, not generic thought leadership or a
-  transcript of the chain.
+  transcript of the graph.
 - Strategic bar: the piece must create a concrete reader or operator outcome:
   understanding, decision, trust, adoption, or follow-up.
 - Stop conditions: stop with `needs_more_evidence`, `needs_review`, or

@@ -53,7 +53,7 @@ export interface RegistrySkillVersion {
   readonly runner_names: readonly string[];
   readonly source_type: string;
   readonly trust_tier: RegistryTrustTier;
-  readonly catalog_kind?: "skill" | "chain";
+  readonly catalog_kind?: "skill" | "graph";
   readonly catalog_audience?: "public" | "builder" | "operator";
   readonly catalog_visibility?: "public" | "private";
   readonly source_metadata?: RegistrySourceMetadata;
@@ -210,7 +210,7 @@ export function normalizeRegistrySkillVersion(value: unknown): RegistrySkillVers
     publisher,
     runner_names: normalizeStringArray(value.runner_names, "registry_version.runner_names"),
     trust_tier: trustTier,
-    catalog_kind: value.catalog_kind === "chain" ? "chain" : "skill",
+    catalog_kind: value.catalog_kind === "graph" ? "graph" : "skill",
     catalog_audience: value.catalog_audience === "builder" || value.catalog_audience === "operator" ? value.catalog_audience : "public",
     catalog_visibility: value.catalog_visibility === "private" ? "private" : "public",
     source_metadata: sourceMetadata,

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { GraphParseError, GraphValidationError, parseGraphYaml, validateGraph } from "./graph.js";
 
-const validChain = `
+const validGraph = `
 name: sequential-echo
 owner: runx
 steps:
@@ -23,8 +23,8 @@ steps:
 `;
 
 describe("parseGraphYaml", () => {
-  it("parses chain yaml into raw IR", () => {
-    const raw = parseGraphYaml(validChain);
+  it("parses graph yaml into raw IR", () => {
+    const raw = parseGraphYaml(validGraph);
 
     expect(raw.document.name).toBe("sequential-echo");
     expect(raw.document.steps).toHaveLength(2);
@@ -36,28 +36,28 @@ describe("parseGraphYaml", () => {
 });
 
 describe("validateGraph", () => {
-  it("validates a sequential chain with explicit context edges", () => {
-    const chain = validateGraph(parseGraphYaml(validChain));
+  it("validates a sequential graph with explicit context edges", () => {
+    const graph = validateGraph(parseGraphYaml(validGraph));
 
-    expect(chain.name).toBe("sequential-echo");
-    expect(chain.owner).toBe("runx");
-    expect(chain.steps.map((step) => step.id)).toEqual(["first", "second"]);
-    expect(chain.steps[0].runner).toBe("echo-cli");
-    expect(chain.steps[0].inputs).toEqual({ message: "hello" });
-    expect(chain.steps[0].scopes).toEqual(["filesystem:read"]);
-    expect(chain.steps[1].contextEdges).toEqual([
+    expect(graph.name).toBe("sequential-echo");
+    expect(graph.owner).toBe("runx");
+    expect(graph.steps.map((step) => step.id)).toEqual(["first", "second"]);
+    expect(graph.steps[0].runner).toBe("echo-cli");
+    expect(graph.steps[0].inputs).toEqual({ message: "hello" });
+    expect(graph.steps[0].scopes).toEqual(["filesystem:read"]);
+    expect(graph.steps[1].contextEdges).toEqual([
       {
         input: "message",
         fromStep: "first",
         output: "stdout",
       },
     ]);
-    expect(chain.steps[1].retry).toEqual({ maxAttempts: 2, backoffMs: 25 });
-    expect(chain.steps[1].mutating).toBe(false);
+    expect(graph.steps[1].retry).toEqual({ maxAttempts: 2, backoffMs: 25 });
+    expect(graph.steps[1].mutating).toBe(false);
   });
 
   it("validates inline run steps without forcing them into skill files", () => {
-    const chain = validateGraph(
+    const graph = validateGraph(
       parseGraphYaml(`
 name: evolve-like
 steps:
@@ -80,14 +80,14 @@ steps:
 `),
     );
 
-    expect(chain.steps[0]).toMatchObject({
+    expect(graph.steps[0]).toMatchObject({
       id: "preflight",
       run: {
         type: "cli-tool",
       },
       skill: undefined,
     });
-    expect(chain.steps[1]).toMatchObject({
+    expect(graph.steps[1]).toMatchObject({
       id: "plan",
       run: {
         type: "agent-step",
@@ -99,7 +99,7 @@ steps:
   });
 
   it("validates tool steps and allowed tool declarations for agent steps", () => {
-    const chain = validateGraph(
+    const graph = validateGraph(
       parseGraphYaml(`
 name: tool-aware
 steps:
@@ -120,17 +120,17 @@ steps:
 `),
     );
 
-    expect(chain.steps[0]).toMatchObject({
+    expect(graph.steps[0]).toMatchObject({
       id: "readme",
       tool: "fs.read",
       skill: undefined,
       run: undefined,
     });
-    expect(chain.steps[1]?.allowedTools).toEqual(["fs.read", "git.status"]);
+    expect(graph.steps[1]?.allowedTools).toEqual(["fs.read", "git.status"]);
   });
 
   it("validates mutating retry idempotency metadata", () => {
-    const chain = validateGraph(
+    const graph = validateGraph(
       parseGraphYaml(`
 name: retry-idempotency
 steps:
@@ -144,7 +144,7 @@ steps:
 `),
     );
 
-    expect(chain.steps[0]).toMatchObject({
+    expect(graph.steps[0]).toMatchObject({
       mutating: true,
       idempotencyKey: "{{request_id}}",
       retry: {
@@ -232,7 +232,7 @@ steps:
   });
 
   it("validates fanout groups with structured gates", () => {
-    const chain = validateGraph(
+    const graph = validateGraph(
       parseGraphYaml(`
 name: fanout
 fanout:
@@ -266,13 +266,13 @@ steps:
 `),
     );
 
-    expect(chain.fanoutGroups.advisors).toMatchObject({
+    expect(graph.fanoutGroups.advisors).toMatchObject({
       groupId: "advisors",
       strategy: "quorum",
       minSuccess: 2,
       onBranchFailure: "continue",
     });
-    expect(chain.fanoutGroups.advisors?.thresholdGates).toEqual([
+    expect(graph.fanoutGroups.advisors?.thresholdGates).toEqual([
       {
         step: "risk",
         field: "risk_score",
@@ -280,14 +280,14 @@ steps:
         action: "pause",
       },
     ]);
-    expect(chain.fanoutGroups.advisors?.conflictGates).toEqual([
+    expect(graph.fanoutGroups.advisors?.conflictGates).toEqual([
       {
         field: "recommendation",
         steps: ["market", "risk"],
         action: "escalate",
       },
     ]);
-    expect(chain.steps.map((step) => step.fanoutGroup)).toEqual(["advisors", "advisors", "advisors"]);
+    expect(graph.steps.map((step) => step.fanoutGroup)).toEqual(["advisors", "advisors", "advisors"]);
   });
 
   it("fails when fanout declaration is malformed", () => {

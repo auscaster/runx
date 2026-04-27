@@ -2,7 +2,7 @@ skill: release
 version: "0.1.1"
 
 catalog:
-  kind: chain
+  kind: graph
   audience: public
   visibility: public
 
@@ -24,14 +24,14 @@ harness:
               commits:
                 - sha: a1b2c3d
                   classification: fix
-                  summary: correct chain input resolution for release skill
+                  summary: correct graph input resolution for release skill
                 - sha: e4f5g6h
                   classification: chore
                   summary: bump runtime dependency floor
               changelog:
                 added: []
                 fixed:
-                  - correct chain input resolution for release skill
+                  - correct graph input resolution for release skill
                 changed:
                   - runtime dependency floor raised to node 24
                 breaking: []
@@ -54,10 +54,10 @@ harness:
               announcement_packet:
                 channel: github-release
                 headline: "runx OSS CLI v0.4.6"
-                summary: Bounded patch fixing chain input resolution on the release skill.
+                summary: Bounded patch fixing graph input resolution on the release skill.
                 body: |
                   ## Fixed
-                  - correct chain input resolution for release skill
+                  - correct graph input resolution for release skill
 
                   ## Changed
                   - runtime dependency floor raised to node 24
@@ -126,7 +126,7 @@ harness:
       expect:
         status: needs_resolution
 
-    - name: release-chain-needs-project-root
+    - name: release-graph-needs-project-root
       inputs: {}
       expect:
         status: needs_resolution
@@ -162,7 +162,7 @@ runners:
 
   release:
     default: true
-    type: chain
+    type: graph
     inputs:
       project_root:
         type: string
@@ -180,7 +180,7 @@ runners:
         type: string
         required: false
         description: "Constraints or campaign context for this release."
-    chain:
+    graph:
       name: release
       owner: runx
       steps:

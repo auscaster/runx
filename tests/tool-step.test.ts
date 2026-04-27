@@ -15,7 +15,7 @@ describe("tool steps", () => {
     const notePath = path.join(tempDir, "note.txt");
     await writeFile(notePath, "tool output");
 
-    const chain = validateGraph(
+    const graph = validateGraph(
       parseGraphYaml(`
 name: tool-aware
 steps:
@@ -71,7 +71,7 @@ steps:
 
     try {
       const result = await runLocalGraph({
-        graph: chain,
+        graph: graph,
         graphDirectory: tempDir,
         caller,
         env: { ...process.env, RUNX_CWD: tempDir },
@@ -125,7 +125,7 @@ steps:
       }, null, 2)}\n`,
     );
 
-    const chain = validateGraph(
+    const graph = validateGraph(
       parseGraphYaml(`
 name: local-tool
 steps:
@@ -143,7 +143,7 @@ steps:
 
     try {
       const result = await runLocalGraph({
-        graph: chain,
+        graph: graph,
         graphDirectory: tempDir,
         caller,
         env: { ...process.env, RUNX_CWD: tempDir },
@@ -167,7 +167,7 @@ steps:
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-write-json-tool-"));
     const receiptDir = path.join(tempDir, "receipts");
 
-    const chain = validateGraph(
+    const graph = validateGraph(
       parseGraphYaml(`
 name: write-json
 steps:
@@ -193,7 +193,7 @@ steps:
 
     try {
       const result = await runLocalGraph({
-        graph: chain,
+        graph: graph,
         graphDirectory: tempDir,
         caller,
         env: { ...process.env, RUNX_CWD: tempDir },
@@ -216,7 +216,7 @@ steps:
     const receiptDir = path.join(tempDir, "receipts");
     await writeFile(path.join(tempDir, "stale.txt"), "remove me\n");
 
-    const chain = validateGraph(
+    const graph = validateGraph(
       parseGraphYaml(`
 name: delete-file
 steps:
@@ -235,7 +235,7 @@ steps:
 
     try {
       const result = await runLocalGraph({
-        graph: chain,
+        graph: graph,
         graphDirectory: tempDir,
         caller,
         env: { ...process.env, RUNX_CWD: tempDir },
@@ -284,7 +284,7 @@ steps:
       git(["commit", "-m", "init"]);
       await writeFile(path.join(tempDir, "tracked.txt"), "changed\n");
 
-      const chain = validateGraph(
+      const graph = validateGraph(
         parseGraphYaml(`
 name: git-tools
 steps:
@@ -301,7 +301,7 @@ steps:
       );
 
       const result = await runLocalGraph({
-        graph: chain,
+        graph: graph,
         graphDirectory: tempDir,
         caller,
         env: { ...process.env, RUNX_CWD: tempDir },
@@ -328,7 +328,7 @@ steps:
       report: () => undefined,
     };
 
-    const chain = validateGraph(
+    const graph = validateGraph(
       parseGraphYaml(`
 name: capture-help
 steps:
@@ -341,7 +341,7 @@ steps:
 
     try {
       const result = await runLocalGraph({
-        graph: chain,
+        graph: graph,
         graphDirectory: tempDir,
         caller,
         env: { ...process.env, RUNX_CWD: tempDir },
@@ -391,7 +391,7 @@ phases:
 `,
     );
 
-    const chain = validateGraph(
+    const graph = validateGraph(
       parseGraphYaml(`
 name: read-declared-files
 steps:
@@ -416,7 +416,7 @@ steps:
 
     try {
       const result = await runLocalGraph({
-        graph: chain,
+        graph: graph,
         graphDirectory: tempDir,
         caller,
         env: { ...process.env, RUNX_CWD: tempDir },

@@ -101,22 +101,22 @@ export function hydrateGraphFromLedger(options: {
   }
 
   let state = options.stateRef.value;
-  for (const chainStep of options.graphSteps) {
-    const step = stepsById.get(chainStep.id);
+  for (const graphStep of options.graphSteps) {
+    const step = stepsById.get(graphStep.id);
     const stepSkill =
-      options.graphStepCache.get(chainStep.id)
+      options.graphStepCache.get(graphStep.id)
       ?? (step?.run ? buildInlineGraphStepSkill(step, options.skillEnvironment) : undefined);
-    const event = latestEvents.get(chainStep.id);
+    const event = latestEvents.get(graphStep.id);
     if (!step || !stepSkill || !event) {
       break;
     }
-    const stepArtifacts = artifactsByStep.get(chainStep.id) ?? [];
+    const stepArtifacts = artifactsByStep.get(graphStep.id) ?? [];
     const stepFields = reconstructStepFields(stepArtifacts, stepSkill.artifacts);
     const receiptId = receiptLinksForStep(stepArtifacts, receiptLinks)[0];
     if (event.data.kind === "step_started") {
       state = transitionSequentialGraph(state, {
         type: "start_step",
-        stepId: chainStep.id,
+        stepId: graphStep.id,
         at: entryTimestamp(event),
       });
       break;
@@ -124,17 +124,17 @@ export function hydrateGraphFromLedger(options: {
     if (event.data.kind === "step_succeeded") {
       state = transitionSequentialGraph(state, {
         type: "start_step",
-        stepId: chainStep.id,
+        stepId: graphStep.id,
         at: entryTimestamp(event),
       });
       state = transitionSequentialGraph(state, {
         type: "step_succeeded",
-        stepId: chainStep.id,
+        stepId: graphStep.id,
         at: entryTimestamp(event),
         receiptId,
         outputs: stepFields,
       });
-      options.outputs.set(chainStep.id, {
+      options.outputs.set(graphStep.id, {
         status: "success",
         stdout: reconstructStdout(stepArtifacts, stepFields),
         stderr: "",
@@ -144,9 +144,9 @@ export function hydrateGraphFromLedger(options: {
         artifacts: stepArtifacts.filter(isDomainArtifactEnvelope),
       });
       options.stepRuns.push({
-        stepId: chainStep.id,
+        stepId: graphStep.id,
         skill: graphStepReference(step),
-        skillPath: step.skill ? step.skill : `inline:${chainStep.id}`,
+        skillPath: step.skill ? step.skill : `inline:${graphStep.id}`,
         runner: step.runner,
         attempt: 1,
         status: "success",
@@ -163,12 +163,12 @@ export function hydrateGraphFromLedger(options: {
     if (event.data.kind === "step_failed") {
       state = transitionSequentialGraph(state, {
         type: "start_step",
-        stepId: chainStep.id,
+        stepId: graphStep.id,
         at: entryTimestamp(event),
       });
       state = transitionSequentialGraph(state, {
         type: "step_failed",
-        stepId: chainStep.id,
+        stepId: graphStep.id,
         at: entryTimestamp(event),
         error: typeof event.data.detail === "object" && event.data.detail && "reason" in event.data.detail
           ? String((event.data.detail as Record<string, unknown>).reason)

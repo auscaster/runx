@@ -261,7 +261,7 @@ export async function appendGraphCompletedLedgerEntry(options: {
           skill: options.topLevelSkillName,
           runner: "graph",
         },
-        kind: "chain_completed",
+        kind: "graph_completed",
         status: options.status,
         detail: {
           receipt_id: options.receiptId,

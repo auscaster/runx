@@ -2,7 +2,7 @@ skill: ecosystem-vuln-scan
 version: "0.1.1"
 
 catalog:
-  kind: chain
+  kind: graph
   audience: public
   visibility: public
 
@@ -62,7 +62,7 @@ harness:
 runners:
   ecosystem-vuln-scan:
     default: true
-    type: chain
+    type: graph
     inputs:
       target:
         type: string
@@ -82,7 +82,7 @@ runners:
         type: json
         required: false
         description: "Known incidents or prior findings."
-    chain:
+    graph:
       name: ecosystem-vuln-scan
       owner: runx
       steps:

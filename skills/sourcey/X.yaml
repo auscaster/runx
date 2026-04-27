@@ -28,7 +28,7 @@ runners:
 
   sourcey:
     default: true
-    type: chain
+    type: graph
     inputs:
       project:
         type: string
@@ -37,7 +37,7 @@ runners:
       repo_root:
         type: string
         required: false
-        description: "Optional alias for the project root when Sourcey is composed inside a parent chain."
+        description: "Optional alias for the project root when Sourcey is composed inside a parent graph."
       homepage_url:
         type: string
         required: false
@@ -62,7 +62,7 @@ runners:
         type: string
         required: false
         description: "Explicit Sourcey executable or JS entrypoint; defaults to SOURCEY_BIN or sourcey on PATH."
-    chain:
+    graph:
       name: sourcey
       steps:
         - id: discover

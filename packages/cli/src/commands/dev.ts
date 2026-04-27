@@ -58,7 +58,7 @@ export interface DevCommandArgs {
 }
 
 export interface DevCommandDependencies {
-  readonly resolveRegistryStoreForChains: (env: NodeJS.ProcessEnv) => Promise<RegistryStore | undefined>;
+  readonly resolveRegistryStoreForGraphs: (env: NodeJS.ProcessEnv) => Promise<RegistryStore | undefined>;
   readonly resolveDefaultReceiptDir: (env: NodeJS.ProcessEnv) => string;
   readonly createNonInteractiveCaller: (
     answers?: Readonly<Record<string, unknown>>,
@@ -246,15 +246,15 @@ async function runDevFixture(
   if (kind === "tool") {
     return runToolFixture(root, fixturePath, fixture, name, lane, target, startedAt, env);
   }
-  if (kind === "skill" || kind === "chain") {
+  if (kind === "skill" || kind === "graph") {
     return runSkillFixture(root, fixturePath, fixture, name, lane, target, startedAt, parsed.devRealAgents, env, deps);
   }
   return failedFixture(name, lane, target, startedAt, [{
     path: "target.kind",
-    expected: "tool | skill | chain",
+    expected: "tool | skill | graph",
     actual: target.kind,
     kind: "exact_mismatch",
-    message: "Fixture target.kind must be tool, skill, or chain.",
+    message: "Fixture target.kind must be tool, skill, or graph.",
   }]);
 }
 
@@ -489,7 +489,7 @@ async function runSkillFixture(
       expected: "existing skill",
       actual: ref,
       kind: "exact_mismatch",
-      message: `Skill or chain ${ref} was not found.`,
+      message: `Skill or graph ${ref} was not found.`,
     }]);
   }
   const workspace = await prepareFixtureWorkspace(root, fixturePath, fixture, env);
@@ -519,7 +519,7 @@ async function runSkillFixture(
       },
       receiptDir: deps.resolveDefaultReceiptDir(env),
       runxHome: resolveRunxHomeDir(env),
-      registryStore: await deps.resolveRegistryStoreForChains(env),
+      registryStore: await deps.resolveRegistryStoreForGraphs(env),
       adapters: useRealAgents
         ? await resolveDefaultSkillAdapters(env)
         : createDefaultSkillAdapters(),
@@ -600,14 +600,14 @@ async function recordReplayFixture(
     }]);
   }
   const kind = typeof target.kind === "string" ? target.kind : undefined;
-  const result = kind === "skill" || kind === "chain"
+  const result = kind === "skill" || kind === "graph"
     ? await runSkillFixture(root, fixturePath, fixture, name, lane, target, startedAt, parsed.devRealAgents, env, deps)
     : failedFixture(name, lane, target, startedAt, [{
         path: "target.kind",
-        expected: "skill | chain",
+        expected: "skill | graph",
         actual: target.kind,
         kind: "exact_mismatch",
-        message: "Agent replay recording requires a skill or chain target.",
+        message: "Agent replay recording requires a skill or graph target.",
       }]);
   const replayPath = fixturePath.replace(/\.ya?ml$/i, ".replay.json");
   const cassette = {

@@ -54,7 +54,7 @@ export function writeUsage(stream: Writable, env: NodeJS.ProcessEnv = process.en
       "  runx new <name> [--directory dir] [--json]",
       "  runx init [-g|--global] [--prefetch official] [--json]",
       "  runx harness <fixture.yaml|skill-dir|SKILL.md> [--json]",
-      "  runx list [tools|skills|chains|packets|overlays] [--ok-only|--invalid-only] [--json]",
+      "  runx list [tools|skills|graphs|packets|overlays] [--ok-only|--invalid-only] [--json]",
       "  runx doctor [path] [--fix] [--explain id|--list-diagnostics] [--json]",
       "  runx dev [path] [--lane deterministic|agent|repo-integration|all] [--record] [--json]",
       "  runx mcp serve <skill-ref> [<skill-ref> ...]",

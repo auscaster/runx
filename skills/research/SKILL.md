@@ -27,7 +27,7 @@ claims that change the operator's decision.
 ## Quality Profile
 
 - Purpose: answer one practical question well enough to change a downstream
-  decision or stop the chain.
+  decision or stop the graph.
 - Audience: the maintainer, operator, author, or follow-on skill that will use
   the research packet.
 - Artifact contract: `research_brief`, `evidence_log`, `decision_support`, and
@@ -36,7 +36,7 @@ claims that change the operator's decision.
   verified facts from inference and unsupported hypotheses.
 - Voice bar: concise analyst-to-maintainer prose. Do not narrate browsing,
   cite "general knowledge", or pad with generic market language.
-- Strategic bar: state why the finding matters for the chain purpose: what to
+- Strategic bar: state why the finding matters for the graph purpose: what to
   write, what not to write, what to build, what to avoid, or what needs review.
 - Stop conditions: return `needs_more_evidence` when the available sources
   would force a speculative conclusion, and return `not_worth_publishing` when

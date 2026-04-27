@@ -2,7 +2,7 @@ skill: design-skill
 version: "0.1.1"
 
 catalog:
-  kind: chain
+  kind: graph
   audience: builder
   visibility: private
 
@@ -51,7 +51,7 @@ harness:
               adjacent_skills:
                 - research
                 - draft-content
-              why_new: The missing capability is the governed chain that turns those adjacent primitives into one reusable first-party ecosystem brief flow.
+              why_new: The missing capability is the governed graph that turns those adjacent primitives into one reusable first-party ecosystem brief flow.
             recommended_flow:
               - step: research
               - step: draft
@@ -74,13 +74,13 @@ harness:
                 - draft-content
               why_new: The current catalog exposes research and drafting separately, but not one first-party skill that turns them into a reusable ecosystem brief flow.
             maintainer_decisions:
-              - question: Should the first-party chain stop at a reviewable brief draft?
+              - question: Should the first-party graph stop at a reviewable brief draft?
                 options:
                   - yes
                   - no, add publish now
                 why: Keeps the first cut bounded around evidence and review.
             execution_plan:
-              runner: chain
+              runner: graph
               phases:
                 - research
                 - draft
@@ -114,7 +114,7 @@ harness:
 runners:
   design-skill:
     default: true
-    type: chain
+    type: graph
     inputs:
       objective:
         type: string
@@ -124,7 +124,7 @@ runners:
         type: string
         required: false
         description: "Repo, product, or operator context that constrains the design."
-    chain:
+    graph:
       name: design-skill
       owner: runx
       steps:

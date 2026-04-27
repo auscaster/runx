@@ -560,7 +560,7 @@ export function renderHarnessResult(
 export function renderListResult(result: RunxListReport, env: NodeJS.ProcessEnv = process.env): string {
   const t = theme(process.stdout, env);
   const lines = [""];
-  for (const kind of ["tool", "skill", "chain", "packet", "overlay"] as const) {
+  for (const kind of ["tool", "skill", "graph", "packet", "overlay"] as const) {
     const items = result.items.filter((item) => item.kind === kind);
     if (items.length === 0) {
       continue;
@@ -588,7 +588,7 @@ function renderListItemDetail(item: RunxListItem): string {
     const emits = item.emits?.map((emit) => emit.packet ? `${emit.name}:${emit.packet}` : emit.name).join(", ");
     return `${scopes}${emits ? `  emits ${emits}` : ""}`;
   }
-  if (item.kind === "chain") {
+  if (item.kind === "graph") {
     return `${item.steps ?? 0} steps${renderCoverageDetail(item)}`;
   }
   if (item.kind === "skill") {

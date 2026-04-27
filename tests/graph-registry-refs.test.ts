@@ -45,7 +45,7 @@ runners:
         required: true
 `;
 
-describe("chain registry refs", () => {
+describe("graph registry refs", () => {
   describe("isRegistryRef", () => {
     it("accepts owner/name and owner/name@version", () => {
       expect(isRegistryRef("runx/echo")).toBe(true);
@@ -96,7 +96,7 @@ describe("chain registry refs", () => {
   });
 
   it("resolves a graph step skill via the registry store", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-registry-"));
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-graph-registry-"));
 
     try {
       const store = createFileRegistryStore(path.join(tempDir, "registry"));
@@ -107,10 +107,10 @@ describe("chain registry refs", () => {
         profileDocument: ECHO_PROFILE,
       });
 
-      const graphPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "graph.yaml");
       await writeFile(
         graphPath,
-        `name: chain-registry-ref
+        `name: graph-registry-ref
 steps:
   - id: echo
     skill: testorg/echo
@@ -144,7 +144,7 @@ steps:
   });
 
   it("resolves a pinned version from the registry", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-registry-pin-"));
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-graph-registry-pin-"));
 
     try {
       const store = createFileRegistryStore(path.join(tempDir, "registry"));
@@ -161,10 +161,10 @@ steps:
         profileDocument: ECHO_PROFILE,
       });
 
-      const graphPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "graph.yaml");
       await writeFile(
         graphPath,
-        `name: chain-registry-pinned
+        `name: graph-registry-pinned
 steps:
   - id: echo
     skill: testorg/echo@0.1.0
@@ -195,13 +195,13 @@ steps:
   });
 
   it("fails with a clear message when no registry store is configured", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-registry-missing-"));
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-graph-registry-missing-"));
 
     try {
-      const graphPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "graph.yaml");
       await writeFile(
         graphPath,
-        `name: chain-registry-missing-store
+        `name: graph-registry-missing-store
 steps:
   - id: echo
     skill: testorg/echo
@@ -226,14 +226,14 @@ steps:
   });
 
   it("fails with a clear message when the skill is not in the registry", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-registry-notfound-"));
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-graph-registry-notfound-"));
 
     try {
       const store = createFileRegistryStore(path.join(tempDir, "registry"));
-      const graphPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "graph.yaml");
       await writeFile(
         graphPath,
-        `name: chain-registry-missing-skill
+        `name: graph-registry-missing-skill
 steps:
   - id: echo
     skill: testorg/missing
@@ -260,7 +260,7 @@ steps:
   });
 
   it("fails with available versions when a pinned version is missing", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-registry-badpin-"));
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-graph-registry-badpin-"));
 
     try {
       const store = createFileRegistryStore(path.join(tempDir, "registry"));
@@ -271,10 +271,10 @@ steps:
         profileDocument: ECHO_PROFILE,
       });
 
-      const graphPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "graph.yaml");
       await writeFile(
         graphPath,
-        `name: chain-registry-missing-pin
+        `name: graph-registry-missing-pin
 steps:
   - id: echo
     skill: testorg/echo@9.9.9
@@ -301,7 +301,7 @@ steps:
   });
 
   it("fetches a graph step skill from a remote registry via HttpCachedRegistryStore", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-registry-http-"));
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-graph-registry-http-"));
 
     try {
       let fetches = 0;
@@ -353,10 +353,10 @@ steps:
         fetchImpl,
       });
 
-      const graphPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "graph.yaml");
       await writeFile(
         graphPath,
-        `name: chain-registry-http
+        `name: graph-registry-http
 steps:
   - id: echo
     skill: testorg/echo
@@ -401,7 +401,7 @@ steps:
   });
 
   it("still accepts filesystem-relative skill refs", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-chain-registry-compat-"));
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-graph-registry-compat-"));
 
     try {
       const skillDir = path.join(tempDir, "skills", "echo");
@@ -409,10 +409,10 @@ steps:
       await writeFile(path.join(skillDir, "SKILL.md"), ECHO_MARKDOWN);
       await writeFile(path.join(skillDir, "X.yaml"), ECHO_PROFILE);
 
-      const graphPath = path.join(tempDir, "chain.yaml");
+      const graphPath = path.join(tempDir, "graph.yaml");
       await writeFile(
         graphPath,
-        `name: chain-registry-fs-compat
+        `name: graph-registry-fs-compat
 steps:
   - id: echo
     skill: ./skills/echo

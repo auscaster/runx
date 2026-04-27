@@ -59,5 +59,5 @@ Response runner:
 - `maintainer_context` (optional): project norms, release posture, and
   response constraints.
 - `operator_context` (optional): compatibility alias for maintainer or
-  operator context used by higher-level triage chains.
+  operator context used by higher-level triage graphs.
 - `objective` (optional): what the operator wants from this pass.

@@ -298,7 +298,7 @@ async function discoverSkillDoctorDiagnostics(root: string): Promise<readonly Do
           }],
         }));
       }
-      diagnostics.push(...await validateChainContextReferences(root, skillDir, profilePath, manifest));
+      diagnostics.push(...await validateGraphContextReferences(root, skillDir, profilePath, manifest));
     } catch (error) {
       diagnostics.push(createDoctorDiagnostic({
         id: "runx.skill.profile.invalid",
@@ -354,7 +354,7 @@ async function discoverPacketDoctorDiagnostics(root: string): Promise<readonly D
   return diagnostics;
 }
 
-async function validateChainContextReferences(
+async function validateGraphContextReferences(
   root: string,
   skillDir: string,
   profilePath: string,
@@ -362,7 +362,7 @@ async function validateChainContextReferences(
 ): Promise<readonly DoctorDiagnostic[]> {
   const diagnostics: DoctorDiagnostic[] = [];
   for (const runner of Object.values(manifest.runners)) {
-    const graph = runner.source.chain;
+    const graph = runner.source.graph;
     if (!graph) {
       continue;
     }
@@ -373,12 +373,12 @@ async function validateChainContextReferences(
         const producerOutputs = outputMap.get(edge.fromStep);
         if (!producerOutputs) {
           diagnostics.push(createDoctorDiagnostic({
-            id: "runx.chain.context.producer_missing",
+            id: "runx.graph.context.producer_missing",
             severity: "error",
-            title: "Chain context producer is missing",
+            title: "Graph context producer is missing",
             message: `${step.id}.${edge.input} references missing producer step ${edge.fromStep}.`,
-            target: { kind: "chain", ref: graph.name, step: step.id },
-            location: { path: toProjectPath(root, profilePath), json_pointer: `/runners/${runner.name}/chain/steps/${step.id}/context/${edge.input}` },
+            target: { kind: "graph", ref: graph.name, step: step.id },
+            location: { path: toProjectPath(root, profilePath), json_pointer: `/runners/${runner.name}/graph/steps/${step.id}/context/${edge.input}` },
             evidence: { reference: `${edge.fromStep}.${edge.output}` },
             repairs: [{ id: "choose_existing_producer", kind: "manual", confidence: "medium", risk: "low", requires_human_review: false }],
           }));
@@ -390,12 +390,12 @@ async function validateChainContextReferences(
         const [emitName, envelopeSegment, ...packetPath] = edge.output.split(".");
         if (!emitName || !producerOutputs[emitName]) {
           diagnostics.push(createDoctorDiagnostic({
-            id: "runx.chain.context.output_missing",
+            id: "runx.graph.context.output_missing",
             severity: "error",
-            title: "Chain context output is missing",
+            title: "Graph context output is missing",
             message: `${step.id}.${edge.input} references output ${emitName || "(empty)"} from ${edge.fromStep}, but that output is not declared.`,
-            target: { kind: "chain", ref: graph.name, step: step.id },
-            location: { path: toProjectPath(root, profilePath), json_pointer: `/runners/${runner.name}/chain/steps/${step.id}/context/${edge.input}` },
+            target: { kind: "graph", ref: graph.name, step: step.id },
+            location: { path: toProjectPath(root, profilePath), json_pointer: `/runners/${runner.name}/graph/steps/${step.id}/context/${edge.input}` },
             evidence: {
               reference: `${edge.fromStep}.${edge.output}`,
               available_outputs: Object.keys(producerOutputs),
@@ -406,12 +406,12 @@ async function validateChainContextReferences(
         }
         if (envelopeSegment !== "data") {
           diagnostics.push(createDoctorDiagnostic({
-            id: "runx.chain.context.data_envelope_skipped",
+            id: "runx.graph.context.data_envelope_skipped",
             severity: "error",
-            title: "Chain context skipped artifact data envelope",
+            title: "Graph context skipped artifact data envelope",
             message: `${step.id}.${edge.input} must reference ${edge.fromStep}.${emitName}.data before packet fields.`,
-            target: { kind: "chain", ref: graph.name, step: step.id },
-            location: { path: toProjectPath(root, profilePath), json_pointer: `/runners/${runner.name}/chain/steps/${step.id}/context/${edge.input}` },
+            target: { kind: "graph", ref: graph.name, step: step.id },
+            location: { path: toProjectPath(root, profilePath), json_pointer: `/runners/${runner.name}/graph/steps/${step.id}/context/${edge.input}` },
             evidence: {
               reference: `${edge.fromStep}.${edge.output}`,
               expected_prefix: `${edge.fromStep}.${emitName}.data`,
@@ -433,12 +433,12 @@ async function validateChainContextReferences(
           if (!warnedMissingSchema.has(warningKey)) {
             warnedMissingSchema.add(warningKey);
             diagnostics.push(createDoctorDiagnostic({
-              id: "runx.chain.context.schema_missing",
+              id: "runx.graph.context.schema_missing",
               severity: "warning",
-              title: "Chain context producer has no packet schema",
+              title: "Graph context producer has no packet schema",
               message: `${edge.fromStep}.${emitName} has no packet metadata, so doctor cannot verify packet paths.`,
-              target: { kind: "chain", ref: graph.name, step: step.id },
-              location: { path: toProjectPath(root, profilePath), json_pointer: `/runners/${runner.name}/chain/steps/${step.id}/context/${edge.input}` },
+              target: { kind: "graph", ref: graph.name, step: step.id },
+              location: { path: toProjectPath(root, profilePath), json_pointer: `/runners/${runner.name}/graph/steps/${step.id}/context/${edge.input}` },
               evidence: { reference: `${edge.fromStep}.${emitName}.data` },
               repairs: [{ id: "add_output_packet", kind: "edit_yaml", confidence: "medium", risk: "low", path: toProjectPath(root, profilePath), requires_human_review: false }],
             }));
@@ -453,18 +453,18 @@ async function validateChainContextReferences(
             title: "Packet schema is missing",
             message: `Packet ${packetId} referenced by ${edge.fromStep}.${emitName} is not declared in package.json runx.packets.`,
             target: { kind: "packet", ref: packetId },
-            location: { path: toProjectPath(root, profilePath), json_pointer: `/runners/${runner.name}/chain/steps/${step.id}/context/${edge.input}` },
+            location: { path: toProjectPath(root, profilePath), json_pointer: `/runners/${runner.name}/graph/steps/${step.id}/context/${edge.input}` },
             evidence: { reference: `${edge.fromStep}.${edge.output}` },
             repairs: [{ id: "declare_packet_artifact", kind: "manual", confidence: "medium", risk: "low", requires_human_review: false }],
           }));
         } else if (packetCheck.status === "path_invalid") {
           diagnostics.push(createDoctorDiagnostic({
-            id: "runx.chain.context.path_invalid",
+            id: "runx.graph.context.path_invalid",
             severity: "error",
-            title: "Chain context packet path is invalid",
+            title: "Graph context packet path is invalid",
             message: `${packetPath.join(".") || "(data)"} does not exist in packet ${packetId}.`,
-            target: { kind: "chain", ref: graph.name, step: step.id },
-            location: { path: toProjectPath(root, profilePath), json_pointer: `/runners/${runner.name}/chain/steps/${step.id}/context/${edge.input}` },
+            target: { kind: "graph", ref: graph.name, step: step.id },
+            location: { path: toProjectPath(root, profilePath), json_pointer: `/runners/${runner.name}/graph/steps/${step.id}/context/${edge.input}` },
             evidence: {
               reference: `${edge.fromStep}.${edge.output}`,
               packet: packetId,
@@ -745,14 +745,14 @@ const DOCTOR_DIAGNOSTIC_EXPLANATIONS: Readonly<Record<string, {
     explanation: "Workspace packages are only real boundaries if imports go through the declared package surface. Relative reaches into another package's src tree bypass ownership, exports, and publish shape.",
     repair: "Import through the owning package boundary or move the shared code to the package that owns it. Do not reference ../other-package/src paths.",
   },
-  "runx.chain.context.path_invalid": {
-    title: "Chain context path is invalid",
+  "runx.graph.context.path_invalid": {
+    title: "Graph context path is invalid",
     severity: "error",
-    explanation: "A chain context reference points at a producer output path that does not exist according to the producer packet schema.",
+    explanation: "A graph context reference points at a producer output path that does not exist according to the producer packet schema.",
     repair: "Use the producer step id, emitted output name, mandatory data segment, and a valid property inside the packet.",
   },
-  "runx.chain.context.schema_missing": {
-    title: "Chain context producer has no packet schema",
+  "runx.graph.context.schema_missing": {
+    title: "Graph context producer has no packet schema",
     severity: "warning",
     explanation: "Doctor can verify topology but cannot type-check the referenced data path without a declared packet schema.",
     repair: "Add artifacts.packet for a single emitted artifact, artifacts.packets.<emit> for named emits, or output.packet metadata for tools.",
@@ -760,7 +760,7 @@ const DOCTOR_DIAGNOSTIC_EXPLANATIONS: Readonly<Record<string, {
   "runx.packet.ref.missing": {
     title: "Packet glob matched no files",
     severity: "error",
-    explanation: "package.json runx.packets declares packet artifacts that do not exist, so packet assertions and chain validation cannot resolve them.",
+    explanation: "package.json runx.packets declares packet artifacts that do not exist, so packet assertions and graph validation cannot resolve them.",
     repair: "Fix the glob or build the packet artifacts.",
   },
   "runx.packet.id.collision": {

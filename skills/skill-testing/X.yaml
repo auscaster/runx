@@ -2,7 +2,7 @@ skill: skill-testing
 version: "0.1.1"
 
 catalog:
-  kind: chain
+  kind: graph
   audience: public
   visibility: public
 
@@ -70,7 +70,7 @@ harness:
 runners:
   skill-testing:
     default: true
-    type: chain
+    type: graph
     inputs:
       skill_ref:
         type: string
@@ -94,7 +94,7 @@ runners:
         type: string
         required: false
         description: "Safety, environment, or time constraints on evaluation."
-    chain:
+    graph:
       name: skill-testing
       owner: runx
       steps:

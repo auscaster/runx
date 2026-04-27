@@ -152,13 +152,13 @@ Delegate to child-task.
 runners:
   wrapper-task:
     default: true
-    type: chain
+    type: graph
     inputs:
       task_id:
         type: string
         required: false
         default: default-task
-    chain:
+    graph:
       name: wrapper-task
       owner: test
       steps:

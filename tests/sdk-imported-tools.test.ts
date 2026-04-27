@@ -21,8 +21,8 @@ describe("SDK imported tools", () => {
 name: imported-tool-skill
 description: Uses an imported fixture tool.
 source:
-  type: chain
-  chain:
+  type: graph
+  graph:
     name: imported-tool-skill
     steps:
       - id: echo

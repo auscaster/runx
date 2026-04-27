@@ -134,13 +134,13 @@ Delegate to child-task.
 runners:
   wrapper-task:
     default: true
-    type: chain
+    type: graph
     inputs:
       task_id:
         type: string
         required: false
         default: default-task
-    chain:
+    graph:
       name: wrapper-task
       owner: test
       steps:
@@ -1354,15 +1354,15 @@ source:
     ]);
   });
 
-  it("validates chain context paths through artifact packet metadata", async () => {
+  it("validates graph context paths through artifact packet metadata", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-doctor-packets-"));
     tempDirs.push(tempDir);
-    await mkdir(path.join(tempDir, "skills", "chain"), { recursive: true });
+    await mkdir(path.join(tempDir, "skills", "graph"), { recursive: true });
     await mkdir(path.join(tempDir, "dist", "packets"), { recursive: true });
     await writeFile(
       path.join(tempDir, "package.json"),
       `${JSON.stringify({
-        name: "packet-chain",
+        name: "packet-graph",
         version: "0.1.0",
         type: "module",
         runx: {
@@ -1374,8 +1374,8 @@ source:
       path.join(tempDir, "dist", "packets", "profile.v1.schema.json"),
       `${JSON.stringify({
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "https://schemas.runx.dev/packet-chain/profile/v1.json",
-        "x-runx-packet-id": "packet-chain.profile.v1",
+        "$id": "https://schemas.runx.dev/packet-graph/profile/v1.json",
+        "x-runx-packet-id": "packet-graph.profile.v1",
         type: "object",
         properties: {
           profile: {
@@ -1390,14 +1390,14 @@ source:
       }, null, 2)}\n`,
     );
     await writeFile(
-      path.join(tempDir, "skills", "chain", "X.yaml"),
-      `skill: chain
+      path.join(tempDir, "skills", "graph", "X.yaml"),
+      `skill: graph
 runners:
   default:
     default: true
-    type: chain
-    chain:
-      name: chain
+    type: graph
+    graph:
+      name: graph
       steps:
         - id: produce
           run:
@@ -1410,7 +1410,7 @@ runners:
             named_emits:
               profile_packet: profile
             packets:
-              profile_packet: packet-chain.profile.v1
+              profile_packet: packet-graph.profile.v1
         - id: consume
           run:
             type: agent-step
@@ -1422,7 +1422,7 @@ runners:
             brand_name: produce.profile_packet.data.profile.name
 harness:
   cases:
-    - name: chain-smoke
+    - name: graph-smoke
       inputs: {}
       caller:
         answers:

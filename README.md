@@ -157,7 +157,7 @@ The official catalog has two public kinds:
 
 - skills: `request-triage`, `issue-triage`, `research`, `draft-content`,
   `vuln-scan`, `scafld`, `sourcey`, `moltbook`
-- skill chains: `issue-to-pr`, `release`, `content-pipeline`,
+- skill graphs: `issue-to-pr`, `release`, `content-pipeline`,
   `deep-research-brief`, `ecosystem-vuln-scan`, `ecosystem-brief`,
   `skill-lab`, `skill-testing`
 

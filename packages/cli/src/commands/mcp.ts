@@ -28,7 +28,7 @@ export interface McpCommandArgs {
 }
 
 export interface McpCommandDependencies {
-  readonly resolveRegistryStoreForChains: (env: NodeJS.ProcessEnv) => Promise<RegistryStore | undefined>;
+  readonly resolveRegistryStoreForGraphs: (env: NodeJS.ProcessEnv) => Promise<RegistryStore | undefined>;
   readonly resolveDefaultReceiptDir: (env: NodeJS.ProcessEnv) => string;
 }
 
@@ -75,7 +75,7 @@ export async function handleMcpServeCommand(
     throw new Error("runx mcp serve requires at least one skill reference.");
   }
 
-  const registryStore = await deps.resolveRegistryStoreForChains(env);
+  const registryStore = await deps.resolveRegistryStoreForGraphs(env);
   const adapters = await resolveDefaultSkillAdapters(env);
   const toolCatalogAdapters = resolveEnvToolCatalogAdapters(env);
   const receiptDir = parsed.receiptDir ? resolvePathFromUserInput(parsed.receiptDir, env) : deps.resolveDefaultReceiptDir(env);

@@ -33,7 +33,7 @@
           "type": "string"
         },
         {
-          "const": "chains",
+          "const": "graphs",
           "type": "string"
         },
         {
@@ -70,7 +70,7 @@
                 "type": "string"
               },
               {
-                "const": "chain",
+                "const": "graph",
                 "type": "string"
               },
               {

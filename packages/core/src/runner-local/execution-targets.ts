@@ -131,11 +131,11 @@ export async function resolveSkillReference(skillPath: string): Promise<Resolved
 }
 
 export function materializeInlineGraph(skill: ValidatedSkill): ExecutionGraph {
-  if (!skill.source.chain) {
-    throw new Error(`Skill '${skill.name}' does not declare an inline chain.`);
+  if (!skill.source.graph) {
+    throw new Error(`Skill '${skill.name}' does not declare an inline graph.`);
   }
   return {
-    ...skill.source.chain,
+    ...skill.source.graph,
     name: skill.name,
   };
 }
@@ -230,7 +230,7 @@ export async function resolveGraphStepExecution(options: {
   }
 
   if (!options.step.run) {
-    throw new Error(`Chain step '${options.step.id}' is missing skill, tool, or run.`);
+    throw new Error(`Graph step '${options.step.id}' is missing skill, tool, or run.`);
   }
 
   return {
@@ -245,7 +245,7 @@ export function buildInlineGraphStepSkill(
   skillEnvironment?: SkillEnvironment,
 ): ValidatedSkill {
   if (!step.run) {
-    throw new Error(`Chain step '${step.id}' is missing an inline run definition.`);
+    throw new Error(`Graph step '${step.id}' is missing an inline run definition.`);
   }
   const body = composeInlineStepBody(skillEnvironment?.body, step);
   return {

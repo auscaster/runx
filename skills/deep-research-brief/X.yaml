@@ -2,7 +2,7 @@ skill: deep-research-brief
 version: "0.1.0"
 
 catalog:
-  kind: chain
+  kind: graph
   audience: public
   visibility: public
 
@@ -85,7 +85,7 @@ harness:
 runners:
   deep-research-brief:
     default: true
-    type: chain
+    type: graph
     inputs:
       objective:
         type: string
@@ -115,7 +115,7 @@ runners:
         type: json
         required: false
         description: "Structured list of projects, companies, or repos to keep in scope."
-    chain:
+    graph:
       name: deep-research-brief
       owner: runx
       steps:

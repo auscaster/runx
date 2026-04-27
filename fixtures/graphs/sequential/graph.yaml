@@ -4,7 +4,7 @@ steps:
   - id: first
     skill: ../../skills/echo
     inputs:
-      message: hello from chain
+      message: hello from graph
   - id: second
     skill: ../../skills/echo
     context:
