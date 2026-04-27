@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createDefaultSkillAdapters } from "@runxhq/adapters";
 
-import { parseHarnessFixture, runHarness, runHarnessTarget } from "./runner.js";
+import { parseHarnessFixture, runHarness, runHarnessTarget } from "@runxhq/runtime-local/harness";
 
 describe("harness runner", () => {
   it("parses fixture shape and caller traces", () => {

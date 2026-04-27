@@ -15,7 +15,7 @@ import {
   createTrustedHostOutcome,
   inspect,
   type ConnectService,
-} from "./index.js";
+} from "@runxhq/runtime-local/sdk";
 
 const originalFetch = globalThis.fetch;
 

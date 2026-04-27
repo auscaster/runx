@@ -35,19 +35,59 @@ const forbiddenPureNodeImports = new Set([
   "worker_threads",
   "node:worker_threads",
 ]);
-const coreReversePackagePrefixes = [
-  "@runxhq/runtime-local",
-  "@runxhq/adapters",
-  "@runxhq/cli",
-  "@runxhq/host-adapters",
-  "@runxhq/langchain",
-];
+const forbiddenPackageImports = {
+  core: {
+    prefixes: [
+      "@runxhq/runtime-local",
+      "@runxhq/adapters",
+      "@runxhq/cli",
+      "@runxhq/host-adapters",
+      "@runxhq/langchain",
+    ],
+    reason: "@runxhq/core must not depend on runtime, adapters, CLI, or host packages.",
+  },
+  "runtime-local": {
+    prefixes: [
+      "@runxhq/adapters",
+      "@runxhq/cli",
+      "@runxhq/host-adapters",
+      "@runxhq/langchain",
+    ],
+    reason: "@runxhq/runtime-local must not depend on downstream adapters, CLI, or host packages.",
+  },
+  adapters: {
+    prefixes: [
+      "@runxhq/cli",
+      "@runxhq/host-adapters",
+      "@runxhq/langchain",
+    ],
+    reason: "@runxhq/adapters must stay below host, CLI, and framework packages.",
+  },
+  "host-adapters": {
+    prefixes: [
+      "@runxhq/adapters",
+      "@runxhq/cli",
+      "@runxhq/langchain",
+    ],
+    reason: "@runxhq/host-adapters must not depend on adapters, CLI, or framework packages.",
+  },
+  langchain: {
+    prefixes: [
+      "@runxhq/adapters",
+      "@runxhq/cli",
+      "@runxhq/host-adapters",
+    ],
+    reason: "@runxhq/langchain must not depend on adapters, CLI, or host packages.",
+  },
+};
 const pureCoreDomains = ["policy", "state-machine"];
 const relativeRuntimeDomainPattern = /(^|\/)(runner-local|harness|sdk|mcp)(\/|$)/;
 const staticSpecifierPattern =
   /\b(?:import|export)\s+(?:type\s+)?(?:[^'";]*?\s+from\s+)?["']([^"']+)["']|import\s*\(\s*["']([^"']+)["']\s*\)/g;
 
 const findings = [];
+const packageManifestCache = new Map();
+const workspacePackageNames = await readWorkspacePackageNames();
 
 await checkPackageExports();
 await checkForbiddenCoreRuntimeDirectories();
@@ -105,6 +145,11 @@ async function checkSourceFile(filePath) {
       findings.push(`${rel} imports removed ${specifier}; use @runxhq/runtime-local public paths.`);
     }
 
+    if (packageSource) {
+      checkForbiddenPackageImport(rel, packageSource.packageName, specifier);
+      await checkDeclaredWorkspaceImport(rel, packageSource.packageName, specifier);
+    }
+
     if (packageSource?.packageName === "core") {
       checkCoreImport(rel, packageSource.domain, specifier);
     }
@@ -116,10 +161,6 @@ async function checkSourceFile(filePath) {
 }
 
 function checkCoreImport(rel, domain, specifier) {
-  if (coreReversePackagePrefixes.some((prefix) => specifier === prefix || specifier.startsWith(`${prefix}/`))) {
-    findings.push(`${rel} imports ${specifier}; @runxhq/core must not depend on runtime, adapters, CLI, or host packages.`);
-  }
-
   if (specifier.startsWith(".") && relativeRuntimeDomainPattern.test(toPosix(path.normalize(path.join(path.dirname(rel), specifier))))) {
     findings.push(`${rel} imports ${specifier}; core cannot reach removed runtime-local domains by relative path.`);
   }
@@ -147,6 +188,38 @@ function checkCoreImport(rel, domain, specifier) {
   }
 }
 
+function checkForbiddenPackageImport(rel, packageName, specifier) {
+  const rule = forbiddenPackageImports[packageName];
+  if (!rule) {
+    return;
+  }
+  if (rule.prefixes.some((prefix) => specifier === prefix || specifier.startsWith(`${prefix}/`))) {
+    findings.push(`${rel} imports ${specifier}; ${rule.reason}`);
+  }
+}
+
+async function checkDeclaredWorkspaceImport(rel, packageName, specifier) {
+  const dependencyName = workspaceDependencyName(specifier);
+  if (!dependencyName || !workspacePackageNames.has(dependencyName)) {
+    return;
+  }
+
+  const manifest = await readPackageManifest(packageName);
+  if (!manifest || manifest.name === dependencyName) {
+    return;
+  }
+
+  const declared = {
+    ...manifest.dependencies,
+    ...manifest.devDependencies,
+    ...manifest.peerDependencies,
+    ...manifest.optionalDependencies,
+  };
+  if (!Object.hasOwn(declared, dependencyName)) {
+    findings.push(`${rel} imports ${specifier}; ${manifest.name} must declare ${dependencyName} in package.json.`);
+  }
+}
+
 function extractSpecifiers(source) {
   const specifiers = [];
   let match;
@@ -165,6 +238,38 @@ function getPackageSource(rel) {
     packageName: parts[1],
     domain: parts[3] ?? "",
   };
+}
+
+function workspaceDependencyName(specifier) {
+  const match = /^(@runxhq\/[^/]+)/.exec(specifier);
+  return match?.[1];
+}
+
+async function readWorkspacePackageNames() {
+  const packagesDir = path.join(workspaceRoot, "packages");
+  const names = new Set();
+  for (const entry of await readdir(packagesDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+    const manifest = await readPackageManifest(entry.name);
+    if (manifest?.name) {
+      names.add(manifest.name);
+    }
+  }
+  return names;
+}
+
+async function readPackageManifest(packageName) {
+  if (packageManifestCache.has(packageName)) {
+    return packageManifestCache.get(packageName);
+  }
+  const manifestPath = path.join(workspaceRoot, "packages", packageName, "package.json");
+  const manifest = await readFile(manifestPath, "utf8")
+    .then((contents) => JSON.parse(contents))
+    .catch(() => undefined);
+  packageManifestCache.set(packageName, manifest);
+  return manifest;
 }
 
 function specifierTargetsDomain(rel, specifier, domain) {

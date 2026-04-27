@@ -7,6 +7,6 @@ export default defineConfig({
     alias: [...workspaceAliases],
   },
   test: {
-    include: ["packages/**/*.test.ts"],
+    include: ["packages/**/*.test.ts", "tests/runtime-local-*.test.ts"],
   },
 });
