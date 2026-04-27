@@ -755,25 +755,13 @@ export function buildHostedOpenApiPublicSchemas(): Readonly<Record<string, unkno
       required: ["status", "enrollment"],
       additionalProperties: false,
     },
-    SelfPublishWebhookRequest: {
-      type: "object",
-      properties: {
-        type: { type: "string", enum: ["push", "tag", "repository.deleted"] },
-        repo_full_name: { type: "string" },
-        ref: { type: "string" },
-        tag: { type: "string" },
-      },
-      required: ["type", "repo_full_name"],
-      additionalProperties: false,
-    },
-    SelfPublishWebhookEnvelope: {
+    WebhookAcceptedEnvelope: {
       type: "object",
       properties: {
         status: { type: "string", const: "accepted" },
         updated: { type: "integer" },
-        enrollments: { type: "array", items: openApiSchemaRef("SelfPublishEnrollment") },
       },
-      required: ["status", "updated", "enrollments"],
+      required: ["status", "updated"],
       additionalProperties: false,
     },
     IndexRequest: {
