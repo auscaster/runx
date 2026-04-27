@@ -199,15 +199,11 @@ async function walk(directory, files) {
       }
       continue;
     }
-    if (!entry.isFile() || !sourceExtensions.has(path.extname(entry.name)) || isTestFile(entry.name)) {
+    if (!entry.isFile() || !sourceExtensions.has(path.extname(entry.name))) {
       continue;
     }
     files.push(path.join(directory, entry.name));
   }
-}
-
-function isTestFile(fileName) {
-  return /\.(test|spec)\.(ts|tsx|mts|cts)$/.test(fileName);
 }
 
 function toPosix(input) {
