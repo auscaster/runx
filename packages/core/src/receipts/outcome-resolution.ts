@@ -72,7 +72,7 @@ export async function writeReceiptOutcomeResolution(
   return resolution;
 }
 
-export async function readReceiptOutcomeResolution(
+async function readReceiptOutcomeResolution(
   receiptDir: string,
   resolutionId: string,
 ): Promise<ReceiptOutcomeResolution> {
@@ -93,7 +93,7 @@ export async function readVerifiedReceiptOutcomeResolution(
   };
 }
 
-export async function listReceiptOutcomeResolutions(
+async function listReceiptOutcomeResolutions(
   receiptDir: string,
   receiptId?: string,
 ): Promise<readonly ReceiptOutcomeResolution[]> {
@@ -129,14 +129,6 @@ export async function listVerifiedReceiptOutcomeResolutions(
       verification: await verifyReceiptOutcomeResolutionFromLocalKey(resolution, runxHome),
     })),
   );
-}
-
-export async function latestReceiptOutcomeResolution(
-  receiptDir: string,
-  receiptId: string,
-): Promise<ReceiptOutcomeResolution | undefined> {
-  const resolutions = await listReceiptOutcomeResolutions(receiptDir, receiptId);
-  return resolutions[0];
 }
 
 export async function latestVerifiedReceiptOutcomeResolution(

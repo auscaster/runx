@@ -309,14 +309,25 @@ export async function loadRunxWorkspacePolicy(
 }
 
 async function loadOptionalJsonFile<T>(filePath: string): Promise<T> {
+  let contents: string;
   try {
-    return JSON.parse(await readFile(filePath, "utf8")) as T;
+    contents = await readFile(filePath, "utf8");
   } catch (error) {
     if (isNodeError(error) && error.code === "ENOENT") {
       return {} as T;
     }
     throw error;
   }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(contents);
+  } catch (error) {
+    throw new Error(`${filePath} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (!isRecord(parsed)) {
+    throw new Error(`${filePath} must contain a JSON object.`);
+  }
+  return parsed as T;
 }
 
 export async function writeRunxConfigFile(configPath: string, config: RunxConfigFile): Promise<void> {
