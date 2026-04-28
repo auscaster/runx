@@ -273,15 +273,28 @@ function loadOfficialSkillLock(): readonly OfficialSkillLockEntry[] {
   if (cachedOfficialSkillLock) {
     return cachedOfficialSkillLock;
   }
+  const lockUrl = new URL("./official-skills.lock.json", import.meta.url);
+  let raw: string;
   try {
-    const raw = readFileSync(new URL("./official-skills.lock.json", import.meta.url), "utf8");
-    const parsed = JSON.parse(raw) as readonly OfficialSkillLockEntry[];
-    cachedOfficialSkillLock = Array.isArray(parsed) ? parsed : [];
-    return cachedOfficialSkillLock;
-  } catch {
-    cachedOfficialSkillLock = [];
-    return cachedOfficialSkillLock;
+    raw = readFileSync(lockUrl, "utf8");
+  } catch (error) {
+    throw new Error(
+      `Official skills lock file is missing at ${lockUrl.href}. The CLI install may be incomplete; reinstall to restore it. (${error instanceof Error ? error.message : String(error)})`,
+    );
   }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(
+      `Official skills lock file at ${lockUrl.href} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error(`Official skills lock file at ${lockUrl.href} must contain a JSON array.`);
+  }
+  cachedOfficialSkillLock = parsed as readonly OfficialSkillLockEntry[];
+  return cachedOfficialSkillLock;
 }
 
 function resolveLocalSkillReference(ref: string, env: NodeJS.ProcessEnv): string | undefined {
