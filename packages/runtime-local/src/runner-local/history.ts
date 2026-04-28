@@ -648,8 +648,11 @@ async function tryReadLocalReceipt(
 ): Promise<{ readonly receipt: LocalReceipt; readonly verification: ReceiptVerification } | undefined> {
   try {
     return await readVerifiedLocalReceipt(receiptDir, receiptId, runxHome);
-  } catch {
-    return undefined;
+  } catch (error) {
+    if (isNotFound(error)) {
+      return undefined;
+    }
+    throw error;
   }
 }
 

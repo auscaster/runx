@@ -1,5 +1,5 @@
 import { constants as fsConstants } from "node:fs";
-import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { isMarketplaceRef, resolveMarketplaceSkill, type MarketplaceAdapter } from "@runxhq/core/marketplaces";
@@ -10,6 +10,7 @@ import {
   type SkillInstallOrigin,
 } from "@runxhq/core/parser";
 import { hashString } from "@runxhq/core/receipts";
+import { isNotFound, readOptionalFile } from "@runxhq/core/util";
 import {
   acquireRegistrySkill,
   resolveRegistrySkill,
@@ -74,8 +75,8 @@ export async function installLocalSkill(options: InstallLocalSkillOptions): Prom
   const packageRoot = path.join(options.destinationRoot, ...safeSkillPackageParts(options.ref, install.skill.name));
   const destination = path.join(packageRoot, "SKILL.md");
   const profileStatePath = candidate.profileDocument ? path.join(packageRoot, ".runx", "profile.json") : undefined;
-  const existing = await readExisting(destination);
-  const existingProfileState = profileStatePath ? await readExisting(profileStatePath) : undefined;
+  const existing = await readOptionalFile(destination);
+  const existingProfileState = profileStatePath ? await readOptionalFile(profileStatePath) : undefined;
   const nextProfileState = candidate.profileDocument
     ? `${JSON.stringify(buildProfileState(install.skill.name, actualDigest, candidate.profileDocument, profileDigest, runnerNames, install.origin), null, 2)}\n`
     : undefined;
@@ -254,13 +255,6 @@ function validateInstallBindingManifest(
   return runnerNames;
 }
 
-async function readExisting(destination: string): Promise<string | undefined> {
-  try {
-    return await readFile(destination, "utf8");
-  } catch {
-    return undefined;
-  }
-}
 
 async function writeAtomic(destination: string, contents: string, replace = false): Promise<void> {
   const tempPath = `${destination}.tmp-${process.pid}-${Date.now()}`;
@@ -279,8 +273,11 @@ async function writeAtomic(destination: string, contents: string, replace = fals
 async function assertMissing(destination: string): Promise<void> {
   try {
     await access(destination, fsConstants.F_OK);
-  } catch {
-    return;
+  } catch (error) {
+    if (isNotFound(error)) {
+      return;
+    }
+    throw error;
   }
   throw new Error(`Skill install destination already exists: ${destination}`);
 }

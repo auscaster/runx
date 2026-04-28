@@ -8,7 +8,7 @@ import {
   type RegistrySkillResolution,
   type RegistryStore,
 } from "@runxhq/core/registry";
-import { readOptionalFile } from "@runxhq/core/util";
+import { isNotFound, readOptionalFile } from "@runxhq/core/util";
 
 export interface ParsedRegistryRef {
   readonly kind: "registry";
@@ -130,8 +130,11 @@ async function safeListVersions(store: RegistryStore, skillId: string): Promise<
   try {
     const versions = await store.listVersions(skillId);
     return versions.map((version) => version.version);
-  } catch {
-    return [];
+  } catch (error) {
+    if (isNotFound(error)) {
+      return [];
+    }
+    throw error;
   }
 }
 
