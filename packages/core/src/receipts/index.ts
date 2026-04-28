@@ -343,6 +343,11 @@ export async function writeLocalGraphReceipt(options: WriteLocalGraphReceiptOpti
   return receipt;
 }
 
+/**
+ * Bypass: returns the parsed receipt without checking its signature. Prefer
+ * `readVerifiedLocalReceipt` everywhere except inside test fixtures or the
+ * verified-read wrapper itself.
+ */
 export async function readLocalReceipt(receiptDir: string, id: string): Promise<LocalReceipt> {
   assertReceiptLikeId(id);
   const contents = await readFile(path.join(receiptDir, `${id}.json`), "utf8");
@@ -361,6 +366,11 @@ export async function readVerifiedLocalReceipt(
   };
 }
 
+/**
+ * Bypass: returns parsed receipts without checking signatures. Prefer
+ * `listVerifiedLocalReceipts` for any read path that fans into runtime
+ * decisions (context derivation, governance, etc.).
+ */
 export async function listLocalReceipts(receiptDir: string): Promise<readonly LocalReceipt[]> {
   let entries: readonly string[];
   try {

@@ -738,6 +738,7 @@ export async function runValidatedSkill(options: RunValidatedSkillOptions): Prom
     inputs: options.inputs,
     env: options.env,
     receiptDir: options.receiptDir ?? defaultReceiptDir(options.env),
+    runxHome: options.runxHome,
     runId: contextEnvelopeRunId,
     stepId: options.orchestrationStepId,
     currentContext: options.currentContext,

@@ -1,0 +1,70 @@
+# Repo context: Node repo detected (pnpm)
+# Repo markers: package.json, pnpm-lock.yaml
+# Suggested validation commands come from repo detection (including mixed Python+Node repos)
+# and .ai/config.local.yaml when available.
+spec_version: "1.1"
+task_id: "issue-to-pr-fixture"
+created: "2026-04-27T14:56:15Z"
+updated: "2026-04-27T14:56:15Z"
+status: "draft"
+harden_status: "not_run"
+
+task:
+  title: "Fixture thread-driven change"
+  summary: >
+    TODO: Describe the problem or goal for "Fixture thread-driven change". Repo context: Node repo detected (pnpm).
+  size: "micro"
+  risk_level: "low"
+  context:
+    packages:
+      - "TODO: replace with affected package(s) or paths. Repo markers: package.json, pnpm-lock.yaml."
+    invariants:
+      - "domain_boundaries"
+  objectives:
+    - "TODO: State the primary outcome for \"Fixture thread-driven change\"."
+  touchpoints:
+    - area: "TODO: primary area touched by \"Fixture thread-driven change\""
+      description: "Replace with the main package, module, or workflow surface affected by \"Fixture thread-driven change\"."
+  acceptance:
+    definition_of_done:
+      - id: "dod1"
+        description: "TODO: define what completion means for this task."
+        status: "pending"
+    validation:
+      - id: "v1"
+        type: "compile"
+        description: "Run the repo's suggested compile or build check for this task."
+        command: "pnpm build"
+        expected: "exit code 0"
+      - id: "v2"
+        type: "test"
+        description: "Run the repo's suggested targeted test command for this task."
+        command: "pnpm test"
+        expected: "exit code 0"
+
+planning_log:
+  - timestamp: "2026-04-27T14:56:15Z"
+    actor: "user"
+    summary: "Spec created via scafld plan"
+
+phases:
+  - id: "phase1"
+    name: "TODO: first implementation slice for \"Fixture thread-driven change\""
+    objective: "TODO: Describe the first concrete slice of \"Fixture thread-driven change\"."
+    changes:
+      - file: "TODO"
+        action: "update"
+        content_spec: |
+          TODO: Describe the changes for the first slice of "Fixture thread-driven change".
+    acceptance_criteria:
+      - id: "ac1_1"
+        type: "test"
+        description: "Run the repo's suggested targeted test command for this phase."
+        command: "pnpm test"
+        expected: "exit code 0"
+    status: "pending"
+
+rollback:
+  strategy: "per_phase"
+  commands:
+    phase1: "git checkout HEAD -- TODO"

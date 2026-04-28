@@ -14,7 +14,7 @@ import {
 } from "@runxhq/core/executor";
 import { type ValidatedSkill } from "@runxhq/core/parser";
 import { isPlainRecord, pathExists } from "@runxhq/core/util";
-import { hashStable, hashString, listLocalReceipts, type LocalReceipt } from "@runxhq/core/receipts";
+import { hashStable, hashString, listVerifiedLocalReceipts, type LocalReceipt } from "@runxhq/core/receipts";
 
 import { mergeMetadata } from "./runner-helpers.js";
 import type { MaterializedContextEdge } from "./index.js";
@@ -136,6 +136,7 @@ export async function prepareAgentContext(options: {
   readonly inputs: Readonly<Record<string, unknown>>;
   readonly env?: NodeJS.ProcessEnv;
   readonly receiptDir: string;
+  readonly runxHome?: string;
   readonly runId: string;
   readonly stepId?: string;
   readonly currentContext?: readonly MaterializedContextEdge[];
@@ -177,6 +178,7 @@ export async function prepareAgentContext(options: {
     skillName: options.skill.name,
     projectKeyHash,
     excludeRunId: options.runId,
+    runxHome: options.runxHome ?? options.env?.RUNX_HOME,
   });
   return {
     currentContext,
@@ -360,20 +362,22 @@ async function loadHistoricalAgentContext(options: {
   readonly skillName: string;
   readonly projectKeyHash?: string;
   readonly excludeRunId: string;
+  readonly runxHome?: string;
 }): Promise<readonly ArtifactEnvelope[]> {
   if (!options.projectKeyHash) {
     return [];
   }
-  const receipts = await listLocalReceipts(options.receiptDir);
-  const candidate = receipts.find((receipt) =>
-    receipt.kind === "skill_execution"
+  const verified = await listVerifiedLocalReceipts(options.receiptDir, options.runxHome);
+  const candidate = verified.find(({ receipt, verification }) =>
+    verification.status === "verified"
+    && receipt.kind === "skill_execution"
     && receipt.id !== options.excludeRunId
     && receipt.status === "success"
     && receiptSkillName(receipt) === options.skillName
     && receiptProjectScopeKeyHash(receipt) === options.projectKeyHash
     && Array.isArray(receipt.artifact_ids)
     && receipt.artifact_ids.length > 0,
-  );
+  )?.receipt;
   if (!candidate || candidate.kind !== "skill_execution") {
     return [];
   }

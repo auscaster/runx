@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -149,6 +149,74 @@ describe("agent context envelope", () => {
         "git.status",
         "shell.exec",
       ]);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("excludes receipts whose signature no longer verifies from historical context", async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-agent-history-tamper-"));
+    const receiptDir = path.join(tempDir, "receipts");
+    const runxHome = path.join(tempDir, "home");
+
+    const completionCaller: Caller = {
+      resolve: async (request) => {
+        if (request.kind === "cognitive_work" && request.id === "agent_step.evolve-plan.output") {
+          return {
+            actor: "agent",
+            payload: {
+              objective_brief: { objective: "add release notes", target_type: "repo", target_ref: "." },
+              diagnosis_report: { findings: ["docs missing"], recommended_phases: ["scope", "model"] },
+              change_plan: { steps: ["draft release notes"], estimated_scope: "small", risk_assessment: "low" },
+              spec_document: { spec_version: "1.1", task_id: "evolve_release_notes", phases: ["scope", "ingest", "model"] },
+            },
+          };
+        }
+        return undefined;
+      },
+      report: () => undefined,
+    };
+
+    try {
+      const first = await runLocalSkill({
+        skillPath: path.resolve("skills/evolve"),
+        inputs: { objective: "add release notes", repo_root: "." },
+        caller: completionCaller,
+        env: { ...process.env, RUNX_CWD: process.cwd() },
+        receiptDir,
+        runxHome,
+        adapters: createDefaultSkillAdapters(),
+      });
+      expect(first.status).toBe("success");
+
+      const entries = await readdir(receiptDir);
+      const receiptNames = entries.filter((entry) => entry.startsWith("rx_") && entry.endsWith(".json"));
+      expect(receiptNames.length).toBeGreaterThan(0);
+      for (const receiptName of receiptNames) {
+        const receiptPath = path.join(receiptDir, receiptName);
+        const tampered = JSON.parse(await readFile(receiptPath, "utf8")) as Record<string, unknown>;
+        tampered.skill_name = "tampered";
+        await writeFile(receiptPath, `${JSON.stringify(tampered, null, 2)}\n`);
+      }
+
+      const second = await runLocalSkill({
+        skillPath: path.resolve("skills/evolve"),
+        inputs: { objective: "add release notes", repo_root: "." },
+        caller: passiveCaller,
+        env: { ...process.env, RUNX_CWD: process.cwd() },
+        receiptDir,
+        runxHome,
+        adapters: createDefaultSkillAdapters(),
+      });
+
+      expect(second.status).toBe("needs_resolution");
+      if (second.status !== "needs_resolution") {
+        return;
+      }
+      const historical = second.requests[0]?.kind === "cognitive_work"
+        ? second.requests[0].work.envelope.historical_context
+        : [];
+      expect(historical).toEqual([]);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
