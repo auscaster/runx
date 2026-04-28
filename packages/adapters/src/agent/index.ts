@@ -7,6 +7,7 @@ import {
   loadRunxConfigFile,
   resolveRunxHomeDir,
 } from "@runxhq/core/config";
+import { errorMessage } from "@runxhq/core/util";
 import {
   type AdapterInvokeRequest,
   type AdapterInvokeResult,
@@ -161,7 +162,7 @@ async function invokeManagedAgentAdapter(
       exitCode: null,
       signal: null,
       durationMs: Date.now() - startedAt,
-      errorMessage: error instanceof Error ? error.message : String(error),
+      errorMessage: errorMessage(error),
       metadata: nativeAgentMetadata(sourceType, request, config, undefined, "failure"),
     };
   }

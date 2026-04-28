@@ -1,4 +1,5 @@
 import type { CognitiveResolutionRequest } from "@runxhq/core/executor";
+import { errorMessage } from "@runxhq/core/util";
 
 import {
   FINAL_RESULT_TOOL_NAME,
@@ -101,7 +102,7 @@ export async function resolveWithOpenAi(
             type: "function_call_output",
             call_id: call.call_id,
             output: JSON.stringify({
-              error: error instanceof Error ? error.message : String(error),
+              error: errorMessage(error),
             }),
           });
         }

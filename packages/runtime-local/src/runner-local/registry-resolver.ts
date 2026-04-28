@@ -8,7 +8,7 @@ import {
   type RegistrySkillResolution,
   type RegistryStore,
 } from "@runxhq/core/registry";
-import { isNotFound, readOptionalFile } from "@runxhq/core/util";
+import { errorMessage, isNotFound, readOptionalFile } from "@runxhq/core/util";
 
 export interface ParsedRegistryRef {
   readonly kind: "registry";
@@ -121,7 +121,7 @@ async function lookupRegistrySkill(
   try {
     return await resolveRegistrySkill(store, parsed.skillId, { version: parsed.version });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     throw new Error(`Registry lookup failed for '${parsed.raw}': ${message}`);
   }
 }

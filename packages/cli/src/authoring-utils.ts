@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { hashStable, isRecord as isPlainRecord, safeReadDir, stableStringify } from "@runxhq/core/util";
+import { errorMessage, hashStable, isRecord as isPlainRecord, safeReadDir, stableStringify } from "@runxhq/core/util";
 
 export { isPlainRecord, safeReadDir, stableStringify };
 
@@ -46,7 +46,7 @@ export async function buildLocalPacketIndex(
       errors: [{
         id: "runx.packet.package.invalid",
         title: "Package metadata is invalid",
-        message: error instanceof Error ? error.message : String(error),
+        message: errorMessage(error),
         ref: "package.json",
         path: "package.json",
       }],
@@ -118,7 +118,7 @@ export async function buildLocalPacketIndex(
         errors.push({
           id: "runx.packet.schema.invalid",
           title: "Packet schema is invalid",
-          message: error instanceof Error ? error.message : String(error),
+          message: errorMessage(error),
           ref: relativePath,
           path: relativePath,
         });

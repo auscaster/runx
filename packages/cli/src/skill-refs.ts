@@ -28,7 +28,7 @@ import {
   type ParsedRegistryRef,
 } from "@runxhq/runtime-local";
 
-import { asRecord } from "@runxhq/core/util";
+import { asRecord, errorMessage } from "@runxhq/core/util";
 
 import { ensureRunxInstallState } from "./runx-state.js";
 
@@ -282,7 +282,7 @@ function loadOfficialSkillLock(): readonly OfficialSkillLockEntry[] {
     raw = readFileSync(lockUrl, "utf8");
   } catch (error) {
     throw new Error(
-      `Official skills lock file is missing at ${lockUrl.href}. The CLI install may be incomplete; reinstall to restore it. (${error instanceof Error ? error.message : String(error)})`,
+      `Official skills lock file is missing at ${lockUrl.href}. The CLI install may be incomplete; reinstall to restore it. (${errorMessage(error)})`,
       { cause: error },
     );
   }
@@ -291,7 +291,7 @@ function loadOfficialSkillLock(): readonly OfficialSkillLockEntry[] {
     parsed = JSON.parse(raw);
   } catch (error) {
     throw new Error(
-      `Official skills lock file at ${lockUrl.href} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+      `Official skills lock file at ${lockUrl.href} is not valid JSON: ${errorMessage(error)}`,
       { cause: error },
     );
   }

@@ -11,7 +11,7 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { isNodeError, isNotFound } from "../util/types.js";
+import { errorMessage, isNodeError, isNotFound } from "../util/types.js";
 
 export interface LocalKeyPair {
   readonly privateKey: KeyObject;
@@ -59,7 +59,7 @@ export async function loadOrCreateLocalKey(runxHome = defaultRunxHome()): Promis
       }
     }
     throw new Error(
-      `runx signing key creation failed at ${privateKeyPath}: ${writeError instanceof Error ? writeError.message : String(writeError)}`,
+      `runx signing key creation failed at ${privateKeyPath}: ${errorMessage(writeError)}`,
     );
   }
 }
@@ -141,7 +141,7 @@ async function tryLoadKeyPair(privatePath: string, publicPath: string, retries =
       return null;
     }
     throw new Error(
-      `runx signing key unreadable at ${privatePath}: ${error instanceof Error ? error.message : String(error)}`,
+      `runx signing key unreadable at ${privatePath}: ${errorMessage(error)}`,
       { cause: error },
     );
   }

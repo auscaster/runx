@@ -4,6 +4,8 @@
  * Promise.allSettled, and setTimeout.
  */
 
+import { errorMessage } from "@runxhq/core/util";
+
 export interface FanoutTask<T> {
   readonly id: string;
   readonly fn: (signal: AbortSignal) => Promise<T>;
@@ -52,7 +54,7 @@ export async function runFanout<T>(
       return {
         id: task.id,
         status: "failure",
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
       };
     } finally {
       if (timer) clearTimeout(timer);
@@ -68,7 +70,7 @@ export async function runFanout<T>(
     return {
       id: tasks[i].id,
       status: "failure" as const,
-      error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      error: errorMessage(result.reason),
     };
   });
 }

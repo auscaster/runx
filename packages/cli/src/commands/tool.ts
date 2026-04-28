@@ -9,6 +9,7 @@ import { pathToFileURL } from "node:url";
 
 import { resolvePathFromUserInput, resolveRunxWorkspaceBase } from "@runxhq/core/config";
 import { parseToolManifestJson, validateToolManifest } from "@runxhq/core/parser";
+import { errorMessage } from "@runxhq/core/util";
 
 import {
   isPlainRecord,
@@ -71,7 +72,7 @@ export async function handleToolBuildCommand(parsed: ToolCommandArgs, env: NodeJ
       const result = await buildToolManifest(root, toolDir);
       built.push(result);
     } catch (error) {
-      errors.push(`${toProjectPath(root, toolDir)}: ${error instanceof Error ? error.message : String(error)}`);
+      errors.push(`${toProjectPath(root, toolDir)}: ${errorMessage(error)}`);
     }
   }
   return {
@@ -109,7 +110,7 @@ export async function handleToolMigrateCommand(parsed: ToolCommandArgs, env: Nod
         manifest: toProjectPath(root, manifestPath),
       });
     } catch (error) {
-      errors.push(`${toProjectPath(root, toolDir)}: ${error instanceof Error ? error.message : String(error)}`);
+      errors.push(`${toProjectPath(root, toolDir)}: ${errorMessage(error)}`);
     }
   }
   return {

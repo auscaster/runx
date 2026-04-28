@@ -1,3 +1,5 @@
+import { errorMessage } from "../util/types.js";
+
 import { acquireRegistrySkill, type AcquiredRegistrySkill } from "./http-client.js";
 import {
   FileRegistryStore,
@@ -119,7 +121,7 @@ async function safeAcquire(args: {
       channel: args.channel,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     if (/HTTP 404/.test(message)) {
       return undefined;
     }

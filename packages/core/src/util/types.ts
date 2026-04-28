@@ -21,3 +21,7 @@ export function isNotFound(error: unknown): boolean {
 export function isAlreadyExists(error: unknown): boolean {
   return isNodeError(error) && error.code === "EEXIST";
 }
+
+export function errorMessage(value: unknown): string {
+  return value instanceof Error ? value.message : String(value);
+}

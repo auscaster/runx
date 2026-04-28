@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { isNodeError, isRecord } from "../util/types.js";
+import { errorMessage, isNodeError, isRecord } from "../util/types.js";
 import { readOptionalFile } from "../util/fs.js";
 import { fileURLToPath } from "node:url";
 
@@ -323,7 +323,7 @@ async function loadOptionalJsonFile<T>(filePath: string): Promise<T> {
     parsed = JSON.parse(contents);
   } catch (error) {
     throw new Error(
-      `${filePath} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+      `${filePath} is not valid JSON: ${errorMessage(error)}`,
       { cause: error },
     );
   }

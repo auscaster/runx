@@ -7,6 +7,7 @@ import { stdin as processStdin, stdout as processStdout } from "node:process";
 import { pathToFileURL } from "node:url";
 
 import { resolvePathFromUserInput } from "@runxhq/core/config";
+import { errorMessage } from "@runxhq/core/util";
 
 import { createAgentRuntimeLoader, createInteractiveCaller, createNonInteractiveCaller, readCallerInputFile } from "./callers.js";
 import { configAction } from "./commands/config.js";
@@ -162,7 +163,7 @@ export async function runCli(
       : createInteractiveCaller(io, callerInput.answers, callerInput.approvals, { reportEvents: !parsed.json }, env, agentRuntimeLoader);
     return await dispatchCli(parsed, io, env, caller, services);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     return writeCliError(io, message);
   }
 }

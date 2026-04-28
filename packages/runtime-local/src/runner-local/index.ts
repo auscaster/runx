@@ -24,6 +24,7 @@ export { runLocalGraph };
 import { readFile } from "node:fs/promises";
 
 import { materializeArtifacts } from "@runxhq/core/artifacts";
+import { errorMessage } from "@runxhq/core/util";
 import { appendPendingSkillLedgerEntries, appendSkillLedgerEntries } from "./graph-ledger.js";
 import {
   createCallerAgentAdapter,
@@ -981,7 +982,7 @@ export async function runValidatedSkill(options: RunValidatedSkillOptions): Prom
       message: "Local knowledge indexing failed after receipt write; continuing with the persisted receipt.",
       data: {
         receiptId: receipt.id,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(error),
       },
     });
   }

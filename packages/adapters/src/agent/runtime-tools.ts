@@ -3,6 +3,7 @@ import {
   type NestedSkillInvoker,
   type SkillAdapter,
 } from "@runxhq/core/executor";
+import { errorMessage } from "@runxhq/core/util";
 import { resolveToolExecutionTarget, runValidatedSkill } from "@runxhq/runtime-local";
 
 import { createA2aAdapter, createFixtureA2aTransport } from "../a2a/index.js";
@@ -203,7 +204,7 @@ export async function executeManagedToolCall(tool: ManagedRuntimeTool, arguments
   } catch (error) {
     return {
       value: {
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(error),
       },
       trace: {
         tool: tool.runxName,

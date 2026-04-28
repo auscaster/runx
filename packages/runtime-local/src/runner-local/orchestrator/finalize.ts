@@ -1,4 +1,5 @@
 import { writeLocalGraphReceipt } from "@runxhq/core/receipts";
+import { errorMessage } from "@runxhq/core/util";
 
 import { appendGraphCompletedLedgerEntry } from "../graph-ledger.js";
 import { graphProducerSkillName } from "../graph-reporting.js";
@@ -54,7 +55,7 @@ export async function finalizeRun(ctx: RunContext, options: RunLocalGraphOptions
       message: "Local knowledge indexing failed after receipt write; continuing with the persisted receipt.",
       data: {
         receiptId: receipt.id,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(error),
       },
     });
   }

@@ -10,6 +10,7 @@ import {
   validateRunnerManifest,
   validateToolManifest,
 } from "@runxhq/core/parser";
+import { errorMessage } from "@runxhq/core/util";
 
 import {
   buildLocalPacketIndex,
@@ -240,7 +241,7 @@ async function discoverToolDoctorDiagnostics(root: string): Promise<readonly Doc
           id: "runx.tool.manifest.invalid",
           severity: "error",
           title: "Tool manifest is invalid",
-          message: error instanceof Error ? error.message : String(error),
+          message: errorMessage(error),
           target: {
             kind: "tool",
             ref: `${namespaceEntry.name}.${toolEntry.name}`,
@@ -304,7 +305,7 @@ async function discoverSkillDoctorDiagnostics(root: string): Promise<readonly Do
         id: "runx.skill.profile.invalid",
         severity: "error",
         title: "Skill execution profile is invalid",
-        message: error instanceof Error ? error.message : String(error),
+        message: errorMessage(error),
         target: {
           kind: "skill",
           ref: skillName,

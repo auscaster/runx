@@ -2,7 +2,7 @@ import { parseDocument } from "yaml";
 
 import { validateGraphDocument, type ExecutionGraph } from "./graph.js";
 import { GOVERNED_DISPOSITIONS, type ExecutionSemantics } from "../receipts/index.js";
-import { isRecord } from "../util/types.js";
+import { errorMessage, isRecord } from "../util/types.js";
 
 export const parserPackage = "@runxhq/core/parser";
 
@@ -276,7 +276,7 @@ export function parseToolManifestJson(json: string): RawToolManifestIR {
     parsed = JSON.parse(json);
   } catch (error) {
     throw new SkillParseError(
-      `Tool manifest JSON is invalid: ${error instanceof Error ? error.message : String(error)}`,
+      `Tool manifest JSON is invalid: ${errorMessage(error)}`,
       { cause: error },
     );
   }

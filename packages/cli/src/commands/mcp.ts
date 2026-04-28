@@ -7,7 +7,7 @@ import {
   type SkillInput,
 } from "@runxhq/core/parser";
 import type { RegistryStore } from "@runxhq/core/registry";
-import { asRecord } from "@runxhq/core/util";
+import { asRecord, errorMessage } from "@runxhq/core/util";
 import {
   resolveSkillRunner,
   readPendingSkillPath,
@@ -193,7 +193,7 @@ export async function handleMcpServeCommand(
         return errorResponse(
           request.id,
           -32000,
-          error instanceof Error ? error.message : String(error),
+          errorMessage(error),
         );
       }
     }

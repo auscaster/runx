@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { asRecord, isPlainRecord as isRecord } from "@runxhq/core/util";
+import { asRecord, errorMessage, isPlainRecord as isRecord } from "@runxhq/core/util";
 
 export { asRecord, isRecord };
 
@@ -24,7 +24,7 @@ export function parseJsonValue(value: string, label: string): unknown {
     return JSON.parse(value) as unknown;
   } catch (error) {
     throw new Error(
-      `${label} must be valid JSON. ${error instanceof Error ? error.message : String(error)}`,
+      `${label} must be valid JSON. ${errorMessage(error)}`,
       { cause: error },
     );
   }

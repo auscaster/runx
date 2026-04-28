@@ -8,6 +8,7 @@ import {
   type ArtifactEnvelope,
 } from "@runxhq/core/artifacts";
 import { createFileKnowledgeStore } from "@runxhq/core/knowledge";
+import { errorMessage } from "@runxhq/core/util";
 import { resolveRunxKnowledgeDir } from "@runxhq/core/config";
 import type { PostRunReflectPolicy } from "@runxhq/core/parser";
 import type { LocalReceipt } from "@runxhq/core/receipts";
@@ -117,7 +118,7 @@ export async function projectReflectIfEnabled(options: ReflectProjectionOptions)
       message: "Post-run reflect projection failed; continuing with the persisted receipt.",
       data: {
         receiptId: options.receipt.id,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(error),
       },
     });
   }
