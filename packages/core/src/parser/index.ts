@@ -199,15 +199,15 @@ export interface ValidateSkillOptions {
 }
 
 export class SkillParseError extends Error {
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "SkillParseError";
   }
 }
 
 export class SkillValidationError extends Error {
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "SkillValidationError";
   }
 }
@@ -275,7 +275,10 @@ export function parseToolManifestJson(json: string): RawToolManifestIR {
   try {
     parsed = JSON.parse(json);
   } catch (error) {
-    throw new SkillParseError(`Tool manifest JSON is invalid: ${error instanceof Error ? error.message : String(error)}`);
+    throw new SkillParseError(
+      `Tool manifest JSON is invalid: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
   }
 
   if (!isRecord(parsed)) {

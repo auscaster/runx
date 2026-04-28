@@ -142,6 +142,7 @@ async function tryLoadKeyPair(privatePath: string, publicPath: string, retries =
     }
     throw new Error(
       `runx signing key unreadable at ${privatePath}: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
     );
   }
 }

@@ -322,7 +322,10 @@ async function loadOptionalJsonFile<T>(filePath: string): Promise<T> {
   try {
     parsed = JSON.parse(contents);
   } catch (error) {
-    throw new Error(`${filePath} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `${filePath} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
   }
   if (!isRecord(parsed)) {
     throw new Error(`${filePath} must contain a JSON object.`);

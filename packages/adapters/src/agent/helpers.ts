@@ -23,7 +23,10 @@ export function parseJsonValue(value: string, label: string): unknown {
   try {
     return JSON.parse(value) as unknown;
   } catch (error) {
-    throw new Error(`${label} must be valid JSON. ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `${label} must be valid JSON. ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
   }
 }
 

@@ -283,6 +283,7 @@ function loadOfficialSkillLock(): readonly OfficialSkillLockEntry[] {
   } catch (error) {
     throw new Error(
       `Official skills lock file is missing at ${lockUrl.href}. The CLI install may be incomplete; reinstall to restore it. (${error instanceof Error ? error.message : String(error)})`,
+      { cause: error },
     );
   }
   let parsed: unknown;
@@ -291,6 +292,7 @@ function loadOfficialSkillLock(): readonly OfficialSkillLockEntry[] {
   } catch (error) {
     throw new Error(
       `Official skills lock file at ${lockUrl.href} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
     );
   }
   if (!Array.isArray(parsed)) {
