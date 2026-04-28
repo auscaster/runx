@@ -41,16 +41,19 @@ export async function loadOrCreateLocalKey(runxHome = defaultRunxHome()): Promis
     return loaded;
   }
 
+  await mkdir(keyDir, { recursive: true });
+  const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+  const privatePem = privateKey.export({ format: "pem", type: "pkcs8" }).toString();
+  const publicPem = publicKey.export({ format: "pem", type: "spki" }).toString();
+
+  // Serialize through the private key's atomic creation. The earlier
+  // implementation issued both writes in parallel under flag: "wx", which
+  // could leave the directory with a private file from one process and a
+  // public file from another when two callers initialised a fresh runxHome
+  // concurrently. The first process to win the private write owns the pair;
+  // losers hit EEXIST, abandon their generated keys, and load the winner's.
   try {
-    await mkdir(keyDir, { recursive: true });
-    const { privateKey, publicKey } = generateKeyPairSync("ed25519");
-    const privatePem = privateKey.export({ format: "pem", type: "pkcs8" }).toString();
-    const publicPem = publicKey.export({ format: "pem", type: "spki" }).toString();
-    await Promise.all([
-      writeFile(privateKeyPath, privatePem, { flag: "wx", mode: 0o600 }),
-      writeFile(publicKeyPath, publicPem, { flag: "wx", mode: 0o644 }),
-    ]);
-    return keyPairFromPem(privatePem, publicPem);
+    await writeFile(privateKeyPath, privatePem, { flag: "wx", mode: 0o600 });
   } catch (writeError: unknown) {
     if (isNodeError(writeError) && writeError.code === "EEXIST") {
       const retried = await tryLoadKeyPair(privateKeyPath, publicKeyPath);
@@ -60,8 +63,28 @@ export async function loadOrCreateLocalKey(runxHome = defaultRunxHome()): Promis
     }
     throw new Error(
       `runx signing key creation failed at ${privateKeyPath}: ${errorMessage(writeError)}`,
+      { cause: writeError },
     );
   }
+
+  try {
+    await writeFile(publicKeyPath, publicPem, { flag: "wx", mode: 0o644 });
+  } catch (writeError: unknown) {
+    // We won the private write, so the on-disk public must match this
+    // private. Overwrite any stale public file (e.g. from an earlier crashed
+    // run that wrote public but not private). flag: "wx" would refuse the
+    // overwrite; default writeFile truncates and replaces.
+    if (isNodeError(writeError) && writeError.code === "EEXIST") {
+      await writeFile(publicKeyPath, publicPem, { mode: 0o644 });
+    } else {
+      throw new Error(
+        `runx signing key creation failed at ${publicKeyPath}: ${errorMessage(writeError)}`,
+        { cause: writeError },
+      );
+    }
+  }
+
+  return keyPairFromPem(privatePem, publicPem);
 }
 
 export async function loadLocalPublicKey(

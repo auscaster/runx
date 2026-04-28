@@ -154,38 +154,10 @@ async function writePackDist({ directory, dist, compiledPackageRoot, compiledEnt
  * import compiled files) never observe a half-built dist tree.
  */
 async function buildDistAtomically({ dist, populate }) {
-  const staging = `${dist}.staging-${process.pid}-${Date.now()}`;
-  const previous = `${dist}.previous-${process.pid}-${Date.now()}`;
-  await rm(staging, { recursive: true, force: true });
-  await mkdir(staging, { recursive: true });
-  try {
+  await replaceTreeAtomically(dist, async (staging) => {
+    await mkdir(staging, { recursive: true });
     await populate(staging);
-  } catch (error) {
-    await rm(staging, { recursive: true, force: true }).catch(() => {});
-    throw error;
-  }
-  let renamedAway = false;
-  try {
-    await rename(dist, previous);
-    renamedAway = true;
-  } catch (error) {
-    if (!error || error.code !== "ENOENT") {
-      await rm(staging, { recursive: true, force: true }).catch(() => {});
-      throw error;
-    }
-  }
-  try {
-    await rename(staging, dist);
-  } catch (error) {
-    if (renamedAway) {
-      await rename(previous, dist).catch(() => {});
-    }
-    await rm(staging, { recursive: true, force: true }).catch(() => {});
-    throw error;
-  }
-  if (renamedAway) {
-    await rm(previous, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }).catch(() => {});
-  }
+  });
 }
 
 async function syncCliAssets(directory) {
@@ -245,13 +217,18 @@ async function syncCliTools(directory) {
   const source = path.join(workspaceRoot, "tools");
   const target = path.join(directory, "tools");
   const compiledTarget = path.join(directory, "dist", "tools");
-  await rm(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
-  await rm(compiledTarget, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
-  if (await exists(source)) {
-    await cp(source, target, { recursive: true });
-    await copyCliToolRuntimeTree(source, compiledTarget);
+  if (!(await exists(source))) {
+    await rm(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    await rm(compiledTarget, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    return;
   }
-  await stripSourceMaps(compiledTarget);
+  await replaceTreeAtomically(target, async (staging) => {
+    await cp(source, staging, { recursive: true });
+  });
+  await replaceTreeAtomically(compiledTarget, async (staging) => {
+    await copyCliToolRuntimeTree(source, staging);
+    await stripSourceMaps(staging);
+  });
 }
 
 async function copyCliToolRuntimeTree(sourceRoot, targetRoot) {
@@ -308,14 +285,54 @@ async function syncCliThreadAdapter(directory) {
 async function syncCliSkillRuntimeAssets(directory) {
   const source = path.join(workspaceRoot, "skills");
   const target = path.join(directory, "skills");
-  await rm(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   if (!(await exists(source))) {
+    await rm(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
     return;
   }
-  await copyFilteredTree(source, target, (filePath) => {
-    const base = path.basename(filePath);
-    return base !== "SKILL.md" && base !== "X.yaml";
+  await replaceTreeAtomically(target, async (staging) => {
+    await copyFilteredTree(source, staging, (filePath) => {
+      const base = path.basename(filePath);
+      return base !== "SKILL.md" && base !== "X.yaml";
+    });
   });
+}
+
+/**
+ * Populate `target` via a sibling staging directory then atomic-rename it
+ * into place, so concurrent readers never observe the rm-then-cp window.
+ */
+async function replaceTreeAtomically(target, populate) {
+  const staging = `${target}.staging-${process.pid}-${Date.now()}`;
+  const previous = `${target}.previous-${process.pid}-${Date.now()}`;
+  await rm(staging, { recursive: true, force: true });
+  try {
+    await populate(staging);
+  } catch (error) {
+    await rm(staging, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
+  let renamedAway = false;
+  try {
+    await rename(target, previous);
+    renamedAway = true;
+  } catch (error) {
+    if (!error || error.code !== "ENOENT") {
+      await rm(staging, { recursive: true, force: true }).catch(() => {});
+      throw error;
+    }
+  }
+  try {
+    await rename(staging, target);
+  } catch (error) {
+    if (renamedAway) {
+      await rename(previous, target).catch(() => {});
+    }
+    await rm(staging, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
+  if (renamedAway) {
+    await rm(previous, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }).catch(() => {});
+  }
 }
 
 async function syncOfficialSkillLock(directory) {
