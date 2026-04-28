@@ -616,7 +616,7 @@ Read note.txt and produce a grounded summary.
       tool: "fs.read",
       status: "success",
     });
-    const receipts = await listLocalReceipts(path.join(receiptDir, ".runx", "receipts"));
+    const receipts = await listLocalReceipts(receiptDir);
     const toolReceipt = receipts.find((receipt) =>
       receipt.kind === "skill_execution" && receipt.source_type === "cli-tool"
     );

@@ -1,5 +1,10 @@
 import path from "node:path";
 
+import { resolveRunxGlobalHomeDir } from "@runxhq/core/config";
+
 export function defaultReceiptDir(env: NodeJS.ProcessEnv | undefined): string {
-  return path.resolve(env?.RUNX_RECEIPT_DIR ?? env?.INIT_CWD ?? process.cwd(), ".runx", "receipts");
+  if (env?.RUNX_RECEIPT_DIR) {
+    return path.resolve(env.RUNX_RECEIPT_DIR);
+  }
+  return path.join(resolveRunxGlobalHomeDir(env ?? {}), "receipts");
 }

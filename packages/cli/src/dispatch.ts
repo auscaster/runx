@@ -24,6 +24,7 @@ import {
   type RegistryStore,
 } from "@runxhq/core/registry";
 import {
+  defaultReceiptDir,
   installLocalSkill,
   readPendingRunState,
   readPendingSkillPath,
@@ -609,11 +610,7 @@ function resolveKnowledgeDir(env: NodeJS.ProcessEnv): string {
 }
 
 function resolveDefaultReceiptDir(env: NodeJS.ProcessEnv): string {
-  return path.resolve(
-    env.RUNX_RECEIPT_DIR ?? env.INIT_CWD ?? env.RUNX_CWD ?? process.cwd(),
-    ".runx",
-    "receipts",
-  );
+  return defaultReceiptDir(env);
 }
 
 async function resolveResumeSkillPath(

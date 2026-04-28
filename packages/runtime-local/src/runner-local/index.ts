@@ -98,6 +98,7 @@ import {
 import type { GraphStepGovernance } from "./graph-governance.js";
 import { readResumedSelectedRunner, resolveInputs } from "./inputs.js";
 import { defaultReceiptDir } from "./receipt-paths.js";
+export { defaultReceiptDir } from "./receipt-paths.js";
 import {
   approvalReceiptMetadata,
   approveSandboxEscalationIfNeeded,
