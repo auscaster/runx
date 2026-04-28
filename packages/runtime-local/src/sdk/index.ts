@@ -552,13 +552,13 @@ function dedupeToolSearchResults(results: readonly ToolCatalogSearchResult[]): r
   return Array.from(deduped.values());
 }
 
-interface RunxInstallState {
+export interface RunxInstallState {
   readonly version: 1;
   readonly installation_id: string;
   readonly created_at: string;
 }
 
-async function ensureRunxInstallState(
+export async function ensureRunxInstallState(
   globalHomeDir: string,
   now: () => string = () => new Date().toISOString(),
 ): Promise<{ readonly state: RunxInstallState; readonly created: boolean }> {
@@ -582,7 +582,7 @@ async function ensureRunxInstallState(
   };
 }
 
-async function readRunxInstallState(globalHomeDir: string): Promise<RunxInstallState | undefined> {
+export async function readRunxInstallState(globalHomeDir: string): Promise<RunxInstallState | undefined> {
   const installPath = path.join(globalHomeDir, "install.json");
   let contents: string;
   try {
