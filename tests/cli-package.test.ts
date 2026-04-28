@@ -13,7 +13,26 @@ const cliBinEntry = path.join(cliPackageRoot, "bin", "runx.js");
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 
-describe("Node CLI package", () => {
+// This file rebuilds the workspace dist in beforeAll and renames
+// cli/dist/index.js mid-test. Both mutate state that other test files
+// concurrently spawn child processes against; running them in the same
+// vitest invocation produces sporadic ENOENT/signature-mismatch flakes.
+// scripts/test-workspace.mjs handles segregation by setting
+// RUNX_VITEST_BATCH=cli-package for a dedicated second pass; plain
+// `pnpm exec vitest run` skips this file with describe.skip and prints a
+// hint. Targeted runs can override via RUNX_VITEST_BATCH=cli-package.
+const isCliPackageBatch = process.env.RUNX_VITEST_BATCH === "cli-package";
+const describeIfBatched = isCliPackageBatch ? describe : describe.skip;
+
+if (!isCliPackageBatch) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    "[cli-package.test.ts] skipped: rebuild + dist mutation race with concurrent tests. " +
+    "Run via `pnpm test` or set RUNX_VITEST_BATCH=cli-package to include this file.",
+  );
+}
+
+describeIfBatched("Node CLI package", () => {
   beforeAll(async () => {
     await execFileAsync(pnpm, ["build"], {
       cwd: workspaceRoot,

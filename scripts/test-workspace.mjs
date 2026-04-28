@@ -12,20 +12,25 @@ const forwardedArgsWithoutCliPackageTest = forwardedArgs.filter((arg) => !isCliP
 if (forwardedArgs.length > 0) {
   if (cliPackageTestTargets.length > 0 && hasExplicitTarget(forwardedArgsWithoutCliPackageTest)) {
     await runVitest(["run", ...forwardedArgsWithoutCliPackageTest]);
-    await runVitest(["run", ...sharedOptions(forwardedArgsWithoutCliPackageTest), ...cliPackageTestTargets]);
+    await runVitest(["run", ...sharedOptions(forwardedArgsWithoutCliPackageTest), ...cliPackageTestTargets], {
+      RUNX_VITEST_BATCH: "cli-package",
+    });
+  } else if (cliPackageTestTargets.length > 0) {
+    await runVitest(["run", ...forwardedArgs], { RUNX_VITEST_BATCH: "cli-package" });
   } else {
     await runVitest(["run", ...forwardedArgs]);
   }
 } else {
   await runVitest(["run", "--exclude", "tests/cli-package.test.ts"]);
-  await runVitest(["run", "tests/cli-package.test.ts"]);
+  await runVitest(["run", "tests/cli-package.test.ts"], { RUNX_VITEST_BATCH: "cli-package" });
 }
 
-async function runVitest(args) {
+async function runVitest(args, extraEnv = {}) {
   await new Promise((resolve, reject) => {
     const child = spawn(pnpm, ["exec", "vitest", ...args], {
       cwd: workspaceRoot,
       stdio: "inherit",
+      env: { ...process.env, ...extraEnv },
     });
     child.on("error", reject);
     child.on("exit", (code) => {
