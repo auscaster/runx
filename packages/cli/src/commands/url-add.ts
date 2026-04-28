@@ -68,18 +68,41 @@ export async function publishUrlSkill(options: UrlAddOptions): Promise<UrlAddInd
   });
   const text = await response.text();
   if (!response.ok) {
-    let payload: UrlAddErrorPayload | undefined;
+    const httpFailure = (): UrlAddCliError => new UrlAddCliError({
+      code: "http_error",
+      detail: `runx-api returned ${response.status} ${response.statusText}: ${text.slice(0, 200)}`,
+    });
+    let payload: unknown;
     try {
-      payload = JSON.parse(text) as UrlAddErrorPayload;
+      payload = JSON.parse(text);
     } catch {
-      throw new UrlAddCliError({
-        code: "http_error",
-        detail: `runx-api returned ${response.status} ${response.statusText}: ${text.slice(0, 200)}`,
-      });
+      throw httpFailure();
     }
-    throw new UrlAddCliError(payload.error);
+    if (
+      typeof payload !== "object"
+      || payload === null
+      || typeof (payload as { error?: unknown }).error !== "object"
+      || (payload as { error: { code?: unknown } }).error === null
+      || typeof (payload as { error: { code?: unknown } }).error.code !== "string"
+      || typeof (payload as { error: { detail?: unknown } }).error.detail !== "string"
+    ) {
+      throw httpFailure();
+    }
+    throw new UrlAddCliError((payload as UrlAddErrorPayload).error);
   }
-  return JSON.parse(text) as UrlAddIndexResult;
+  const parsed: unknown = JSON.parse(text);
+  if (
+    typeof parsed !== "object"
+    || parsed === null
+    || (parsed as { status?: unknown }).status !== "success"
+    || !Array.isArray((parsed as { listings?: unknown }).listings)
+  ) {
+    throw new UrlAddCliError({
+      code: "invalid_response",
+      detail: `runx-api returned an unexpected payload: ${text.slice(0, 200)}`,
+    });
+  }
+  return parsed as UrlAddIndexResult;
 }
 
 export function renderUrlAddResult(result: UrlAddIndexResult): string {

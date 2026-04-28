@@ -118,6 +118,26 @@ describe("publishUrlSkill", () => {
       }),
     ).rejects.toBeInstanceOf(UrlAddCliError);
   });
+
+  it("falls back to a generic http_error when the error body is JSON but not the expected shape", async () => {
+    await expect(
+      publishUrlSkill({
+        repoUrl: "github.com/spam/repo",
+        apiBaseUrl: "https://api.runx.test",
+        fetcher: async () => new Response("null", { status: 500 }),
+      }),
+    ).rejects.toMatchObject({ payload: { code: "http_error" } });
+  });
+
+  it("throws invalid_response when a 200 returns a non-success payload", async () => {
+    await expect(
+      publishUrlSkill({
+        repoUrl: "github.com/kam/skills",
+        apiBaseUrl: "https://api.runx.test",
+        fetcher: async () => new Response("null", { status: 200 }),
+      }),
+    ).rejects.toMatchObject({ payload: { code: "invalid_response" } });
+  });
 });
 
 describe("renderUrlAddResult", () => {
