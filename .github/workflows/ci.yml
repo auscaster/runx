@@ -1,0 +1,50 @@
+name: ci
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: 10.18.2
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Restore check caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.cache/tsc
+            .build
+            dist
+          key: ${{ runner.os }}-oss-checks-${{ hashFiles('pnpm-lock.yaml', 'package.json', 'tsconfig*.json', 'packages/**/tsconfig.json', 'packages/**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-oss-checks-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify
+        run: pnpm verify:fast
