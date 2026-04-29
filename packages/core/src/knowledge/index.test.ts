@@ -308,7 +308,7 @@ describe("thread contract", () => {
     ).toThrow(/thread_locator/);
   });
 
-  it("rejects nested legacy subject payloads in the thread contract", () => {
+  it("rejects nested subject payloads in the thread contract", () => {
     expect(
       () =>
         validateThread({

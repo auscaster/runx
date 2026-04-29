@@ -24,7 +24,7 @@ describe("scafld skill contract", () => {
     expect(runner?.source.args).toEqual(["./run.mjs"]);
     expect(wrapper).toContain("const result = spawnSync(scafld, args");
     expect(wrapper).toContain('args.push("--json")');
-    expect(wrapper).toContain("const command = ({ spec: \"new\", execute: \"exec\" })[requested] || requested;");
+    expect(wrapper).toContain("const command = String(inputs.command || \"\");");
     expect(wrapper).toContain('"summary"');
     expect(wrapper).toContain('"checks"');
     expect(wrapper).toContain('"pr-body"');

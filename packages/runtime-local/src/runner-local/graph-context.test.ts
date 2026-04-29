@@ -45,8 +45,8 @@ function makeOutput(): GraphStepOutput {
 }
 
 describe("resolveOutputPath", () => {
-  it("preserves legacy field access for packet-wrapped artifacts", () => {
-    const files = resolveOutputPath(makeOutput(), "file_bundle_write.data.files");
+  it("requires explicit packet traversal", () => {
+    const files = resolveOutputPath(makeOutput(), "file_bundle_write.data.data.files");
 
     expect(files).toEqual([
       {
@@ -55,13 +55,9 @@ describe("resolveOutputPath", () => {
     ]);
   });
 
-  it("still supports explicit packet traversal", () => {
-    const files = resolveOutputPath(makeOutput(), "file_bundle_write.data.data.files");
-
-    expect(files).toEqual([
-      {
-        path: "docs/index.md",
-      },
-    ]);
+  it("rejects implicit packet payload traversal", () => {
+    expect(() => resolveOutputPath(makeOutput(), "file_bundle_write.data.files")).toThrow(
+      "Context output path 'file_bundle_write.data.files' was not produced by the source step.",
+    );
   });
 });

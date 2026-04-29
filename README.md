@@ -126,7 +126,7 @@ command, and there is no privileged `runx docs ...` path inside the engine.
 runx new docs-demo
 ```
 
-For cold-start adoption, the thin alias is:
+For cold-start adoption, the package entrypoint is:
 
 ```bash
 npm create @runxhq/skill@latest docs-demo

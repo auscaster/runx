@@ -15,11 +15,6 @@
       "required": false,
       "description": "Primary scafld task id to inspect."
     },
-    "taskId": {
-      "type": "string",
-      "required": false,
-      "description": "Camel-case alias for task_id."
-    },
     "fixture": {
       "type": "string",
       "required": false,

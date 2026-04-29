@@ -300,7 +300,7 @@ runners:
             - scafld:spec:write
           mutation: true
           inputs:
-            command: spec
+            command: new
         - id: author-spec
           label: draft spec
           run:
@@ -440,7 +440,7 @@ runners:
           scopes:
             - spec.read_declared_files
           context:
-            spec_contents: read-active-spec.file_read.data.contents
+            spec_contents: read-active-spec.file_read.data.data.contents
         - id: author-fix
           label: draft fix
           run:
@@ -482,8 +482,8 @@ runners:
             - git.status
           context:
             spec_path: scafld-start.result.transition.to
-            spec_file: read-active-spec.file_read.data
-            spec_contents: read-active-spec.file_read.data.contents
+            spec_file: read-active-spec.file_read.data.data
+            spec_contents: read-active-spec.file_read.data.data.contents
             branch_binding: scafld-branch.result.origin.git
             sync_state: scafld-branch.result.sync
             declared_file_context: read-declared-files.declared_file_context.data
@@ -507,7 +507,7 @@ runners:
             - scafld:exec:write
           mutation: true
           inputs:
-            command: execute
+            command: exec
         - id: scafld-status
           label: inspect live lane state
           skill: ../scafld
@@ -553,10 +553,10 @@ runners:
             review_file: scafld-review-open.result.review_file
             review_prompt: scafld-review-open.result.review_prompt
             review_required_sections: scafld-review-open.result.required_sections
-            review_file_contents: read-review-template.file_read.data.contents
+            review_file_contents: read-review-template.file_read.data.data.contents
             fix_bundle: author-fix.fix_bundle.data
-            written_files: write-fix.file_bundle_write.data.files
-            spec_contents: read-active-spec.file_read.data.contents
+            written_files: write-fix.file_bundle_write.data.data.files
+            spec_contents: read-active-spec.file_read.data.data.contents
             status_snapshot: scafld-status.result
           instructions: >
             Fill the existing scafld review artifact requested by review_prompt.

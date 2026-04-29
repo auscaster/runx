@@ -127,43 +127,6 @@ runners:
     }
   });
 
-  it("normalizes legacy placeholder publisher records from disk", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-registry-legacy-"));
-
-    try {
-      const skillDir = path.join(tempDir, "nilstate", "legacy");
-      await mkdir(skillDir, { recursive: true });
-      await writeFile(
-        path.join(skillDir, "upstream-abc123.json"),
-        `${JSON.stringify({
-          skill_id: "nilstate/legacy",
-          owner: "nilstate",
-          name: "legacy",
-          version: "upstream-abc123",
-          digest: "sha256:legacy",
-          markdown: "---\nname: legacy\n---\nLegacy fixture.",
-          source_type: "agent",
-          runner_names: ["agent"],
-          required_scopes: [],
-          tags: [],
-          publisher: { type: "placeholder", id: "nilstate" },
-          created_at: "2026-04-10T00:00:00.000Z",
-        }, null, 2)}\n`,
-      );
-
-      const store = createFileRegistryStore(tempDir);
-      await expect(store.getVersion("nilstate/legacy", "upstream-abc123")).resolves.toMatchObject({
-        trust_tier: "community",
-        publisher: {
-          kind: "publisher",
-          id: "nilstate",
-        },
-      });
-    } finally {
-      await rm(tempDir, { recursive: true, force: true });
-    }
-  });
-
   it("derives a new default version when the execution profile changes", async () => {
     const markdown = `---
 name: profiled-skill
@@ -235,7 +198,7 @@ runners:
         createdAt: "2026-04-10T00:00:00.000Z",
         profileDocument,
       });
-      const legacyRecord = {
+      const staleRecord = {
         ...derived,
         tags: [],
         created_at: "2026-04-01T00:00:00.000Z",
@@ -243,7 +206,7 @@ runners:
       await mkdir(path.join(tempDir, "nilstate", "upstream-tagged"), { recursive: true });
       await writeFile(
         path.join(tempDir, "nilstate", "upstream-tagged", "upstream-abc123.json"),
-        `${JSON.stringify(legacyRecord, null, 2)}\n`,
+        `${JSON.stringify(staleRecord, null, 2)}\n`,
       );
 
       const refreshed = await createRegistrySkillVersion(store, markdown, {
@@ -265,7 +228,7 @@ runners:
     }
   });
 
-  it("keeps portable registry skills compatible without a execution profile", async () => {
+  it("resolves portable registry skills without an execution profile", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-registry-portable-"));
 
     try {

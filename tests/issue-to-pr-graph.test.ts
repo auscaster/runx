@@ -137,7 +137,7 @@ describe("issue-to-PR composite skill", () => {
     expect(graph.steps.find((step) => step.id === "read-declared-files")).toMatchObject({
       tool: "spec.read_declared_files",
       context: {
-        spec_contents: "read-active-spec.file_read.data.contents",
+        spec_contents: "read-active-spec.file_read.data.data.contents",
       },
     });
     expect(graph.steps.find((step) => step.id === "write-fix")).toMatchObject({
@@ -149,8 +149,8 @@ describe("issue-to-PR composite skill", () => {
     expect(graph.steps.find((step) => step.id === "author-fix")).toMatchObject({
       context: {
         spec_path: "scafld-start.result.transition.to",
-        spec_file: "read-active-spec.file_read.data",
-        spec_contents: "read-active-spec.file_read.data.contents",
+        spec_file: "read-active-spec.file_read.data.data",
+        spec_contents: "read-active-spec.file_read.data.data.contents",
         branch_binding: "scafld-branch.result.origin.git",
         sync_state: "scafld-branch.result.sync",
         declared_file_context: "read-declared-files.declared_file_context.data",
@@ -183,10 +183,10 @@ describe("issue-to-PR composite skill", () => {
         review_file: "scafld-review-open.result.review_file",
         review_prompt: "scafld-review-open.result.review_prompt",
         review_required_sections: "scafld-review-open.result.required_sections",
-        review_file_contents: "read-review-template.file_read.data.contents",
+        review_file_contents: "read-review-template.file_read.data.data.contents",
         fix_bundle: "author-fix.fix_bundle.data",
-        written_files: "write-fix.file_bundle_write.data.files",
-        spec_contents: "read-active-spec.file_read.data.contents",
+        written_files: "write-fix.file_bundle_write.data.data.files",
+        spec_contents: "read-active-spec.file_read.data.data.contents",
         status_snapshot: "scafld-status.result",
       },
     });

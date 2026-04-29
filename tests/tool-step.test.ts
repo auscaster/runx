@@ -36,7 +36,7 @@ steps:
       - fs.read
       - git.status
     context:
-      note: read_note.file_read.data
+      note: read_note.file_read.data.data
     artifacts:
       named_emits:
         summary: summary
@@ -54,7 +54,7 @@ steps:
           expect.objectContaining({
             input: "note",
             from_step: "read_note",
-            output: "file_read.data",
+            output: "file_read.data.data",
           }),
         ]);
         return {
@@ -415,7 +415,7 @@ steps:
     inputs:
       repo_root: ${JSON.stringify(tempDir)}
     context:
-      spec_contents: read_spec.file_read.data.contents
+      spec_contents: read_spec.file_read.data.data.contents
 `),
     );
 

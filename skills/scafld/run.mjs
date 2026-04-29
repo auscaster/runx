@@ -11,9 +11,8 @@ const cwd = path.resolve(String(
     || process.env.RUNX_CWD
     || process.cwd()
 ));
-const taskId = String(inputs.task_id || inputs.taskId || "");
-const requested = String(inputs.command || inputs.mode || "");
-const command = ({ spec: "new", execute: "exec" })[requested] || requested;
+const taskId = String(inputs.task_id || "");
+const command = String(inputs.command || "");
 const jsonCommands = new Set([
   "init",
   "new",

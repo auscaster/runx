@@ -15,7 +15,7 @@ Before the first automated release, add `runx-py` as a trusted publisher on PyPI
    - Environment name: *(leave blank)*
 4. Save.
 
-With trusted publishing configured, no PyPI API token is stored on GitHub. Any legacy account-scoped token used for manual uploads should be revoked or downscoped to project-only.
+With trusted publishing configured, no PyPI API token is stored on GitHub. Any previous account-scoped token used for manual uploads should be revoked or downscoped to project-only.
 
 ## Cutting a release
 

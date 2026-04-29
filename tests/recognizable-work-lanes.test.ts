@@ -28,7 +28,7 @@ describe("recognizable work lanes", () => {
                 triage_report: {
                   category: "docs",
                   severity: "low",
-                  summary: "The public docs still route users through the compatibility alias instead of the canonical lane.",
+                  summary: "The public docs still route users through the removed lane name instead of the canonical lane.",
                   suggested_reply: "We should update the docs to point users at issue-to-pr as the canonical lane.",
                   recommended_lane: "issue-to-pr",
                   rationale: "The request is a bounded docs-only fix in one repo.",

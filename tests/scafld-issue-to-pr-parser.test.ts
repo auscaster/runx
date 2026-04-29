@@ -103,12 +103,12 @@ describe("scafld issue-to-PR skill contract", () => {
     expect(
       Object.fromEntries(graph.steps.filter((step) => step.inputs.command !== undefined).map((step) => [step.id, step.inputs.command])),
     ).toEqual({
-      "scafld-new": "spec",
+      "scafld-new": "new",
       "scafld-validate": "validate",
       "scafld-approve": "approve",
       "scafld-start": "start",
       "scafld-branch": "branch",
-      "scafld-exec": "execute",
+      "scafld-exec": "exec",
       "scafld-status": "status",
       "scafld-audit": "audit",
       "scafld-review-open": "review",
@@ -179,9 +179,9 @@ describe("scafld issue-to-PR skill contract", () => {
         review_file: "scafld-review-open.result.review_file",
         review_prompt: "scafld-review-open.result.review_prompt",
         review_required_sections: "scafld-review-open.result.required_sections",
-        review_file_contents: "read-review-template.file_read.data.contents",
+        review_file_contents: "read-review-template.file_read.data.data.contents",
         fix_bundle: "author-fix.fix_bundle.data",
-        written_files: "write-fix.file_bundle_write.data.files",
+        written_files: "write-fix.file_bundle_write.data.data.files",
         status_snapshot: "scafld-status.result",
       },
     });

@@ -12,7 +12,6 @@ export default defineTool({
   description: "Capture the native `scafld checks --json` payload without treating a failing check as a tool failure.",
   inputs: {
     task_id: stringInput({ optional: true, description: "Primary scafld task id to inspect." }),
-    taskId: stringInput({ optional: true, description: "Camel-case alias for task_id." }),
     fixture: stringInput({ optional: true, description: "Optional fixture workspace root used during dev and harness execution." }),
     cwd: stringInput({ optional: true, description: "Optional working directory override for the scafld invocation." }),
     scafld_bin: stringInput({ optional: true, description: "Optional explicit scafld executable or path." }),
@@ -35,7 +34,7 @@ function runCaptureChecks({ inputs, env }) {
       process.cwd(),
     ),
   );
-  const taskId = firstNonEmptyString(inputs.task_id, inputs.taskId);
+  const taskId = firstNonEmptyString(inputs.task_id);
 
   if (!taskId) {
     throw new Error("task_id is required.");

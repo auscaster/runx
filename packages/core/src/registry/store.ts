@@ -200,7 +200,7 @@ export function normalizeRegistrySkillVersion(value: unknown): RegistrySkillVers
   }
   const owner = requireNonEmptyString(value.owner, "registry_version.owner");
   const createdAt = requireNonEmptyString(value.created_at, "registry_version.created_at");
-  const publisher = normalizeRegistryVersionPublisher(value.publisher, owner);
+  const publisher = normalizeRegistryVersionPublisher(value.publisher);
   const trustTier = normalizeRegistryVersionTrustTier(value.trust_tier);
   const sourceMetadata = validateRegistrySourceMetadata(value.source_metadata, "registry_version.source_metadata");
   const attestations = validateRegistryAttestations(value.attestations, "registry_version.attestations");
@@ -280,15 +280,7 @@ export function validateRegistryPublisher(value: unknown, label = "publisher"): 
   };
 }
 
-function normalizeRegistryVersionPublisher(value: unknown, owner: string): RegistryPublisher {
-  if (isRecord(value) && value.kind === undefined && value.type === "placeholder") {
-    return {
-      kind: "publisher",
-      id: optionalNonEmptyString(value.id, "registry_version.publisher.id") ?? owner,
-      handle: optionalNonEmptyString(value.handle, "registry_version.publisher.handle"),
-      display_name: optionalNonEmptyString(value.display_name, "registry_version.publisher.display_name"),
-    };
-  }
+function normalizeRegistryVersionPublisher(value: unknown): RegistryPublisher {
   return validateRegistryPublisher(value, "registry_version.publisher");
 }
 
@@ -439,5 +431,3 @@ function normalizeStringArray(value: unknown, label: string): readonly string[] 
   }
   return value.map((entry, index) => requireNonEmptyString(entry, `${label}[${index}]`));
 }
-
-

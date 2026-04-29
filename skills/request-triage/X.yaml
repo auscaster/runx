@@ -28,7 +28,7 @@ harness:
             triage_report:
               category: docs
               severity: low
-              summary: The docs are outdated and still point users at the compatibility alias instead of the canonical skill name.
+              summary: The docs are outdated and still point users at the removed skill name instead of the canonical skill name.
               suggested_reply: We'll update the public docs to point at issue-to-pr as the canonical command.
               recommended_lane: issue-to-pr
               rationale: The report is a bounded one-repo documentation fix with low risk.

@@ -6,7 +6,7 @@ const workspaceRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url))
 
 const sourceExtensions = new Set([".ts", ".tsx", ".mts", ".cts"]);
 const ignoredDirectoryNames = new Set(["node_modules", "dist", ".build", "coverage"]);
-const legacyCoreRuntimeSubpaths = [
+const removedCoreRuntimeSubpaths = [
   "@runxhq/core/runner-local",
   "@runxhq/core/harness",
   "@runxhq/core/sdk",
@@ -120,9 +120,9 @@ async function checkPackageExports() {
   const coreManifest = JSON.parse(await readFile(coreManifestPath, "utf8"));
   const runtimeLocalManifest = JSON.parse(await readFile(runtimeLocalManifestPath, "utf8"));
 
-  for (const legacySubpath of ["./runner-local", "./harness", "./sdk", "./mcp", "./tool-catalogs"]) {
-    if (Object.hasOwn(coreManifest.exports ?? {}, legacySubpath)) {
-      findings.push(`packages/core/package.json still exports ${legacySubpath}; use @runxhq/runtime-local instead.`);
+  for (const removedSubpath of ["./runner-local", "./harness", "./sdk", "./mcp", "./tool-catalogs"]) {
+    if (Object.hasOwn(coreManifest.exports ?? {}, removedSubpath)) {
+      findings.push(`packages/core/package.json still exports ${removedSubpath}; use @runxhq/runtime-local instead.`);
     }
   }
 
@@ -150,7 +150,7 @@ async function checkSourceFile(filePath) {
   const packageSource = getPackageSource(rel);
 
   for (const specifier of specifiers) {
-    if (legacyCoreRuntimeSubpaths.some((prefix) => specifier === prefix || specifier.startsWith(`${prefix}/`))) {
+    if (removedCoreRuntimeSubpaths.some((prefix) => specifier === prefix || specifier.startsWith(`${prefix}/`))) {
       findings.push(`${rel} imports removed ${specifier}; use @runxhq/runtime-local public paths.`);
     }
 

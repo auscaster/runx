@@ -175,12 +175,12 @@ mypy .                # Python
 
 ---
 
-## Legacy & Migrations
+## Removed APIs & Migrations
 
 **Hard rules:**
 - **Do NOT** add runtime fallbacks, dual-reads, or dual-writes when changing identifiers or APIs
 - When a key/schema is updated, **adopt the new scheme immediately**
-- Do not reference legacy keys in hot paths
+- Do not reference removed keys in hot paths
 - If migration is required, use a **one-off script** executed out of band
 - Keep app code free of migration branches
 - **Migrations must be idempotent** and safe to re-run
@@ -273,7 +273,7 @@ docs(conventions): add git commit guidelines
 
 **Forbidden:**
 - Invent behavior or requirements (ask instead)
-- Add legacy/fallback code paths
+- Add removed-key/fallback code paths
 - Silently change routing, auth, or persistence semantics
 - Derive behavior from implicit assumptions or hidden fallbacks
 - Place concerns in the wrong layer

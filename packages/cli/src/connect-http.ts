@@ -86,12 +86,12 @@ export function createHttpConnectService(options: HttpConnectServiceOptions): {
 
   return {
     list: async () =>
-      await requestJson<HttpConnectListResponse>(fetchImpl, `${baseUrl}/v1/connect/grants`, {
+      await requestJson<HttpConnectListResponse>(fetchImpl, `${baseUrl}/v1/grants`, {
         method: "GET",
         headers: authHeaders(options.accessToken),
       }),
     preprovision: async (request) => {
-      const started = await requestJson<HttpConnectStartResponse>(fetchImpl, `${baseUrl}/v1/connect/flows`, {
+      const started = await requestJson<HttpConnectStartResponse>(fetchImpl, `${baseUrl}/v1/connect/sessions`, {
         method: "POST",
         headers: authHeaders(options.accessToken),
         body: JSON.stringify(request),
@@ -122,7 +122,7 @@ export function createHttpConnectService(options: HttpConnectServiceOptions): {
       throw new Error(`Unsupported connect start status: ${String((started as { status?: unknown }).status)}`);
     },
     revoke: async (grantId) =>
-      await requestJson<HttpConnectRevokeResponse>(fetchImpl, `${baseUrl}/v1/connect/grants/${encodeURIComponent(grantId)}`, {
+      await requestJson<HttpConnectRevokeResponse>(fetchImpl, `${baseUrl}/v1/grants/${encodeURIComponent(grantId)}`, {
         method: "DELETE",
         headers: authHeaders(options.accessToken),
       }),
@@ -144,7 +144,7 @@ async function waitForConnectFlow(options: {
   while (true) {
     const polled = await requestJson<HttpConnectFlowResponse>(
       options.fetchImpl,
-      `${options.baseUrl}/v1/connect/flows/${encodeURIComponent(options.flowId)}`,
+      `${options.baseUrl}/v1/connect/sessions/${encodeURIComponent(options.flowId)}`,
       {
         method: "GET",
         headers: authHeaders(options.accessToken),
@@ -261,4 +261,3 @@ function safeJson(raw: string): unknown {
     return undefined;
   }
 }
-

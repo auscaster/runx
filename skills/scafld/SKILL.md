@@ -146,11 +146,10 @@ The spec file (`.ai/specs/.../<task-id>.yaml`) contains:
 
 ## Inputs
 
-- `command` (required): scafld command to run. Accepts: `init`, `new`/`spec`,
-  `approve`, `start`, `exec`/`execute`, `audit`, `review`, `complete`,
+- `command` (required): scafld command to run. Accepts: `init`, `new`,
+  `approve`, `start`, `exec`, `audit`, `review`, `complete`,
   `validate`, `status`, `fail`, `cancel`, `report`, `branch`, `sync`,
-  `summary`, `checks`, `pr-body`. Aliases: `spec` maps to `new`, `execute`
-  maps to `exec`.
+  `summary`, `checks`, `pr-body`.
 - `task_id`: scafld task id (required for all commands except `init`).
 - `fixture`: workspace root containing `.ai/`; used as scafld working directory.
 - `title`: title for `new` command (`-t` flag).

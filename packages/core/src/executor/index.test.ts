@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { validateAgentContextEnvelope } from "./index.js";
 
 describe("agent context envelope", () => {
-  it("rejects legacy context.voice_grammar aliases", () => {
+  it("rejects removed context.voice_grammar fields", () => {
     expect(() => validateAgentContextEnvelope({
       run_id: "rx_test",
       skill: "demo",
@@ -18,7 +18,7 @@ describe("agent context envelope", () => {
           root_path: "/tmp",
           path: "/tmp/VOICE.md",
           sha256: "abc123",
-          content: "legacy",
+          content: "removed",
         },
       },
       trust_boundary: "test",

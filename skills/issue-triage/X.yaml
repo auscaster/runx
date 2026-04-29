@@ -97,7 +97,7 @@ runners:
       operator_context:
         type: string
         required: false
-        description: "Compatibility alias for maintainer or operator context."
+        description: "Operator-supplied context for triage."
 
   respond:
     default: true
@@ -132,4 +132,4 @@ runners:
       operator_context:
         type: string
         required: false
-        description: "Compatibility alias for maintainer or operator context."
+        description: "Operator-supplied context for triage."

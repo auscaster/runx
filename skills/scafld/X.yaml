@@ -61,7 +61,7 @@ runners:
       command:
         type: string
         required: true
-        description: "Native scafld command to run: init, new/spec, approve, start, exec/execute, audit, review, complete, validate, status, fail, cancel, report, branch, sync, summary, checks, or pr-body."
+        description: "Native scafld command to run: init, new, approve, start, exec, audit, review, complete, validate, status, fail, cancel, report, branch, sync, summary, checks, or pr-body."
       task_id:
         type: string
         required: false

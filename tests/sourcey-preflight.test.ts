@@ -295,11 +295,8 @@ function unwrapPacketData(value: unknown): unknown {
   return current;
 }
 
-async function writeSourceyStub(stubPath: string, options: { captureEnv?: boolean } | string = {}): Promise<void> {
-  // Backwards-compat shim: prior signature took `envCapturePath: string`.
-  // We now derive paths from the stub's own directory so they survive
-  // the sandbox env-allowlist that strips test-only env vars.
-  const captureEnv = typeof options === "string" ? true : options.captureEnv === true;
+async function writeSourceyStub(stubPath: string, options: { captureEnv?: boolean } = {}): Promise<void> {
+  const captureEnv = options.captureEnv === true;
   const lines = [
     'import { mkdirSync, writeFileSync } from "node:fs";',
     'import { fileURLToPath } from "node:url";',

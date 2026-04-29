@@ -69,11 +69,6 @@ export function resolveOutputPath(output: GraphStepOutput, outputPath: string): 
       return value[key];
     }
 
-    const packetPayload = unwrapPacketPayload(value);
-    if (packetPayload && key in packetPayload) {
-      return packetPayload[key];
-    }
-
     throw new Error(`Context output path '${outputPath}' was not produced by the source step.`);
   }, record);
 }
@@ -95,11 +90,4 @@ function isArtifactEnvelopeValue(value: unknown): value is ArtifactEnvelope {
     && typeof (value as { meta?: { artifact_id?: unknown; run_id?: unknown } }).meta?.artifact_id === "string"
     && typeof (value as { meta?: { artifact_id?: unknown; run_id?: unknown } }).meta?.run_id === "string"
     && "data" in value;
-}
-
-function unwrapPacketPayload(value: Record<string, unknown>): Record<string, unknown> | undefined {
-  if (typeof value.schema !== "string") {
-    return undefined;
-  }
-  return isRecord(value.data) ? value.data : undefined;
 }

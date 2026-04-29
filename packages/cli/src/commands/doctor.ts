@@ -108,13 +108,13 @@ async function discoverToolDoctorDiagnostics(root: string): Promise<readonly Doc
         continue;
       }
       const toolDir = path.join(namespaceDir, toolEntry.name);
-      const legacyPath = path.join(toolDir, "tool.yaml");
-      if (existsSync(legacyPath)) {
-        const relativePath = toProjectPath(root, legacyPath);
+      const removedFormatPath = path.join(toolDir, "tool.yaml");
+      if (existsSync(removedFormatPath)) {
+        const relativePath = toProjectPath(root, removedFormatPath);
         diagnostics.push(createDoctorDiagnostic({
-          id: "runx.tool.manifest.legacy_format",
+          id: "runx.tool.manifest.removed_format",
           severity: "error",
-          title: "Legacy tool.yaml is no longer supported",
+          title: "tool.yaml is no longer supported",
           message: `Tool ${namespaceEntry.name}.${toolEntry.name} still uses tool.yaml. Runx resolves manifest.json only.`,
           target: {
             kind: "tool",
@@ -686,8 +686,8 @@ const DOCTOR_DIAGNOSTIC_EXPLANATIONS: Readonly<Record<string, {
   readonly explanation: string;
   readonly repair: string;
 }>> = {
-  "runx.tool.manifest.legacy_format": {
-    title: "Legacy tool.yaml is no longer supported",
+  "runx.tool.manifest.removed_format": {
+    title: "tool.yaml is no longer supported",
     severity: "error",
     explanation: "Runx v1 resolves tools from manifest.json generated or normalized by the authoring pipeline. A remaining tool.yaml means there are two potential sources of truth.",
     repair: "Run runx tool migrate <tool-dir>, review the generated manifest.json and run.mjs, then re-run runx doctor.",

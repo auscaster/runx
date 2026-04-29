@@ -15,7 +15,7 @@ const usageLines = [
   "",
   "Notes:",
   "  runx new is the canonical command.",
-  "  The create package is a thin cold-start alias over the same scaffolder.",
+  "  The create package is a cold-start entrypoint for the same scaffolder.",
 ];
 
 export function writeCreateSkillUsage(stream: Writable): void {

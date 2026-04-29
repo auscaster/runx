@@ -92,7 +92,7 @@ condition, action, and exit artifact.
   - `integration_checks`: cross-repo checks that must pass before the overall
     change set is considered done
   - `open_questions`
-- `orchestration_steps`: compatibility view of the plan as an ordered array.
+- `orchestration_steps`: canonical execution view of the plan as an ordered array.
   Each step:
   - `id`: kebab-case identifier
   - `skill`: skill name or path

@@ -1315,15 +1315,15 @@ describe("runx tool", () => {
 });
 
 describe("runx doctor", () => {
-  it("emits machine-actionable diagnostics for legacy tool.yaml files", async () => {
+  it("emits machine-actionable diagnostics for removed tool.yaml files", async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), "runx-doctor-"));
     tempDirs.push(tempDir);
-    const toolDir = path.join(tempDir, "tools", "demo", "legacy");
+    const toolDir = path.join(tempDir, "tools", "demo", "removed");
     await mkdir(toolDir, { recursive: true });
     await writeFile(
       path.join(toolDir, "tool.yaml"),
-      `name: demo.legacy
-description: Legacy tool fixture.
+      `name: demo.removed
+description: Removed tool fixture.
 source:
   type: cli-tool
   command: node
@@ -1347,7 +1347,7 @@ source:
     expect(report.status).toBe("failure");
     expect(report.diagnostics).toEqual([
       expect.objectContaining({
-        id: "runx.tool.manifest.legacy_format",
+        id: "runx.tool.manifest.removed_format",
         instance_id: expect.stringMatching(/^sha256:/),
         repairs: [expect.objectContaining({ id: "migrate_to_define_tool", risk: "medium" })],
       }),

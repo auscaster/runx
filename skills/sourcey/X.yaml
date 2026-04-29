@@ -242,7 +242,7 @@ runners:
           context:
             discovery_report: discover.discovery_report.data
             doc_bundle: author.doc_bundle.data
-            build_report: build.sourcey_build_report.data
+            build_report: build.sourcey_build_report.data.data
           artifacts:
             named_emits:
               evaluation_report: evaluation_report
@@ -277,7 +277,7 @@ runners:
           context:
             discovery_report: discover.discovery_report.data
             doc_bundle: author.doc_bundle.data
-            build_report: build.sourcey_build_report.data
+            build_report: build.sourcey_build_report.data.data
             evaluation_report: critique.evaluation_report.data
           artifacts:
             named_emits:
@@ -307,9 +307,9 @@ runners:
           scopes:
             - sourcey.verify
           context:
-            output_dir: rebuild.sourcey_build_report.data.output_dir
-            index_path: rebuild.sourcey_build_report.data.index_path
-            sourcey_build_report: rebuild.sourcey_build_report.data
+            output_dir: rebuild.sourcey_build_report.data.data.output_dir
+            index_path: rebuild.sourcey_build_report.data.data.index_path
+            sourcey_build_report: rebuild.sourcey_build_report.data.data
         - id: package
           label: package sourcey run
           tool: sourcey.package
@@ -318,10 +318,10 @@ runners:
           context:
             discovery_report: discover.discovery_report.data
             doc_bundle: author.doc_bundle.data
-            sourcey_build_report: rebuild.sourcey_build_report.data
+            sourcey_build_report: rebuild.sourcey_build_report.data.data
             evaluation_report: critique.evaluation_report.data
             revision_bundle: revise.revision_bundle.data
-            sourcey_verification_report: verify.sourcey_verification_report.data
+            sourcey_verification_report: verify.sourcey_verification_report.data.data
       policy:
         transitions:
           - to: author
@@ -331,16 +331,16 @@ runners:
             field: approve.approval_decision.data.approved
             equals: true
           - to: critique
-            field: build.sourcey_build_report.data.generated
+            field: build.sourcey_build_report.data.data.generated
             equals: true
           - to: revise
-            field: build.sourcey_build_report.data.generated
+            field: build.sourcey_build_report.data.data.generated
             equals: true
           - to: rebuild
-            field: build.sourcey_build_report.data.generated
+            field: build.sourcey_build_report.data.data.generated
             equals: true
           - to: verify
-            field: rebuild.sourcey_build_report.data.generated
+            field: rebuild.sourcey_build_report.data.data.generated
             equals: true
     artifacts:
       wrap_as: sourcey_packet

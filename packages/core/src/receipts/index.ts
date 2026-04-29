@@ -435,7 +435,7 @@ export async function listVerifiedLocalReceipts(
     throw error;
   }
 
-  // Listings are tolerant: a single corrupt or legacy-shape receipt must not
+  // Listings are tolerant: a single corrupt or invalid-shape receipt must not
   // poison the whole list. Single-receipt reads (`readVerifiedLocalReceipt`)
   // remain strict; callers asking for a specific id still get a clear error.
   const settled = await Promise.all(
