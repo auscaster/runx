@@ -70,7 +70,7 @@ export function parseStructuredOutput(stdout: string): Readonly<Record<string, u
   try {
     const parsed = JSON.parse(stdout) as unknown;
     return isRecord(parsed) ? parsed : {};
-  } catch {
+  } catch (_error) {
     return {};
   }
 }

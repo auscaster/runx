@@ -332,9 +332,9 @@ class StdioJsonRpcClient {
       let message: JsonRpcResponse;
       try {
         message = JSON.parse(body) as JsonRpcResponse;
-      } catch {
+      } catch (error) {
         this.stdout = Buffer.alloc(0);
-        this.rejectAll(new Error("MCP server sent invalid JSON."));
+        this.rejectAll(new Error("MCP server sent invalid JSON.", { cause: error }));
         return;
       }
       this.handleMessage(message);

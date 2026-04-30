@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { resolveLocalSkillProfile } from "@runxhq/core/config";
-import { pathExists } from "@runxhq/core/util";
+import { isNodeError, pathExists } from "@runxhq/core/util";
 import {
   extractSkillQualityProfile,
   parseGraphYaml,
@@ -504,9 +504,16 @@ async function resolveBuiltinToolRoots(env: NodeJS.ProcessEnv = process.env): Pr
 async function isDirectory(candidatePath: string): Promise<boolean> {
   try {
     return (await stat(candidatePath)).isDirectory();
-  } catch {
-    return false;
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return false;
+    }
+    throw error;
   }
+}
+
+function isMissingPathError(error: unknown): boolean {
+  return isNodeError(error) && (error.code === "ENOENT" || error.code === "ENOTDIR");
 }
 
 

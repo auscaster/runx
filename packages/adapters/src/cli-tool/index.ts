@@ -179,7 +179,7 @@ export async function invokeCliTool(request: CliToolInvokeRequest): Promise<CliT
       clearTimeout(timeout);
       if (forceKill) clearTimeout(forceKill);
       request.signal?.removeEventListener("abort", abortListener);
-      cleanupLocalProcessSandbox(sandbox);
+      const cleanupErrors = cleanupLocalProcessSandbox(sandbox);
 
       const durationMs = Math.round(performance.now() - started);
       const errorMessage = spawnError?.message
@@ -199,7 +199,10 @@ export async function invokeCliTool(request: CliToolInvokeRequest): Promise<CliT
         durationMs,
         errorMessage,
         metadata: {
-          sandbox: sandbox.metadata,
+          sandbox: {
+            ...sandbox.metadata,
+            cleanup_errors: cleanupErrors.length > 0 ? cleanupErrors : undefined,
+          },
         },
       });
     });

@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { normalizeSandboxDeclaration, type SandboxDeclaration } from "@runxhq/core/policy";
+import { errorMessage } from "@runxhq/core/util";
 
 const defaultEnvAllowlist = [
   "PATH",
@@ -134,11 +135,11 @@ export function prepareLocalProcessSandbox(options: LocalProcessSandboxOptions):
   };
 }
 
-export function cleanupLocalProcessSandbox(sandbox: LocalProcessSandboxResult): void {
+export function cleanupLocalProcessSandbox(sandbox: LocalProcessSandboxResult): readonly string[] {
   if (sandbox.status !== "allow") {
-    return;
+    return [];
   }
-  cleanupPaths(sandbox.cleanupPaths ?? []);
+  return cleanupPaths(sandbox.cleanupPaths ?? []);
 }
 
 function resolveProcessCwd(skillDirectory: string, sourceCwd: string | undefined): string {
@@ -438,14 +439,16 @@ function mkSandboxTempDir(): string {
   return mkdtempSync(path.join(os.tmpdir(), "runx-local-sandbox-"));
 }
 
-function cleanupPaths(paths: readonly string[]): void {
+function cleanupPaths(paths: readonly string[]): readonly string[] {
+  const errors: string[] = [];
   for (const cleanupPath of paths) {
     try {
       rmSync(cleanupPath, { recursive: true, force: true });
-    } catch {
-      // Cleanup is best-effort; execution already completed or failed.
+    } catch (error) {
+      errors.push(`${cleanupPath}: ${errorMessage(error)}`);
     }
   }
+  return errors;
 }
 
 function findExecutable(command: string, searchPath: string | undefined): string | undefined {

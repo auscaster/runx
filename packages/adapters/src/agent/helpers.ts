@@ -14,7 +14,7 @@ export function parseJsonMaybe(value: string): unknown {
   }
   try {
     return JSON.parse(value) as unknown;
-  } catch {
+  } catch (_error) {
     return value;
   }
 }
@@ -48,7 +48,7 @@ export function extractApiErrorMessage(bodyText: string): string {
     if (isRecord(parsed) && typeof parsed.error === "string") {
       return parsed.error;
     }
-  } catch {
+  } catch (_error) {
     return bodyText.trim() || "request failed";
   }
   return bodyText.trim() || "request failed";

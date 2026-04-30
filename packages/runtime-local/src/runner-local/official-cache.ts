@@ -129,47 +129,40 @@ function resolveCliSkillsRoot(): string | undefined {
   if (cachedCliSkillsRoot !== undefined) {
     return cachedCliSkillsRoot ?? undefined;
   }
-  try {
-    let dir = path.dirname(fileURLToPath(import.meta.url));
-    for (let index = 0; index < 10; index += 1) {
-      const packageJsonPath = path.join(dir, "package.json");
-      if (existsSync(packageJsonPath)) {
-        try {
-          const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { readonly name?: string };
-          if (pkg.name === "@runxhq/cli") {
-            const skillsRoot = path.join(dir, "skills");
-            cachedCliSkillsRoot = existsSync(skillsRoot) ? skillsRoot : null;
-            return cachedCliSkillsRoot ?? undefined;
-          }
-        } catch {
-          // ignore malformed package metadata and keep walking
-        }
-      }
-      const parent = path.dirname(dir);
-      if (parent === dir) {
-        break;
-      }
-      dir = parent;
-    }
-    dir = path.dirname(fileURLToPath(import.meta.url));
-    for (let index = 0; index < 10; index += 1) {
+  let dir = path.dirname(fileURLToPath(import.meta.url));
+  for (let index = 0; index < 10; index += 1) {
+    const packageJsonPath = path.join(dir, "package.json");
+    if (existsSync(packageJsonPath) && readPackageName(packageJsonPath) === "@runxhq/cli") {
       const skillsRoot = path.join(dir, "skills");
-      if (existsSync(skillsRoot)) {
-        cachedCliSkillsRoot = skillsRoot;
-        return skillsRoot;
-      }
-      const parent = path.dirname(dir);
-      if (parent === dir) {
-        break;
-      }
-      dir = parent;
+      cachedCliSkillsRoot = existsSync(skillsRoot) ? skillsRoot : null;
+      return cachedCliSkillsRoot ?? undefined;
     }
-  } catch {
-    cachedCliSkillsRoot = null;
-    return undefined;
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      break;
+    }
+    dir = parent;
+  }
+  dir = path.dirname(fileURLToPath(import.meta.url));
+  for (let index = 0; index < 10; index += 1) {
+    const skillsRoot = path.join(dir, "skills");
+    if (existsSync(skillsRoot)) {
+      cachedCliSkillsRoot = skillsRoot;
+      return skillsRoot;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      break;
+    }
+    dir = parent;
   }
   cachedCliSkillsRoot = null;
   return undefined;
+}
+
+function readPackageName(packageJsonPath: string): string | undefined {
+  const pkg = asRecord(JSON.parse(readFileSync(packageJsonPath, "utf8")));
+  return typeof pkg?.name === "string" ? pkg.name : undefined;
 }
 
 async function readProfileDocumentState(skillPath: string): Promise<string | undefined> {
