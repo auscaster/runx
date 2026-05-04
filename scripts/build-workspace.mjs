@@ -313,19 +313,19 @@ async function replaceTreeAtomically(target, populate) {
   }
   let renamedAway = false;
   try {
-    await rename(target, previous);
+    await moveTree(target, previous);
     renamedAway = true;
   } catch (error) {
-    if (!error || error.code !== "ENOENT") {
+    if (!isErrorCode(error, "ENOENT")) {
       await bestEffortCleanup(rm(staging, { recursive: true, force: true }), `remove staging tree ${staging}`);
       throw error;
     }
   }
   try {
-    await rename(staging, target);
+    await moveTree(staging, target);
   } catch (error) {
     if (renamedAway) {
-      await bestEffortCleanup(rename(previous, target), `restore previous tree ${previous}`);
+      await bestEffortCleanup(moveTree(previous, target), `restore previous tree ${previous}`);
     }
     await bestEffortCleanup(rm(staging, { recursive: true, force: true }), `remove staging tree ${staging}`);
     throw error;
@@ -336,6 +336,21 @@ async function replaceTreeAtomically(target, populate) {
       `remove previous tree ${previous}`,
     );
   }
+}
+
+async function moveTree(source, target) {
+  try {
+    await rename(source, target);
+    return;
+  } catch (error) {
+    if (!isErrorCode(error, "EXDEV")) {
+      throw error;
+    }
+  }
+
+  await rm(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  await cp(source, target, { recursive: true });
+  await rm(source, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
 }
 
 async function bestEffortCleanup(operation, action) {
@@ -418,6 +433,10 @@ async function exists(filePath) {
     }
     return false;
   }
+}
+
+function isErrorCode(error, code) {
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === code);
 }
 
 function errorMessage(value) {
